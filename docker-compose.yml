@@ -16,7 +16,7 @@ services:
       POSTGRES_PASSWORD: tripforge
       POSTGRES_DB: tripforge
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"   # loopback only — dev creds are checked in
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -30,8 +30,8 @@ services:
   mailpit:
     image: axllent/mailpit
     ports:
-      - "8025:8025"   # web UI
-      - "1025:1025"   # SMTP
+      - "127.0.0.1:8025:8025"   # web UI — loopback only (holds auth tokens)
+      - "127.0.0.1:1025:1025"   # SMTP — loopback only
 
   # web:  # added by seed-0001 — Next.js app (apps/web) built from this repo
   #   build: { context: ., dockerfile: apps/web/Dockerfile }
