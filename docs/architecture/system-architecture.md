@@ -155,11 +155,17 @@ review-checked and L3-tested where marked.
 - **INV-013 [M]** LLM calls go only through `LLMPort` (`packages/llm`), backed
   by the official Anthropic SDK (`@anthropic-ai/sdk`) — chosen for native tool
   use (tool runner), structured outputs (`messages.parse` + zod), and prompt
-  caching. Models are configured per purpose, not hardcoded at callsites:
-  itinerary drafting on `claude-opus-4-8`, cheap scoring/recommendation calls
-  on `claude-haiku-4-5`. Every call is metered (tokens, purpose, model). The
-  test suite runs against deterministic fakes at the `LLMPort` boundary — no
-  live provider or API key required to run tests.
+  caching. **All calls run on `claude-haiku-4-5` — no Opus-tier models**
+  (operator decision, 2026-07-03; the model is config, so an upgrade is a
+  one-line change if UAT shows drafting quality needs it). The Claude tools
+  the planner needs are **defined in code** in `packages/llm/src/tools/` as
+  typed definitions (zod input schemas via the SDK's `betaZodTool`, one file
+  per tool), wrapping the supply ports — e.g. `search_hotel_rates`,
+  `search_activities`, `quote_transfer`, `quote_car_rental`. No ad-hoc or
+  runtime-assembled tool JSON. Every call is metered (tokens, purpose, model).
+  The test suite runs against deterministic fakes at the `LLMPort` boundary —
+  no live provider or API key required to run tests. Note: Haiku 4.5 does not
+  support the `effort` parameter — do not send it.
 - **INV-014** Planner output is priced against live (or sandbox) inventory via
   supply ports — never static, unbookable suggestions. *(Constitution III, PRD §9.1)*
 - **INV-015** The budget allocator is a pure `packages/domain` function; its
