@@ -19,6 +19,13 @@ GrowthAnts monorepo directory but independent of it).
 
 ## Governance
 
+- **Architecture**: `docs/architecture/system-architecture.md` — system map,
+  tech stack (ADR-0001: Next.js + Expo turborepo, tRPC, Better Auth on
+  Postgres/Drizzle, Anthropic Claude SDK behind LLMPort, docker-compose
+  local), and numbered
+  invariants (INV-NNN). Part of the sealed regulator: feature plans propose
+  invariants, only operator gates land them. Review DRIFT findings cite
+  invariant IDs.
 - **Constitution**: `.specify/memory/constitution.md` (v1.1.0, anchored to the
   PRD) — six principles govern every change: Marketplace-First (consumer
   surface feeds the marketplace), Agent Experience Is the Wedge, Budget-Aware

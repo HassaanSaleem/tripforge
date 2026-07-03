@@ -51,19 +51,31 @@ and surface the conflict.
 
 ## Required Monorepo Layout
 
+Stack (ADR-0001): Next.js + Expo in a pnpm/turborepo monorepo, tRPC, Better
+Auth on Postgres via Drizzle, official Anthropic SDK (`@anthropic-ai/sdk`)
+behind `LLMPort` (tool use + structured outputs; fakes in tests). Authoritative
+map + invariants: `docs/architecture/system-architecture.md`.
+
 ```
 tripforge/
   apps/
-    web/                     # Next.js agent workspace (UI only — no business rules)
-    api/                     # API service (routes, middleware, composition root)
+    web/                     # Next.js — two route groups by user type (INV-024):
+                             #   workspace (agents) · client views (travelers, white-label)
+                             #   mounts the tRPC router; UI only — no business rules
+    mobile/                  # Expo React Native agent app; same tRPC router over HTTP
   packages/
-    itinerary-schema/        # THE canonical itinerary schema (Constitution IV)
-                             #   zod schemas + TS types + versioning + migrations
-    supply-adapter/          # Supplier port + implementations (Constitution V)
-      src/port.ts            #   the interface every supplier implements
-      src/sandbox/           #   deterministic sandbox mock
-      src/ratehawk/          #   real bedbank adapters (later), one dir per supplier
-    domain/                  # Pure business logic: pricing, revenue-share, licensing
+    api/                     # tRPC routers/procedures (application layer) + role
+                             #   middleware (INV-023); composition root wiring
+    itinerary-schema/        # THE canonical itinerary schema (Constitution IV, INV-001)
+                             #   zod schemas + TS types + versioning + provenance
+    domain/                  # Pure business logic: budget allocator, pricing,
+                             #   revenue-share, licensing (INV-010, INV-015)
+    db/                      # Drizzle schema + client; tenant-scoped query helpers (INV-004)
+    supply-adapter/          # Supply ports + implementations (Constitution V, INV-005)
+      src/ports/             #   hotel / activity / transfer / car port interfaces
+      src/sandbox/           #   deterministic sandbox mocks
+      src/<vendor>/          #   real aggregator adapters (later), one dir per supplier
+    llm/                     # LLMPort + Anthropic SDK implementation, metered (INV-013)
     marketplace/             # Listing, licensing, white-label flows (uses domain/)
     shared/                  # Service-agnostic utilities (logging, config, result types)
   tests/
@@ -75,12 +87,15 @@ tripforge/
 
 | Layer | Contains | Depends on |
 |-------|----------|-----------|
-| `apps/web` | Pages, components, client state | `packages/*` public surfaces only |
-| `apps/api` | Routes, middleware, auth, composition root | `application` code in packages |
-| `packages/itinerary-schema` | zod schemas, types, provenance fields, migrations | *(nothing internal)* |
-| `packages/domain` | Pure functions: pricing math, revenue splits, license terms | `itinerary-schema` |
+| `apps/web` | Pages, components, client state (workspace + client-view route groups) | `packages/*` public surfaces only |
+| `apps/mobile` | Expo screens/components | `packages/api` client, `itinerary-schema` |
+| `packages/api` | tRPC procedures, role/tenant middleware, composition root | `domain`, `db`, ports |
+| `packages/itinerary-schema` | zod schemas, types, provenance fields, versioning | *(nothing internal)* |
+| `packages/domain` | Pure functions: budget allocator, pricing math, revenue splits, license terms | `itinerary-schema` |
+| `packages/db` | Drizzle schema, client, tenant-scoped helpers | `itinerary-schema` |
 | `packages/marketplace` | Listing/licensing/white-label orchestration | `domain`, `itinerary-schema`, ports |
-| `packages/supply-adapter` | Supplier port + concrete adapters | `itinerary-schema` (nothing else) |
+| `packages/supply-adapter` | Supply ports + concrete adapters | `itinerary-schema` (nothing else) |
+| `packages/llm` | LLMPort + AI SDK provider wiring, metering | `shared` |
 | `packages/shared` | Logging, config, `Result`/error types | *(stdlib/3rd-party only)* |
 
 Dependencies point inward. `domain` never imports adapters or apps. `shared` is a

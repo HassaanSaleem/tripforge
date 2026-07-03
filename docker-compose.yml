@@ -1,0 +1,46 @@
+# TripForge local stack — INV-019: `docker compose up` + `pnpm dev` boots the
+# CRUD stack and test suite with zero paid/external services (sandbox supply
+# mocks, deterministic LLM fakes in tests). AI features call the Claude API via
+# the Anthropic SDK and need ANTHROPIC_API_KEY in .env (INV-013).
+#
+# The `web` app service is added by the bootstrap feature (seed-0001) once
+# apps/web exists; until then run the app with `pnpm dev` against this stack.
+
+name: tripforge
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: tripforge
+      POSTGRES_PASSWORD: tripforge
+      POSTGRES_DB: tripforge
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tripforge -d tripforge"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Local SMTP sink for Better Auth emails (verification, invites).
+  # UI at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"   # web UI
+      - "1025:1025"   # SMTP
+
+  # web:  # added by seed-0001 — Next.js app (apps/web) built from this repo
+  #   build: { context: ., dockerfile: apps/web/Dockerfile }
+  #   ports: ["3000:3000"]
+  #   depends_on: { postgres: { condition: service_healthy } }
+  #   environment:
+  #     DATABASE_URL: postgres://tripforge:tripforge@postgres:5432/tripforge
+  #     SMTP_URL: smtp://mailpit:1025
+  #     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+volumes:
+  pgdata:

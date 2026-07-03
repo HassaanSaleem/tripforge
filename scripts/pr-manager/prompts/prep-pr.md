@@ -45,13 +45,14 @@ codex review --base main "Three-way ALIGNMENT review: verify that code, spec, an
 
 Artifacts to read from this branch before judging the diff:
 1. The feature spec: specs/<NNN-feature>/spec.md (requirements + acceptance criteria)
-2. The architecture plan: specs/<NNN-feature>/plan.md (module boundaries, data model, contracts)
-3. The constitution gates: .specify/memory/constitution.md and .kitchenloop/quality-bar.md ('The Bar')
+2. The feature plan: specs/<NNN-feature>/plan.md (module boundaries, data model, contracts)
+3. The system architecture: docs/architecture/system-architecture.md (numbered invariants INV-NNN)
+4. The constitution gates: .specify/memory/constitution.md and .kitchenloop/quality-bar.md ('The Bar')
 
 Classify EVERY finding into exactly one state:
 - VIOLATION    — code contradicts the spec or plan (blocking)
 - CODE-MISSING — a spec requirement has no implementation and no recorded deferral (blocking)
-- DRIFT        — implementation diverges from the plan's architecture: wrong module boundary, schema forked outside the canonical itinerary package, supplier API shapes outside the adapter, money path without state-conservation handling (blocking)
+- DRIFT        — implementation violates a system invariant (cite the INV-NNN id) or diverges from the plan's architecture: wrong module boundary, schema forked outside the canonical itinerary package, supplier API shapes outside the adapter, money path without state-conservation handling, procedure without role authorization (blocking)
 - CODE-AHEAD   — implemented behavior with no basis in the spec/plan (scope creep; blocking unless trivially cosmetic)
 - SPEC-SILENT  — significant implemented behavior the spec does not address (NOT blocking: report it so a spec-amendment ticket is filed; the spec evolves through SDD, code does not silently define it)
 

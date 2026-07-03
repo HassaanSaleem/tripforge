@@ -38,6 +38,7 @@ paths:
 spec:
   docs:
     - "docs/product/Trellis_Product_Charter_PRD.pdf"   # authoritative PRD (Charter+PRD v0.3, July 2026)
+    - "docs/architecture/system-architecture.md"       # system map + invariants (INV-NNN)
     - ".specify/memory/constitution.md"
   dimensions:
     features:
