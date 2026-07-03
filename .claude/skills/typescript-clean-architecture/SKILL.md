@@ -138,6 +138,18 @@ and **nothing outside `packages/supply-adapter` may mention a supplier's API sha
 - All I/O is async; independent calls run with `Promise.all`, not sequential awaits.
 - Retries/timeouts on outbound I/O live in the adapter, not the handler.
 
+### Derived Data & Caching (INV-025/026, ADR-0002)
+
+- Non-user-specific LLM/aggregator output is materialized in Postgres derived
+  tables (`packages/db`) with **semantic cache keys** (window, content hash, or
+  scope — never a blind global TTL) plus `computedAt` and producing `model`.
+- Read paths are cache-first: derived table → on miss/stale, compute through
+  the port → write back. No Redis/in-process memoization for cross-request data.
+- Batch/scheduled computation optimizes for cost and output quality, not
+  latency — richer prompts and curation passes are encouraged there.
+- **Never cache a live price beyond its quote hold/expiry** — money freshness
+  is correctness (INV-006), not a tunable.
+
 ### Logging & Errors
 
 - Structured JSON logging via the `packages/shared` logger; `console.log` is not

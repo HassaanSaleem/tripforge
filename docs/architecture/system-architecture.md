@@ -205,6 +205,37 @@ review-checked and L3-tested where marked.
   into the client experience (which carries the agent's brand only — INV-020).
   Route groups and navigation are separated by user type, not toggled by flags.
 
+### Caching & derived data
+
+- **INV-025 [M]** Expensive computed results are **computed once, served many
+  times**: any LLM output or aggregator-derived content that is not
+  user-specific and not price-live MUST be materialized in Postgres (the
+  single system of record — INV-003; no Redis/memory cache tier without an
+  ADR + operator gate) rather than recomputed per request. Derived tables
+  carry **semantic cache keys** — scope + version or content hash, never blind
+  global TTLs: windowed keys invalidate by period, content-hash keys by
+  change. Every row records `computed_at`, the producing `model`, and its
+  refresh policy. Examples:
+  - `whats_hot(destination, iso_week)` — one curated computation per
+    destination-week serves every user (P2 feed);
+  - `listing_quality(listing_id, content_sha)` — rescored only when the
+    listing's content actually changes;
+  - markup/pricing suggestions per `(category, destination, season)`;
+  - static supplier content (hotel descriptions, amenities, media refs)
+    cached from aggregator lookups.
+  Anthropic prompt caching (INV-013) complements this at the request layer
+  for the stable planner prompt/tool definitions; it is not a substitute for
+  data-layer materialization.
+- **INV-026** The optimization target for derived/AI computation is **cost
+  and output quality, not latency** (operator directive 2026-07-03): prefer
+  scheduled, batched computation with richer prompts and curation passes over
+  cheap per-request calls. Per-request LLM calls are reserved for genuinely
+  user-specific work (drafting a specific client's trip). Periodic refresh
+  runs on Postgres-native scheduling (pg-boss/pg_cron when a feature plan
+  needs it — no new broker). **Carve-out: live prices are never cached beyond
+  their quote hold/expiry (INV-006)** — freshness of money data is a
+  correctness property, not an optimization trade-off.
+
 ---
 
 ## 4. Decision records
@@ -213,7 +244,9 @@ System-wide ADRs live in `docs/architecture/decisions/`; package-level ADRs
 colocate with the package they constrain once it exists (STD-002 §3.5 spirit).
 
 - **ADR-0001** — MVP technology stack (Next.js + Expo, tRPC, Better Auth,
-  Drizzle/Postgres, AI SDK + LLMPort, docker-compose local).
+  Drizzle/Postgres, Anthropic SDK + LLMPort, docker-compose local).
+- **ADR-0002** — Postgres-backed derived-data caching (semantic keys,
+  cost-over-latency batch computation, live-price carve-out).
 
 ## 5. Amendment process
 
