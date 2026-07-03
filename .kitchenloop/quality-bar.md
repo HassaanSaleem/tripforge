@@ -18,6 +18,22 @@ a real state delta — no mocks at the system boundary.
 
 See `.kitchenloop/unbeatable-tests.md` for project-specific L3/L4 guidance.
 
+## Live Verification (INV-027 — per SDD cycle)
+
+Every PR that changes product behavior MUST carry a **Live Test Evidence**
+section: the change was verified against the built compose image (fresh
+`docker compose up --build`), the changed flow was driven in a real browser
+(screenshots archived under `.kitchenloop/evidence/<iteration>/<ticket>/`),
+and the compose log was scanned clean of non-allowlisted ERROR lines.
+Defects found live are fixed in the same cycle — fix → rebuild → re-test.
+
+- A green unit/L2 suite without live evidence **fails review**.
+- Explicit `N/A (no product behavior change)` or `SKIPPED (pre-skeleton)` is
+  acceptable only when true — a silent skip is a review-blocking honesty
+  violation.
+- Log allowlist additions require justification in the PR body; allowlisting
+  a real error to get green is an assertion-weakening violation.
+
 ## Code Quality
 
 - Follows the clean-code policy: `.claude/skills/typescript-clean-architecture/SKILL.md`

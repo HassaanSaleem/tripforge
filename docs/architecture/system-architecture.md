@@ -236,6 +236,24 @@ review-checked and L3-tested where marked.
   their quote hold/expiry (INV-006)** — freshness of money data is a
   correctness property, not an optimization trade-off.
 
+### Live verification & evidence
+
+- **INV-027 [M]** Every SDD cycle that changes product behavior ends with
+  **live verification against the built artifact** (operator directive
+  2026-07-03): boot the docker-compose stack from a fresh image build
+  (`docker compose up --build --wait`), exercise the changed flow as a user
+  would — QA-style browser journey (Playwright / Playwright MCP) for
+  UI-facing changes, real HTTP against real routes for API changes — and
+  review the runtime logs. Defects found live are **fixed in the same cycle**
+  (fix → rebuild → re-test), never deferred to a ticket. Evidence is
+  mandatory and mechanically checkable: per-step screenshots/traces plus the
+  captured compose log land in `.kitchenloop/evidence/<iteration>/<ticket>/`
+  (git-ignored; the PR body cites the verdict and key excerpts). A green
+  unit/L2 suite without live evidence does not satisfy this invariant.
+  *Pre-skeleton carve-out: until seed-0001 lands a runnable web service,
+  the stage records `SKIPPED (pre-skeleton)` in the PR body — explicitly,
+  never silently.* (ADR-0003)
+
 ---
 
 ## 4. Decision records
@@ -247,6 +265,9 @@ colocate with the package they constrain once it exists (STD-002 §3.5 spirit).
   Drizzle/Postgres, Anthropic SDK + LLMPort, docker-compose local).
 - **ADR-0002** — Postgres-backed derived-data caching (semantic keys,
   cost-over-latency batch computation, live-price carve-out).
+- **ADR-0003** — Live verification per SDD cycle (built compose image as test
+  target, Playwright + Playwright MCP as QA driver, screenshot/log evidence,
+  fix-in-cycle policy).
 
 ## 5. Amendment process
 

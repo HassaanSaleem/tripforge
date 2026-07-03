@@ -62,8 +62,15 @@ Plans must pass the Constitution Check before implementation.
 - Quality gate: `.kitchenloop/quality-bar.md` — includes "The Bar" (five
   TripForge domain principles). L3 integration tests are mandatory for
   integration points and money paths; see `.kitchenloop/unbeatable-tests.md`.
+- Live Test & Fix gate (INV-027, ADR-0003): every SDD cycle that changes
+  product behavior ends with live verification against the built compose
+  image — QA browser journey (Playwright/Playwright MCP) with per-step
+  screenshots, compose-log scan, defects fixed in the same cycle. Evidence
+  lands in `.kitchenloop/evidence/` (git-ignored); the PR body carries the
+  verdict in a Live Test Evidence section.
 - UAT gate: sealed test cards in `.kitchenloop/uat-cards/`, evaluated by the
   fresh zero-context `uat-evaluator` agent (`.claude/agents/uat-evaluator.md`)
+  driving the live stack in a real browser (Playwright MCP, screenshots)
 
 ### Operator Control Plane (read before any loop work)
 

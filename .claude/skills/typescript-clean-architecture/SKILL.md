@@ -181,6 +181,9 @@ and **nothing outside `packages/supply-adapter` may mention a supplier's API sha
 - Every handler and every domain function has at least a happy-path test and the
   primary error-branch test. Money functions get exhaustive branch coverage.
 - New integration points require an L3 test (real app + DB, state deltas).
+- Product-behavior changes additionally pass **Live Test & Fix** (INV-027,
+  ADR-0003): verified against the built compose image with a QA browser
+  journey + compose-log scan, evidence archived, defects fixed in-cycle.
 
 ---
 

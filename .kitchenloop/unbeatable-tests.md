@@ -50,9 +50,36 @@ Example: `npm start && curl -sf http://localhost:3000/ && curl -sf http://localh
 
 ### What L4 Looks Like Here
 
-Browser automation against the real running app. A headless browser loads pages, clicks buttons, fills forms, and asserts on visible content. This proves the product works as a user would experience it.
+Browser automation against the **built compose image** (INV-027, ADR-0003) —
+never a dev server. `docker compose up --build --wait` boots the artifact you
+would ship; Playwright loads pages, clicks buttons, fills forms, and asserts
+on visible content, capturing screenshot-on-failure, per-step traces, and
+video automatically. This proves the product works as a user would experience
+it — in the form it actually ships.
 
-Example: `npx playwright test tests/e2e/smoke.spec.ts` exercising a core user journey.
+Example: `docker compose up --build --wait && npx playwright test tests/e2e/smoke.spec.ts`
+exercising a core user journey, followed by a compose-log scan for
+non-allowlisted ERROR lines.
+
+### Live Test & Fix — every SDD cycle (INV-027)
+
+L3/L4 are not just the regression oracle's job. **Every ticket that changes
+product behavior ends with a live pass inside its own Execute cycle**, before
+the PR is done (protocol: `.claude/skills/kitchenloop-execute/SKILL.md` step 4e):
+
+1. Build + boot the compose stack from a fresh image (clean state, `down -v` first)
+2. Live smoke + the Playwright specs relevant to the change
+3. QA-style browser journey of the changed flow via Playwright MCP — per-step
+   screenshots into `.kitchenloop/evidence/<iteration>/<ticket>/`
+4. Compose-log review — non-allowlisted ERROR lines fail the stage even when
+   the UI looks fine
+5. Defects found live are fixed in the SAME cycle: fix → rebuild → re-test
+   (max 3 cycles, then the ticket returns to todo with a blocker comment)
+
+The UAT gate then re-verifies independently: a zero-context evaluator drives
+the same live stack through the sealed test card (browser steps + screenshots
++ log review). Evidence — screenshots, traces, compose logs — is the witness;
+a green suite without live evidence does not count as verified.
 
 ---
 

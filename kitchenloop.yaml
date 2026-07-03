@@ -71,6 +71,22 @@ verification:
     quick_command: "npm test"
     smoke_command: ""
     lint_command: "npm run lint"
+  # Live Test & Fix (INV-027, ADR-0003) — every product-behavior ticket is
+  # verified against the BUILT compose image before its PR is done:
+  # boot -> smoke + Playwright specs -> QA browser journey (Playwright MCP,
+  # screenshots) -> compose-log scan -> fix/rebuild/re-test (max 3 cycles).
+  # Commands are wired by seed-0001 when the web service lands; empty = the
+  # execute phase records SKIPPED (pre-skeleton) explicitly in the PR body.
+  live:
+    boot_command: ""              # seed-0001: "docker compose down -v && docker compose up --build --wait"
+    e2e_command: ""               # seed-0001: "npx playwright test"
+    logs_command: "docker compose logs --no-color"
+    teardown_command: "docker compose down -v"
+    base_url: "http://localhost:3000"
+    evidence_dir: ".kitchenloop/evidence"
+    log_error_pattern: "ERROR|FATAL|Unhandled"
+    log_allowlist: []             # documented-benign error lines only; additions need justification in the PR
+    max_fix_cycles: 3
   preflight_env_vars: []
   stop_conditions:
     pass_rate_floor: 0.95

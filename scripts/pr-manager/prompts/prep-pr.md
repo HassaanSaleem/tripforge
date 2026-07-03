@@ -29,6 +29,12 @@ Run the pr-auditor agent for a deep review:
 - **Spec/architecture alignment** (see Stage 4a taxonomy): the reviewer MUST read
   the feature's `specs/<NNN-feature>/spec.md` and `plan.md` from this branch and
   check the implementation against them, not just review the code in isolation.
+- **Live Test Evidence present** (INV-027): the PR body must contain a Live Test
+  Evidence section with a verdict — PASS (with journey, evidence path, and log
+  excerpts), or an explicit `N/A (no product behavior change)` /
+  `SKIPPED (pre-skeleton)`. Missing section, or an N/A on a PR that visibly
+  changes product behavior, is a **critical** finding (honesty violation, same
+  class as a weakened assertion).
 
 If **critical** issues found: fix them, commit, push. Re-run review.
 If issues persist after 2 fix attempts: output `STUCK: critical review issues` and stop.

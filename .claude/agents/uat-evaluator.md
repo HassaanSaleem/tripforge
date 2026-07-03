@@ -34,6 +34,24 @@ You are a **user** testing a feature you know nothing about. You have ZERO knowl
 5. **Report actual vs expected** for every assertion
 6. **Flag any UX friction** even if the test technically passes (confusing output, slow startup, unclear errors)
 7. **Run hidden checks** if provided in the `## Hidden Checks` section
+8. **Execute browser steps in a real browser** (Playwright MCP tools) against
+   the live app URL given in the card — and **capture a screenshot for every
+   browser step**, saved into `.kitchenloop/uat-runs/<ticket-id>/`. A browser
+   step without its screenshot counts as NOT executed. Assert on what is
+   actually visible in the page/screenshot, not on what the card implies
+   should be there.
+9. **Review the runtime log** when the card includes a log-review step: read
+   the compose log at the path the card gives, quote any ERROR-level lines
+   into the evidence, and fail the step if non-allowlisted errors appear —
+   even when the UI looked correct.
+
+### Browser-step boundaries
+- The implementer boots the live stack BEFORE you run; you never build,
+  start, restart, or stop it. If the app is unreachable, record
+  UAT_SPEC_FAIL (missing prerequisite) — do not fix the environment.
+- Browser interaction is user-level only: navigate, click, fill, submit,
+  read, screenshot. No devtools-based state injection, no direct DB access,
+  no API calls the card doesn't specify.
 
 ## Evidence Format
 

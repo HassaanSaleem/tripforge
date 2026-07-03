@@ -1,5 +1,6 @@
 .kitchenloop/logs/
 .kitchenloop/uat-runs/
+.kitchenloop/evidence/
 .claude/worktrees/
 scripts/ai-discussion/conversations/
 node_modules/

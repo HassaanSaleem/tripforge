@@ -70,9 +70,18 @@ For each ticket, sequentially:
 5. **Implement** the fix or feature
 6. **Run linting**: `npm run lint`
 7. **Run tests**: `npm test`
-8. **Commit** with a descriptive message referencing the ticket
-9. **Push** and create a PR targeting main
-10. **UAT Gate** (if enabled and change touches product code):
+8. **Live Test & Fix** (INV-027 — mandatory for product-behavior changes; see
+   `.claude/skills/kitchenloop-execute/SKILL.md` step 4e for the full protocol):
+   a. `docker compose down -v && docker compose up --build --wait` — test the BUILT image, not a dev server
+   b. Run the live smoke + relevant Playwright specs against the running stack
+   c. Drive the changed flow in a real browser (Playwright MCP) like a QA — screenshot each step to `.kitchenloop/evidence/{iteration}/{ticket_id}/`
+   d. Capture `docker compose logs --no-color` to the evidence dir and scan it — non-allowlisted ERROR lines fail the stage
+   e. Any defect: fix → rebuild → re-test (max 3 cycles, then ticket back to todo with a blocker comment). Never weaken an assertion to pass.
+   f. Add a **Live Test Evidence** section to the PR body (verdict, journey, evidence path, log excerpts, fixes). Pre-skeleton or no-behavior-change tickets record `SKIPPED (pre-skeleton)` / `N/A` explicitly — never silently.
+   g. `docker compose down -v` when done
+9. **Commit** with a descriptive message referencing the ticket
+10. **Push** and create a PR targeting main
+11. **UAT Gate** (if enabled and change touches product code):
     a. Write a test card to `.kitchenloop/uat-cards/{ticket_id}.md` — step-by-step recipe a user would follow to verify the feature works (exact commands, exact expected outputs, no placeholders)
     b. Validate the test card (parse check, no-edit check, no-placeholder check)
     c. Spawn a `uat-evaluator` agent in `isolation: "worktree"` with ONLY the test card (no diff, no ticket, no implementation context)
@@ -80,8 +89,11 @@ For each ticket, sequentially:
     e. Attach evidence to PR as comment
     f. Act on verdict: PASS → proceed; PRODUCT_FAIL → keep ticket open, tag PR; UAT_SPEC_FAIL → log, don't block; EVAL_CHEAT_FAIL → flag for review
     See `.claude/skills/kitchenloop-execute/UAT-GATE.md` for the full protocol.
-11. **Transition** the ticket to "in_review"
-12. **Return** to main in the worktree
+    For web-facing features the card's steps are browser steps executed against
+    the live compose stack (boot it for the evaluator first) — the evaluator
+    drives them via Playwright MCP and screenshots each step as evidence.
+12. **Transition** the ticket to "in_review"
+13. **Return** to main in the worktree
 
 ### Step 4: Summary
 

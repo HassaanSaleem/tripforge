@@ -7,14 +7,20 @@ After each ticket implementation (post-PR creation), the execute phase runs a **
 ## Flow
 
 ```
-implement -> unit tests -> lint -> PR created
+implement -> unit tests -> lint -> live test & fix (INV-027: built compose
+             image, QA journey, log scan — see SKILL.md step 4e) -> PR created
          -> generate test card (implementer)
          -> freeze test card (deterministic validation)
-         -> spawn UAT evaluator (fresh agent, clean worktree)
+         -> boot live stack for the evaluator (docker compose up --build --wait)
+         -> spawn UAT evaluator (fresh agent, clean worktree, browser via Playwright MCP)
          -> integrity check (git diff on worktree)
          -> attach evidence to PR
          -> verdict determines next action
 ```
+
+The UAT gate is the *independent* live check: the implementer already live-tested
+in step 4e, but the evaluator re-verifies with zero implementation context
+against the same built stack. Two different humans-in-spirit, one artifact.
 
 ## Step 1: Generate Test Card (Implementer)
 
@@ -53,6 +59,25 @@ which myapp                     # should return a path
 ### Step 2: ...
 (each step has exact command, exact expected exit code, exact output assertions)
 
+### Browser steps (web-facing features — REQUIRED form for UI changes)
+
+For features a user experiences in the browser, steps are browser actions
+executed against the live compose stack (the implementer boots it before
+spawning the evaluator; the card's prerequisites verify it's up):
+
+```markdown
+### Step N: <user action description>
+**Browser action:** navigate to http://localhost:3000/<route>, then <exact
+interaction: click "<visible label>", fill "<field label>" with "<value>", submit>
+**Expected visible result:** "<exact text/element the user must see>"
+**Expected NOT visible:** "<error text/broken state>"
+**Screenshot:** save as step-N.png in the evidence directory
+```
+
+Browser steps are executed with Playwright MCP browser tools. Every browser
+step MUST capture a screenshot — a browser step without a screenshot does not
+count as executed.
+
 ## Artifacts
 <list any files that should exist after the test, with expected content patterns>
 
@@ -71,8 +96,12 @@ which myapp                     # should return a path
 ### What Makes a GOOD Test Card
 
 - Tests the feature from the CLI or user entry points
+- For web features: browser steps against the live compose stack, with
+  screenshots — testing the built product, not its source
 - Verifies both happy path and one failure mode
 - Has tight output assertions (exact strings, not "should contain something about X")
+- Includes a final log-review step: check the captured compose log for
+  ERROR-level lines (the implementer provides the log path in prerequisites)
 - Runs in under 120 seconds
 - Doesn't require any files that aren't in the repo
 
