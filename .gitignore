@@ -1,0 +1,7 @@
+.kitchenloop/logs/
+.kitchenloop/uat-runs/
+.claude/worktrees/
+scripts/ai-discussion/conversations/
+node_modules/
+.env
+.DS_Store

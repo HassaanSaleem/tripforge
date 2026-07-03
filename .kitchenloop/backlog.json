@@ -1,0 +1,52 @@
+[
+  {
+    "id": "seed-0001",
+    "title": "Bootstrap TripForge app skeleton via SDD",
+    "body": "Feature-sized — route through Spec Kit (/speckit-specify -> /speckit-plan -> /speckit-tasks -> /speckit-implement).\n\nStand up the v1 skeleton so every later iteration has a real product to exercise:\n- TypeScript monorepo: web app (agent workspace) + API service\n- `npm test` (L1 unit) and `npm run lint` wired and passing\n- Health endpoint + an L3 smoke script (start real server, hit real routes, assert responses); then set `verification.oracle.smoke_command` in kitchenloop.yaml\n- Persistence layer chosen in the plan (Constitution Check applies)\n\nAcceptance: fresh clone -> install -> test/lint/smoke all pass; loop-state and coverage matrix can record a T1 scenario against the running app. Quality tooling wired as devDeps with configs: knip (dead code), jscpd (duplication), dependency-cruiser (.dependency-cruiser.cjs encoding the layer boundaries from .claude/skills/typescript-clean-architecture/SKILL.md).",
+    "type": "feature",
+    "priority": "critical",
+    "state": "todo",
+    "created": "2026-07-03T00:00:00Z",
+    "pr_url": ""
+  },
+  {
+    "id": "seed-0002",
+    "title": "Canonical itinerary schema v0 (Constitution IV) via SDD",
+    "body": "Feature-sized — route through Spec Kit.\n\nDefine the single versioned itinerary schema that flows through build -> book -> trade:\n- Core entities: itinerary, day, item (stay/activity/transfer), media ref, pricing block\n- Provenance fields: original author, license terms, revenue-share obligations, rebrand lineage\n- JSON Schema (or zod) + TypeScript types + schema version field and migration convention\n\nAcceptance: schema package published inside the repo; builder/booking/marketplace code may only import the itinerary type from this package. No layer may fork or privately extend it.",
+    "type": "feature",
+    "priority": "critical",
+    "state": "todo",
+    "created": "2026-07-03T00:00:00Z",
+    "pr_url": ""
+  },
+  {
+    "id": "seed-0003",
+    "title": "Supply adapter port family + sandbox mocks (Constitution V, PRD 9.3)",
+    "body": "Feature-sized — route through Spec Kit.\n\nCreate the supplier-agnostic port family for the P0 bookable component map: hotels (bedbank net rates), activities/tickets, transfers, car rental — each with search, quote-with-markup, book, cancel — plus deterministic sandbox mock implementations for tests. Design the port contracts for the PRD 9.2/9.4 engineering realities: quote-then-book with price hold/expiry + re-quote, multi-currency, partial-failure handling in multi-supplier carts, and a merchant-of-record field per component. No supplier API shapes may leak outside an adapter. Real aggregator integrations (RateHawk/Viator/Mozio/CarTrawler class) come later behind the same ports.\n\nAcceptance: booking flows compile against the port interfaces only; L2 contract tests run against the sandbox mocks; swapping implementations requires zero changes outside the adapter package.",
+    "type": "feature",
+    "priority": "high",
+    "state": "backlog",
+    "created": "2026-07-03T00:00:00Z",
+    "pr_url": ""
+  },
+  {
+    "id": "seed-0005",
+    "title": "Budget allocator + quote-then-book flow (PRD 9.1/9.2/9.4) via SDD",
+    "body": "Feature-sized — route through Spec Kit. The core AI differentiator per Constitution III.\n\nBudget allocator: split a total budget (hard cap or target) across categories (flights/transport 35-45%, accommodation 30-40%, activities 10-15%, local transport/transfers 5-10%, buffer 5-10% — tunable by trip type), pull live options per category via the supply ports, assemble to fit, re-balance when a category runs over. Output: itinerary (canonical schema) with visible per-category and per-day budget breakdown.\n\nQuote-then-book: price holds with expiry, re-quote on expiry, transparent currency conversion, multi-supplier cart with partial-failure handling (one component fails, others hold).\n\nAcceptance: allocator is a pure domain function (exhaustively tested, integer minor units); plan->book conversion events emitted (PMF metric); L3 test walks describe-trip -> allocated plan -> quote -> book against sandbox mocks with state-delta assertions.",
+    "type": "feature",
+    "priority": "high",
+    "state": "backlog",
+    "created": "2026-07-03T00:00:00Z",
+    "pr_url": ""
+  },
+  {
+    "id": "seed-0004",
+    "title": "Regression oracle: L3 state-delta harness + PMF instrumentation events",
+    "body": "Build the 4-layer verification harness (compile -> execute -> parse -> state deltas) for TripForge:\n- L3 helpers: start real app + DB, perform an action via API, assert exact DB state deltas (e.g., booking writes reservation + markup ledger rows; failed booking leaves state unchanged — conservation assertion)\n- Money-path conservation checks per Constitution VI\n- Emit the PMF metrics events from day one: marketplace take-rate revenue per active agent, resold-vs-self-built trip ratio\n\nAcceptance: `verification.oracle.smoke_command` runs the harness in bounded time; quality-bar L3 requirement is enforceable in Polish.",
+    "type": "feature",
+    "priority": "high",
+    "state": "backlog",
+    "created": "2026-07-03T00:00:00Z",
+    "pr_url": ""
+  }
+]
