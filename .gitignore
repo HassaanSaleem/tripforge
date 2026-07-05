@@ -17,3 +17,11 @@ coverage/
 .vercel/
 playwright-report/
 test-results/
+
+# KitchenLoop runtime byproducts — machine-local state, never committed.
+# The loop's self-tidy step: future iterations leave a clean tree automatically.
+.kitchenloop/metrics.json
+.kitchenloop/state/
+.kitchenloop/*.lock
+scripts/pr-manager/state.json
+scripts/pr-manager/*.log
