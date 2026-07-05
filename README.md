@@ -32,7 +32,7 @@ routes feature-sized work through **Spec-Driven Development** (Spec Kit):
 change is governed by three sealed documents:
 
 | Layer | File | Role |
-|-------|------|------|
+| --- | --- | --- |
 | Constitution | `.specify/memory/constitution.md` | Six immutable product principles; every plan passes the Constitution Check |
 | Architecture | `docs/architecture/system-architecture.md` | System map + numbered invariants `INV-NNN`; ADRs in `docs/architecture/decisions/` |
 | Quality bar | `.kitchenloop/quality-bar.md` | "The Bar" — five domain principles enforced before merge |
@@ -79,7 +79,7 @@ npm run lint    # ESLint
 
 ## Repository map
 
-```
+```text
 docs/product/            Charter + PRD (product source of truth)
 docs/architecture/       system-architecture.md (invariants) + decisions/ (ADRs)
 .specify/                Spec Kit: constitution, templates, scripts
