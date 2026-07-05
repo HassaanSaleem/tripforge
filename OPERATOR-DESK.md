@@ -14,16 +14,16 @@ Rules for the loop:
 
 | ID | Say | Question | Recommendation | Since | Blocks |
 |----|-----|----------|----------------|-------|--------|
-| D-002 | `scope pushes` | DIRECTIVE's ALWAYS-HALT on "git push to any remote" contradicts the loop's own PR pipeline (every execute/merge path must push feature branches) and deadlocks iteration 1. | Amend the DIRECTIVE item to: halt on **pushes to `main` outside the gated pr-manager merge pipeline, pushes to new remotes, force-pushes, and deploys**; feature-branch pushes for PR creation are authorized. | 2026-07-05 | Iteration 1 (execute + merge paths) |
-| D-003 | `align seals` | DIRECTIVE's sealed-gate list omits the pr-manager review stages and the architecture doc that CLAUDE.md seals — the two lists must be identical or the gap is exploitable. | Add "pr-manager review stages (`scripts/pr-manager/prompts/`)" and "`docs/architecture/system-architecture.md`" to DIRECTIVE's sealed list. | 2026-07-05 | Nothing (hardening) |
 
-**D-002 context:** The pre-flight audit confirmed this as a blocker: DIRECTIVE.md:18
-forbids all pushes while prompts/engine push in five places. Until you answer,
-the engine's direct state-sync pushes to main are gated OFF behind config
-(`repo.allow_state_sync_push: false`) and PR-branch pushes proceed per the
-audit-fix recommendation. Saying `scope pushes` ratifies the scoped wording
-(I apply the DIRECTIVE edit on your word).
+_Empty — nothing is asked of the operator._
 
-**D-003 context:** Hardening only — the mechanical sealed-path deny list in
-pr-manager now blocks loop merges to gate files regardless; this row just makes
-the two documents agree.
+<!-- Resolved 2026-07-05 (operator ratified both at iteration-1 kickoff):
+     D-002 `scope pushes` — DIRECTIVE item 2 push rule scoped to halt only on
+       pushes to main outside the gated pr-manager merge pipeline, pushes to new
+       remotes, force-pushes, and deploys; feature-branch pushes authorized.
+       Direct state-sync pushes to main remain gated off (repo.allow_state_sync_push
+       stays false — those are pushes to main outside the merge pipeline).
+     D-003 `align seals` — DIRECTIVE sealed-gate list now names the pr-manager
+       review stages (scripts/pr-manager/prompts/) and system-architecture.md,
+       matching CLAUDE.md. -->
+

@@ -1,7 +1,7 @@
 ---
 title: DIRECTIVE — the human setpoint
 owner: Syed Hassaan Saleem
-last_validated: 2026-07-03
+last_validated: 2026-07-05
 ---
 
 Hand-written, human-owned. The standing setpoint the loop steers by; read at the
@@ -15,7 +15,10 @@ not a backlog. (State lives in docs/internal/loop-state.md; the queue in
 2. ALWAYS HALT for: constitution amendments; canonical itinerary schema version
    bumps/migrations; changes to revenue-share or client-ownership semantics;
    changes to the loop's own gates (quality bar, oracle, UAT protocol, sweep
-   rules, this file); `git push` to any remote; deploys.
+   rules, pr-manager review stages `scripts/pr-manager/prompts/`,
+   `docs/architecture/system-architecture.md`, this file); pushes to `main`
+   outside the gated pr-manager merge pipeline, pushes to new remotes, and
+   force-pushes; deploys. (Feature-branch pushes for PR creation are authorized.)
 3. Spec gaps (SPEC-SILENT findings) file tickets; spec amendments go through the
    speckit flow with my review — code never silently defines the spec.
 4. Quality sweep every 3rd iteration; dead code is removed only via ticketed PRs.
