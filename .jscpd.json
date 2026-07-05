@@ -1,0 +1,15 @@
+{
+  "threshold": 1,
+  "reporters": ["console"],
+  "absolute": true,
+  "gitignore": true,
+  "ignore": [
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/.turbo/**",
+    "**/*.test.ts",
+    "**/__tests__/**"
+  ],
+  "format": ["typescript", "tsx"]
+}

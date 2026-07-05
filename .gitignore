@@ -6,3 +6,14 @@ scripts/ai-discussion/conversations/
 node_modules/
 .env
 .DS_Store
+
+# Build / tooling artifacts (seed-0001 monorepo)
+.next/
+next-env.d.ts
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+.vercel/
+playwright-report/
+test-results/

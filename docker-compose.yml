@@ -33,14 +33,48 @@ services:
       - "127.0.0.1:8025:8025"   # web UI — loopback only (holds auth tokens)
       - "127.0.0.1:1025:1025"   # SMTP — loopback only
 
-  # web:  # added by seed-0001 — Next.js app (apps/web) built from this repo
-  #   build: { context: ., dockerfile: apps/web/Dockerfile }
-  #   ports: ["127.0.0.1:3000:3000"]   # loopback only — matches postgres/mailpit stance
-  #   depends_on: { postgres: { condition: service_healthy } }
-  #   environment:
-  #     DATABASE_URL: postgres://tripforge:tripforge@postgres:5432/tripforge
-  #     SMTP_URL: smtp://mailpit:1025
-  #     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+  # One-shot schema push before the app boots (INV-004 tenancy + Better Auth
+  # tables). Runs drizzle-kit push against the compose Postgres, then exits.
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tripforge:tripforge@postgres:5432/tripforge
+    restart: "no"
+
+  # Next.js app (apps/web), built from this repo (seed-0001). `docker compose up
+  # --build --wait` boots the BUILT image + postgres + mailpit (INV-019, INV-027).
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runner
+    ports:
+      - "127.0.0.1:3000:3000"   # loopback only — matches postgres/mailpit stance
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgres://tripforge:tripforge@postgres:5432/tripforge
+      SMTP_URL: smtp://mailpit:1025
+      BETTER_AUTH_URL: http://localhost:3000
+      # Non-secret local dev default; real deploys set a strong secret in the host env.
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-dev-only-insecure-secret-change-me}
+      # Optional — the skeleton makes no live AI call (INV-013/019); passed through
+      # for later seeds. Empty is fine.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
 volumes:
   pgdata:

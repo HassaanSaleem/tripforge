@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["tests/integration/*.mjs"]
+    },
+    "apps/web": {
+      "entry": ["app/**/{page,layout,route,loading,error,not-found}.{ts,tsx}", "lib/**/*.ts"],
+      "project": ["**/*.{ts,tsx}"]
+    },
+    "packages/*": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    }
+  }
+}

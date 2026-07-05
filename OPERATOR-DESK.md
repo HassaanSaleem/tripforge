@@ -14,8 +14,24 @@ Rules for the loop:
 
 | ID | Say | Question | Recommendation | Since | Blocks |
 |----|-----|----------|----------------|-------|--------|
+| D-004 | `wire skeleton gates` | seed-0001 landed the runnable skeleton (Next.js/tRPC/Better Auth/Drizzle), an L3 smoke script, the Playwright live-verification harness, and CI — all built but NOT self-wired (the loop may not edit the sealed `kitchenloop.yaml`). May I apply the four config values below? | Apply after the seed-0001 PR merges; flip `require_ci` only once the CI run is green. | 2026-07-05 | INV-027 live verification exiting pre-skeleton mode; CI gating merges. |
 
-_Empty — nothing is asked of the operator._
+**D-004 context** — seed-0001 (PR `kitchen/fix-seed-0001-bootstrap-skeleton`)
+delivers the runnable web service plus its verification harness, but per DIRECTIVE
+(sealed regulator: `kitchenloop.yaml`) the loop cannot wire its own oracle/gates.
+Once the PR merges, set in `kitchenloop.yaml`:
+
+- `verification.oracle.smoke_command`: `node tests/integration/smoke.mjs`
+- `verification.live.boot_command`: `docker compose down -v && docker compose up --build --wait`
+- `verification.live.e2e_command`: `npx playwright test`
+- `pr_manager.require_ci`: `true` — **only after** the `.github/workflows/ci.yml`
+  run is green on the merged commit (flipping it before CI is green would deadlock
+  merges).
+
+Recommendation: apply all four. Until then, INV-027 live verification stays in the
+pre-skeleton carve-out (execute records `SKIPPED (pre-skeleton)`), and merges are
+not CI-gated. Nothing else is blocked — the skeleton's `npm test` / `npm run lint`
+already pass and gate PRs.
 
 <!-- Resolved 2026-07-05 (operator ratified both at iteration-1 kickoff):
      D-002 `scope pushes` — DIRECTIVE item 2 push rule scoped to halt only on
