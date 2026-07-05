@@ -100,6 +100,9 @@ if [ -n "$LIB_DIR" ] && [ -f "$LIB_DIR/config.sh" ]; then
   config_load
   source "$LIB_DIR/paths.sh"
   source "$LIB_DIR/tickets.sh"
+  # Operator notifications (desktop + optional Slack); sourced after config.sh
+  # so notify_operator can read notify.desktop. Never fatal if absent.
+  [ -f "$LIB_DIR/notify.sh" ] && source "$LIB_DIR/notify.sh"
   # Cross-platform timeout with process-group kill (macOS zombie fix)
   [ -f "$LIB_DIR/timeout.sh" ] && source "$LIB_DIR/timeout.sh"
   REPO_ROOT="$KITCHENLOOP_ROOT"
@@ -255,6 +258,17 @@ load_counter() {
 # when drift metrics or stop conditions trip. The regulator is not modifiable
 # by what it regulates: only the operator removes the sentinel.
 HALT_FILE="$REPO_ROOT/.kitchenloop/HALT"
+OPERATOR_DESK_FILE="$REPO_ROOT/OPERATOR-DESK.md"
+
+# Fallback: if notify.sh was not sourced, calls become safe no-ops.
+command -v notify_operator >/dev/null 2>&1 || notify_operator() { :; }
+
+# desk_ask_count — number of pending asks on the operator desk (table rows with
+# an ID like D-002 / A-001). Used to detect when a phase files a new ask.
+desk_ask_count() {
+  [ -f "$OPERATOR_DESK_FILE" ] || { echo 0; return 0; }
+  grep -cE '^\| [A-Z]+-[0-9]+ \|' "$OPERATOR_DESK_FILE" 2>/dev/null || echo 0
+}
 
 # enforce_halt — if the sentinel exists, print it and refuse to run (exit 1).
 enforce_halt() {
@@ -284,6 +298,7 @@ create_halt() {
   } > "$HALT_FILE"
   echo "  [halt] Created HALT sentinel: $reason"
   echo "$(date) | HALT created — $reason" >> "$LOG_FILE"
+  notify_operator "KitchenLoop HALTED — action required" "$reason. The loop is stopped until you resolve it and: rm $HALT_FILE"
 }
 
 AGGRESSIVE_POLISH=false
@@ -1127,6 +1142,9 @@ DIRECTIVE
 run_phase() {
   # HALT sentinel: every loop phase refuses to run while .kitchenloop/HALT exists.
   enforce_halt
+  # Snapshot the operator desk so we can tell if this phase files a new ask.
+  local desk_before
+  desk_before=$(desk_ask_count)
   local phase="$1"
   local loop_num="$2"
   local prompt_name="${3:-$phase}"
@@ -1225,6 +1243,14 @@ run_phase() {
   kill "$watchdog_pid" 2>/dev/null || true; wait "$watchdog_pid" 2>/dev/null 2>&1 || true
   kill "$startup_wdog" 2>/dev/null || true; wait "$startup_wdog" 2>/dev/null 2>&1 || true
   remove_pid "$watchdog_pid"
+
+  # If this phase filed a new operator-desk ask, push it to the operator now.
+  local desk_after
+  desk_after=$(desk_ask_count)
+  if [ "${desk_after:-0}" -gt "${desk_before:-0}" ]; then
+    notify_operator "KitchenLoop needs you — new OPERATOR-DESK ask ($phase)" \
+      "$((desk_after - desk_before)) new ask(s) on the desk. Open OPERATOR-DESK.md and say the listed word to unblock."
+  fi
 
   if [ -f "${phase_log}.timeout" ]; then
     timed_out=true

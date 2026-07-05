@@ -41,7 +41,10 @@ if [ -n "$LIB_DIR" ] && [ -f "$LIB_DIR/config.sh" ]; then
     source "$LIB_DIR/tickets.sh"
     HAS_CONFIG=true
   fi
+  [ -f "$LIB_DIR/notify.sh" ] && source "$LIB_DIR/notify.sh"
 fi
+# Fallback: notify_operator is a safe no-op if notify.sh was not sourced.
+command -v notify_operator >/dev/null 2>&1 || notify_operator() { :; }
 
 # ── Base branch: env var > config > default ────────────────────────
 if [ -n "${BASE_BRANCH:-}" ]; then
@@ -214,6 +217,8 @@ add_operator_desk_row() {
     END { print ""; print ctx }
   ' "$OPERATOR_DESK" > "$tmp" 2>/dev/null && mv "$tmp" "$OPERATOR_DESK" || rm -f "$tmp"
   log "OPERATOR-DESK: filed ask $id (say: $say)"
+  notify_operator "KitchenLoop needs you — new OPERATOR-DESK ask ($id)" \
+    "$question Say \`$say\` to answer. Blocks: $blocks"
 }
 
 # ── Memory management ────────────────────────────────────────────────

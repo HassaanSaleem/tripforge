@@ -159,6 +159,15 @@ ticketing:
 quality:
   bar_file: ".kitchenloop/quality-bar.md"
 
+# ─── Operator notifications ──────────────────────────────────────────
+# The loop actively pings the operator when it files an OPERATOR-DESK ask or
+# trips the .kitchenloop/HALT sentinel, so an unattended overnight batch never
+# waits silently. Desktop (macOS osascript) is a non-secret toggle here; the
+# Slack webhook URL is a secret and lives in .env as KITCHENLOOP_SLACK_WEBHOOK
+# (git-ignored) — set it to also get pinged when you're away from the machine.
+notify:
+  desktop: true                   # macOS notification + terminal bell on desk asks / HALT
+
 pr_manager:
   author_allowlist: []
   review_bot: ""                # no CodeRabbit installed — Codex is the external reviewer
