@@ -255,6 +255,29 @@ review-checked and L3-tested where marked.
   the stage records `SKIPPED (pre-skeleton)` in the PR body — explicitly,
   never silently.* (ADR-0003)
 
+### Deployment & runtime topology
+
+- **INV-028 [M]** The P0 **web** deploy target is **Vercel** (hosting
+  `apps/web`) backed by **Supabase Postgres** as the managed system of record
+  (INV-003 holds — one Postgres, now cloud-managed in prod; Better Auth and
+  Drizzle run against it via a **pooled** connection string, never a direct
+  unpooled socket from serverless). Because Vercel runs `apps/web` as
+  stateless serverless/edge functions, feature code MUST be written to that
+  contract: no reliance on in-process cross-request state, in-memory caches,
+  or an always-on worker daemon (reinforces INV-025 — derived data lives in
+  Postgres, not process memory); any request handler that calls the LLM tool
+  loop MUST stream so it stays within the platform function timeout; scheduled
+  derived-data jobs (INV-026) run on **Supabase `pg_cron`** (or Vercel Cron),
+  never an in-process scheduler. Local dev and INV-027 live verification keep
+  using the docker-compose image; production parity is at the app/schema
+  level, not image-for-image — a feature that only works under a long-lived
+  server process is out of contract until the topology changes. **Deploying is
+  an operator action** (DIRECTIVE ALWAYS-HALT lists deploys): the loop writes
+  deploy-compatible code and never triggers a deploy. *Free-tier revisit
+  triggers: Vercel Hobby is non-commercial → move to Pro before commercial
+  launch; function-timeout or worker needs that outgrow serverless → revisit
+  the host (e.g. Fly.io on the same docker image).* (ADR-0004)
+
 ---
 
 ## 4. Decision records
@@ -269,6 +292,8 @@ colocate with the package they constrain once it exists (STD-002 §3.5 spirit).
 - **ADR-0003** — Live verification per SDD cycle (built compose image as test
   target, Playwright + Playwright MCP as QA driver, screenshot/log evidence,
   fix-in-cycle policy).
+- **ADR-0004** — Web deployment: Vercel (`apps/web`) + Supabase Postgres, free
+  tier for P0; serverless build contract; deploy is operator-gated.
 
 ## 5. Amendment process
 
