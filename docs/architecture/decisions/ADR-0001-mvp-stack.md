@@ -28,7 +28,7 @@ shared engine (PRD §4) and respect the constitution's adapter boundaries.
   actual code by web, mobile, API, and adapters (reinforces INV-001).
 - REST facade is a later additive layer, not a rewrite (tRPC procedures wrap
   cleanly).
-- Better Auth's organization model becomes the tenancy primitive (INV-04);
+- Better Auth's organization model becomes the tenancy primitive (INV-004);
   switching auth later means an auth-table migration, accepted risk at MVP.
 - Zero paid services required for the CRUD stack, tests, or CI (INV-019); AI
   features need only `ANTHROPIC_API_KEY`. The Anthropic SDK gives the planner

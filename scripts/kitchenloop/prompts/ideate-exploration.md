@@ -1,6 +1,15 @@
 # Kitchen Loop - Phase 1: Ideate (Exploration Mode, Autonomous)
 
-You are running **autonomously** in **exploration mode**. The goal is creative, adventurous usage ideas that stress-test the project in unexpected ways. Failures are VALID FINDINGS — they reveal missing features, bad error messages, and edge cases that conservative scenarios never hit.
+You are running **autonomously** in **exploration mode**. The goal is creative, adventurous usage ideas that stress-test the project in unexpected ways. Failures are VALID FINDINGS — they reveal missing features, bad error messages, and edge cases that conservative scenarios never hit. No interactive operator is available — never use `AskUserQuestion`; any ask goes to `OPERATOR-DESK.md` as a row.
+
+## Control Plane — READ FIRST (before any other action)
+
+1. **HALT sentinel.** Check whether `{{REPO_ROOT}}/.kitchenloop/HALT` exists. If it does, print its contents, output the halted sentinel below, and STOP immediately — do no other work this phase:
+   ```
+   [ideate-exploration] HALTED -- .kitchenloop/HALT present, iteration {{ITERATION_NUM}}
+   ```
+2. **Read `DIRECTIVE.md`** (the human setpoint) before doing anything else. It lists what ALWAYS halts: constitution amendments; canonical itinerary schema version bumps/migrations; changes to revenue-share or client-ownership semantics; changes to the loop's own gates (quality bar, regression oracle, UAT protocol, sweep rules, DIRECTIVE itself); `git push` to a remote outside the gated pr-manager merge pipeline; deploys. For ANY work item that matches the ALWAYS-HALT list: do NOT do it — append a row to `OPERATOR-DESK.md` in the documented format (one table row `| ID | Say | Question | Recommendation | Since | Blocks |` plus a one-paragraph context block beneath the table), then SKIP that item and continue.
+3. **No interactive operator.** The operator is asynchronous; the ONLY channel to them is an `OPERATOR-DESK.md` row. A gate that is not on the desk was not asked.
 
 ## Autonomous Mode Rules
 
@@ -15,13 +24,27 @@ You are running **autonomously** in **exploration mode**. The goal is creative, 
 - **Iteration worktree**: {{ITER_WORKTREE}}
 - **Iteration number**: {{ITERATION_NUM}}
 - **Mode**: {{MODE}}
-- **Base branch**: main
+- **Base branch**: {{BASE_BRANCH}}
 - **Important**: You are running inside a git worktree. All file writes go here.
 
 ## HARD BLOCK: Do NOT ideate these combinations
 The following are known-blocked and MUST NOT be selected for this iteration.
 Even in exploration mode, these are known infrastructure failures, not interesting edge cases.
 {{BLOCKED_COMBOS}}
+
+## HARD ROADMAP SCOPE (P0 only) — even exploration stays in phase
+The PRD roadmap (comment block under `spec:` in `kitchenloop.yaml`) restricts the loop to the **P0
+agent-side MVP**. Adventurousness is about unusual *inputs and combinations of in-phase features*,
+NOT about reaching into deferred phases. Do NOT explore, and pick a different target if a candidate
+touches:
+- **P2+**: consumer surface (self-serve planner, self-drive/agent fork), the whats-hot feed
+- **P3+**: flights-as-merchant-of-record, direct-supplier-contracting, multi-region catalogue,
+  consortium/host-agency tooling
+- **Never (PRD non-goals)**: ride-hailing/driver fleet, Airbnb-sourced inventory, generic consumer
+  trip-planner play, scraped/AI-fabricated place imagery
+
+These are unlocked only by an operator decision. A deferred idea is a Missing-Feature note in the
+report, never an exploration target.
 
 ## Your Task
 

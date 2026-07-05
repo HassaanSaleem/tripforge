@@ -1,3 +1,8 @@
+---
+name: kitchenloop-execute
+description: KitchenLoop execute phase — query the top unblocked tickets, implement each through the SDD routing (feature-sized via Spec Kit, bug-sized via direct fix + repro test), live-test against the built stack, ship a PR, and run the UAT gate. Use when running the loop's execute phase or working tickets.
+---
+
 # KitchenLoop: Execute
 
 > Phase 3 -- Query top unblocked tickets, implement them sequentially, ship PRs.
@@ -16,6 +21,54 @@ The Execute phase takes tickets from the todo queue and turns them into merged
 code. Each ticket follows a strict workflow: branch, implement, lint, test,
 commit, PR, transition state. The goal is steady throughput -- 3 to 5 tickets
 per iteration.
+
+The autonomous **execute prompt** (`scripts/kitchenloop/prompts/execute.md`) is
+the authoritative driver of this phase; this skill is its detailed companion and
+MUST state identical rules (backpressure, branch recipe, ticket-state ownership,
+UAT gate). Where they ever diverge, the prompt wins.
+
+---
+
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop. Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[execute] HALTED -- iteration {N}`, and stop immediately.
+   Run no further step.
+2. **Read `DIRECTIVE.md`.** Any work item matching its ALWAYS-HALT list
+   (constitution amendments; canonical itinerary schema version bumps/migrations;
+   revenue-share or client-ownership semantics; changes to the loop's own gates —
+   quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE; `git push` to a
+   remote beyond gated feature-branch pushes; deploys) must NOT be done. Instead
+   write one row to `OPERATOR-DESK.md`
+   (`| ID | Say | Question | Recommendation | Since | Blocks |` plus a context
+   paragraph below it) and skip that ticket, continuing with other work.
+3. **No interactive operator** — never use `AskUserQuestion`. Make reasonable
+   decisions; asks go to `OPERATOR-DESK.md` as rows, never buried in prose or a
+   PR comment.
+
+---
+
+## Ticketing Provider Dispatch
+
+All ticket operations MUST honor `ticketing.provider` from `kitchenloop.yaml`.
+**This repo sets `provider: "none"`**, so the loop's queue lives in
+`.kitchenloop/backlog.json`, NOT in a GitHub issue tracker.
+
+- **`none` / `local`** (this repo): tickets are a JSON array in
+  `.kitchenloop/backlog.json`; each object has `id, title, body, type, priority,
+  state, created, pr_url` and moves through states
+  `backlog → todo → in_progress → in_review → done`. Query/transition/recover via
+  the `scripts/kitchenloop/lib/tickets.sh` helpers — `ticket_list_by_state`,
+  `ticket_transition`, `ticket_recover_stale`, `ticket_set_pr_url`,
+  `ticket_add_comment` — never with `gh issue` commands. Every PR body MUST carry
+  a `Ticket: <ticket-id>` line so `ticket_extract_ids_from_pr` links the PR to
+  its ticket.
+- **`github`**: the `gh issue ...` snippets below are the GitHub path.
+
+Creating and reading PRs via `gh pr create` / `gh pr list` is correct under either
+provider — the loop's PRs are real GitHub PRs; only the ticket queue is local.
 
 ---
 
@@ -36,58 +89,75 @@ Before starting new work, check for open PRs from previous iterations:
 gh pr list --author "@me" --state open --json number,title,mergeable,reviewDecision,statusCheckRollup
 ```
 
-**Backpressure rules:**
-- If there are **5+ open PRs**, STOP. Focus on getting existing PRs merged
-  (address review comments, fix failing CI, ping reviewers).
-- If there are **3-4 open PRs**, limit this iteration to 2 tickets max.
-- If there are **0-2 open PRs**, proceed normally (3-5 tickets).
+**Backpressure rules** (identical to `prompts/execute.md` — the authoritative source):
+- If there are **more than 10 open PRs**, skip execute entirely and log why.
+  Focus the loop's attention on getting existing PRs merged.
+- If there are **5-10 open PRs**, work only smaller, quick-win tickets this iteration.
+- If there are **fewer than 5 open PRs**, proceed normally (3-5 tickets).
 
 ### Step 2: Recover Stale Tickets
 
 Check for tickets marked as in-progress that have no active branch or PR.
 These are artifacts of interrupted previous iterations.
 
-For GitHub Issues ticketing:
-```bash
-gh issue list --label "{ticketing.github.state_labels.in_progress}" --json number,title
-```
+- **Local provider (`none`, this repo)**: `ticket_recover_stale` (from
+  `lib/tickets.sh`) finds `in_progress` tickets with no open PR and moves them
+  back to `todo`. Or list them with `ticket_list_by_state in_progress` and
+  transition each with `ticket_transition {id} todo`.
+- **GitHub provider**:
+  ```bash
+  gh issue list --label "{ticketing.github.state_labels.in_progress}" --json number,title
+  ```
 
 For each stale ticket:
 - If a branch exists with changes, pick up where it left off.
-- If no branch exists, transition back to todo state.
-
-<!-- CUSTOMIZE: Add logic for your ticketing provider if not GitHub Issues.
-     For example, Linear API calls or Jira transitions. -->
+- If no branch exists, transition back to todo state (with a recovery comment:
+  "Recovered by kitchenloop: previous execute run timed out before creating a PR.").
 
 ### Step 3: Select Tickets
 
 1. Query the todo queue, ordered by priority:
-   ```bash
-   gh issue list --label "{ticketing.github.state_labels.todo}" --json number,title,labels,body --limit 10
-   ```
+   - **Local provider (`none`, this repo)**: `ticket_list_by_state todo` (from
+     `lib/tickets.sh`) returns the todo tickets from `.kitchenloop/backlog.json`.
+   - **GitHub provider**:
+     ```bash
+     gh issue list --label "{ticketing.github.state_labels.todo}" --json number,title,labels,body --limit 10
+     ```
 2. Filter out tickets that are blocked (check for "blocked" label or dependencies
    mentioned in the ticket body).
-3. Select the top 3-5 unblocked tickets (adjusted by backpressure from Step 1).
+3. Select the top 3-5 unblocked tickets (adjusted by backpressure from Step 1)
+   using strict priority ordering (critical bugs first, then high bugs, high
+   features, medium, quick wins). Within a tier prefer the smallest scope.
 4. Prefer a mix of categories (bugs, features, improvements) over all-of-one-type.
 
 ### Step 4: Implement Each Ticket
 
 For each selected ticket, execute the following sub-steps sequentially:
 
-#### 4a. Create Branch
+#### 4a. Create Branch (worktree-safe)
+
+This phase runs inside the iteration's git worktree, where `{repo.base_branch}`
+is already checked out at the repo root. NEVER `git checkout {repo.base_branch}`
+here — it fails with "'{repo.base_branch}' is already checked out". Branch
+straight off the remote base (identical recipe to `prompts/execute.md` step 5):
 
 ```bash
-git checkout {repo.base_branch}
-git pull origin {repo.base_branch}
-git checkout -b {repo.iteration_branch_prefix}-{iteration}-{ticket_id}
+git fetch origin && git checkout -b kitchen/fix-{ticket_id}-{short_desc} origin/{repo.base_branch}
 ```
+
+When you move to the next ticket, do NOT `git checkout {repo.base_branch}` — the
+next ticket's `git checkout -b ... origin/{repo.base_branch}` starts cleanly from
+the base regardless of the branch you are currently on.
 
 #### 4b. Transition Ticket to In-Progress
 
-For GitHub Issues:
-```bash
-gh issue edit {ticket_number} --remove-label "{ticketing.github.state_labels.todo}" --add-label "{ticketing.github.state_labels.in_progress}"
-```
+- **Local provider (`none`, this repo)**: `ticket_transition {ticket_id} in_progress`
+  (from `lib/tickets.sh`), which updates the ticket's `state` in
+  `.kitchenloop/backlog.json`.
+- **GitHub provider**:
+  ```bash
+  gh issue edit {ticket_number} --remove-label "{ticketing.github.state_labels.todo}" --add-label "{ticketing.github.state_labels.in_progress}"
+  ```
 
 #### 4c. Implement the Fix/Feature
 
@@ -113,6 +183,18 @@ features through a loop over SDD. Route each ticket by size before coding:
   directly with a test that reproduces the bug first.
 - **Improvement-sized ticket** (polish, refactor, docs): implement directly
   within the quality bar.
+
+**Autonomous-mode override for the Spec Kit chain.** The `/speckit-*` skills were
+written for interactive use and contain "STOP and ask the user" / "wait for user
+response" gates (e.g. `/speckit-specify` clarifications end with "wait for user
+response"; `/speckit-implement` has an incomplete-checklist gate that asks
+"proceed anyway? (yes/no)"). This phase runs with no interactive operator, so in
+loop context you MUST NOT stall on them: resolve clarifications yourself with
+documented assumptions (record each assumption in the spec's Clarifications
+section and in the PR body), and treat incomplete checklist items as
+**proceed-with-note** — list them in the PR body rather than halting. Never call
+`AskUserQuestion`; a genuine blocker that needs the operator becomes an
+`OPERATOR-DESK.md` row, not an interactive wait.
 
 Constitution gates that always apply (see `.kitchenloop/quality-bar.md`,
 "The Bar"): canonical itinerary schema changes need a migration note; no
@@ -204,7 +286,25 @@ gh pr create \
 {1-3 bullet points describing the change}
 
 ## Ticket
-Closes #{ticket_number}
+Ticket: {ticket_id}
+{GitHub provider only — also add: Closes #{ticket_number}}
+
+## Pre-Write Decision
+{reuse | extend | generalize | new} — {one-line justification from the reuse scan
+(search of `packages/` + the relevant public surfaces) for the code written; see
+the Pre-Write Discipline above. A near-duplicate of an existing export without a
+recorded decision is review-blocking.}
+
+## Spec Alignment
+{Feature-sized tickets: one row per functional requirement. This table is what the
+Stage 4a codex alignment review verifies against.}
+
+| Functional requirement (spec.md) | Implementing file(s) | Test(s) |
+|----------------------------------|----------------------|---------|
+| {FR-1} | {path} | {test} |
+
+{Mark any deferred requirement explicitly and link its follow-up ticket. For
+bug/improvement tickets with no `spec.md`, write `N/A (no spec)` instead of the table.}
 
 ## Test Plan
 - [ ] Lint passes
@@ -221,18 +321,69 @@ EOF
   --base {repo.pr_target}
 ```
 
-#### 4h. Transition Ticket to In-Review
+#### 4h. UAT Gate (independent live acceptance test)
 
-```bash
-gh issue edit {ticket_number} --remove-label "{ticketing.github.state_labels.in_progress}" --add-label "{ticketing.github.state_labels.in_review}"
-```
+After the PR exists and BEFORE transitioning the ticket, run the User Acceptance
+Test gate — the full protocol is in
+`.claude/skills/kitchenloop-execute/UAT-GATE.md`. It is the independent live
+check: step 4e was the implementer's own live test; the UAT evaluator re-verifies
+with zero implementation context against the same built stack. Skip ONLY for pure
+refactors / docs / CI changes with no user-visible behavior (record the skip
+reason in the PR); NEVER skip it for product source, CLI, or user-facing changes.
 
-### Step 5: Update Loop State
+1. **Generate the test card** → `.kitchenloop/uat-cards/{ticket_id}.md`: a
+   step-by-step recipe a user follows (exact commands, exact expected exit codes
+   and output assertions, no `<placeholders>`; browser steps for web features).
+2. **Freeze the card** (deterministic validation): every step has a command, an
+   expected exit code, and ≥1 output assertion; reject manual-edit steps and
+   `<angle-bracket-placeholders>`. A defective card → report `UAT_SPEC_FAIL`,
+   don't block.
+3. **Boot the live stack** for the evaluator (`verification.live.boot_command`)
+   so browser steps run against the built image.
+4. **Spawn the `uat-evaluator` subagent** in `isolation: "worktree"` with ONLY
+   the test card contents — no diff, no ticket, no implementation context. This
+   is the one subagent the no-spawn rule permits.
+5. **Integrity check** (the implementer runs it, not the evaluator): `git diff`
+   / `git ls-files --others` on the UAT worktree — any product-file modification
+   outside `.kitchenloop/uat-runs/` = `EVAL_CHEAT_FAIL`; a missing evidence file
+   = `EVAL_CHEAT_FAIL` (override whatever the evaluator reported).
+6. **Parse the verdict** from the evaluator's documented `**Overall:** VERDICT`
+   line using portable tools only (BSD `grep`/`sed` — NEVER `grep -P`/`-oP`).
+   **Fail closed**: an empty or unparseable verdict is blocking and is treated as
+   a `PRODUCT_FAIL`-equivalent.
+7. **Act on the verdict**: `PASS` → proceed to 4i; `PRODUCT_FAIL` → keep the
+   ticket in its current state, comment the failure on the PR, tag `uat-failed`,
+   do NOT transition to in-review; `UAT_SPEC_FAIL` → log (bad card), don't block;
+   `EVAL_CHEAT_FAIL` → flag prominently for review.
+8. **Attach evidence** to the PR as a comment (`gh pr comment` — valid under both
+   providers) and keep the card at `.kitchenloop/uat-cards/{ticket_id}.md` plus
+   evidence at `.kitchenloop/uat-runs/{ticket_id}/`.
 
-Update `paths.loop_state` with:
-- Tickets attempted and their outcomes (completed, skipped, blocked)
-- PRs created (numbers and URLs)
+#### 4i. Transition Ticket to In-Review
+
+Only after a `PASS` (or a legitimately skipped) UAT gate:
+
+- **Local provider (`none`, this repo)**: `ticket_transition {ticket_id} in_review`
+  then `ticket_set_pr_url {ticket_id} {pr_url}` (from `lib/tickets.sh`).
+- **GitHub provider**:
+  ```bash
+  gh issue edit {ticket_number} --remove-label "{ticketing.github.state_labels.in_progress}" --add-label "{ticketing.github.state_labels.in_review}"
+  ```
+
+Never move a ticket to `done` — the pr-manager does that after merge.
+
+### Step 5: Emit Execute Summary (do NOT write loop-state)
+
+**Do NOT write `loop-state.md`** — the regress phase is the sole writer of loop
+state (this avoids concurrent-write corruption of the shared file, matching
+`prompts/execute.md`). Emit the run summary to stdout instead:
+- Tickets attempted and their outcomes (completed, skipped, blocked), stating WHY
+  each was chosen over other available tickets
+- PRs created (numbers/URLs or branch names) with their `Ticket:` ids
+- UAT verdict per ticket
 - Any tickets that were stale-recovered
+
+Regress records this iteration into loop state when it runs.
 
 ---
 
@@ -240,10 +391,15 @@ Update `paths.loop_state` with:
 
 At the end of the Execute phase:
 
-1. **3-5 PRs created** (or fewer if backpressure limited throughput)
-2. **Tickets transitioned** to in-review state
-3. **Stale tickets recovered** or transitioned back to todo
-4. **Loop state updated** at `paths.loop_state`
+1. **3-5 PRs created** (or fewer if backpressure limited throughput), each PR body
+   carrying `Ticket: <id>`, the Pre-Write decision, the spec-alignment table
+   (feature tickets), and the Live Test Evidence section
+2. **A UAT test card** at `.kitchenloop/uat-cards/{ticket_id}.md` and **evidence**
+   at `.kitchenloop/uat-runs/{ticket_id}/` for each product-behavior ticket, with
+   the verdict attached to its PR
+3. **Tickets transitioned** to in-review state (only after a PASS/skipped UAT gate)
+4. **Stale tickets recovered** or transitioned back to todo
+5. **Execute summary** emitted to stdout (loop state is written by regress, not here)
 
 ---
 

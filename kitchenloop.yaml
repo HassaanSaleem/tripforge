@@ -43,6 +43,10 @@ spec:
   dimensions:
     features:
     - "itinerary-builder"
+    # content-library is PRD-anchored (Pillar 1, p.4: content/media library),
+    # so it is P0 build surface — NOT P1+/non-goal. It is not yet enumerated in
+    # the constitution's P0 list; adding it there is a deferred owner-approved
+    # amendment. Until then, ideate may target it and triage must NOT reject it.
     - "content-library"
     - "booking"
     - "marketplace"
@@ -56,13 +60,49 @@ spec:
     - "agent-reseller"    # agent licensing/white-labeling another agent's trip (demand side)
     - "client"            # traveler viewing the branded client-facing output
   # PRD roadmap discipline — P0 (MVP) is agent-side only. The loop must NOT
-  # ideate these until their roadmap phase is unlocked by the operator:
+  # ideate these until their roadmap phase is unlocked by the operator.
+  # The comments below are the rationale; `blocked` is the machine-readable
+  # list (id + phase + reason) the ideate/triage phases filter against so P1+
+  # and non-goal work cannot flow into the backlog without an operator decision.
   # P2+: consumer-surface (self-serve planner, self-drive/agent fork), whats-hot-feed
   # P3+: flights-as-merchant-of-record, direct-supplier-contracting,
   #      multi-region-catalogue, consortium/host-agency tooling
   # Never (PRD non-goals): ride-hailing/driver fleet, Airbnb-sourced inventory,
   #      generic consumer trip-planner play, scraped/AI-fabricated place imagery
-  blocked: []
+  blocked:
+    # P2+ — consumer surface, unlocks when the operator opens the P2 roadmap phase
+    - id: "consumer-surface"
+      phase: "P2"
+      reason: "Consumer self-serve planner + self-drive/request-agent fork — roadmap P2, not P0"
+    - id: "whats-hot-feed"
+      phase: "P2"
+      reason: "What's-hot discovery feed — roadmap P2"
+    # P3+ — unlocks when the operator opens the P3 roadmap phase
+    - id: "flights-merchant-of-record"
+      phase: "P3"
+      reason: "Flights as merchant-of-record — roadmap P3 (P0 treats flights as a budget anchor only)"
+    - id: "direct-supplier-contracting"
+      phase: "P3"
+      reason: "Direct supplier contracting (bypassing aggregators) — roadmap P3"
+    - id: "multi-region-catalogue"
+      phase: "P3"
+      reason: "Multi-region catalogue — roadmap P3"
+    - id: "consortium-host-agency-tooling"
+      phase: "P3"
+      reason: "Consortium / host-agency tooling — roadmap P3"
+    # Never — PRD non-goals, rejected at triage (never unlock without an operator decision)
+    - id: "ride-hailing-fleet"
+      phase: "never"
+      reason: "Ride-hailing / driver fleet — PRD non-goal"
+    - id: "airbnb-inventory"
+      phase: "never"
+      reason: "Airbnb-sourced inventory — PRD non-goal"
+    - id: "generic-consumer-planner"
+      phase: "never"
+      reason: "Generic consumer trip-planner play — PRD non-goal"
+    - id: "scraped-fabricated-imagery"
+      phase: "never"
+      reason: "Scraped / AI-fabricated place imagery — PRD non-goal"
 
 verification:
   oracle:
@@ -77,6 +117,9 @@ verification:
   # screenshots) -> compose-log scan -> fix/rebuild/re-test (max 3 cycles).
   # Commands are wired by seed-0001 when the web service lands; empty = the
   # execute phase records SKIPPED (pre-skeleton) explicitly in the PR body.
+  # SINGLE SOURCE OF TRUTH: the execute prompt/skill reads the Live Test & Fix
+  # commands from `verification.live` here (boot/e2e/logs/teardown/base_url/
+  # evidence_dir/max_fix_cycles) — they are NOT hardcoded in the prompt.
   live:
     boot_command: ""              # seed-0001: "docker compose down -v && docker compose up --build --wait"
     e2e_command: ""               # seed-0001: "npx playwright test"
@@ -119,8 +162,8 @@ quality:
 pr_manager:
   author_allowlist: []
   review_bot: ""                # no CodeRabbit installed — Codex is the external reviewer
-  require_ci: true
-  skip_after_failures: 1
+  require_ci: false             # flip to true once seed-0001 lands the CI workflow (.github/workflows); no CI checks exist pre-skeleton, so gating on them would deadlock every merge
+  skip_after_failures: 2        # escalation ladder reachability: allow a retry before the pr-manager skips, so a transient first failure doesn't strand the ticket
 
 reviewers:
   codex:

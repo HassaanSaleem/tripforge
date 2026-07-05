@@ -128,7 +128,13 @@ tail -f .kitchenloop/logs/*.log                 # monitor
 ## Bootstrap Status
 
 The app skeleton does not exist yet. The seeded backlog
-(`.kitchenloop/backlog.json`) orders the bootstrap: app skeleton → canonical
-itinerary schema v0 → bedbank adapter + sandbox mock → L3 regression oracle
-harness. Until the skeleton lands, `npm test`/`npm run lint` will fail — that
-is expected; the first Execute iteration creates them.
+(`.kitchenloop/backlog.json`) orders the bootstrap (ID order = build order):
+app skeleton (seed-0001) → canonical itinerary schema v0 (seed-0002) →
+supply-adapter port family + sandbox mocks (seed-0003) → L3 regression oracle
+harness (seed-0004) → budget allocator + quote-then-book flow (seed-0005). A
+sixth seed, marketplace v0 (seed-0006: list/license/white-label + revenue-share
+plumbing), builds toward the P0 liquidity milestone (Constitution I/VI). Later
+seeds declare their `Depends on:` predecessors in-body (0002-0005 depend on
+0001; 0005 also on 0002/0003/0004). Until the skeleton lands,
+`npm test`/`npm run lint` will fail — that is expected; the first Execute
+iteration creates them.

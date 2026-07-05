@@ -298,10 +298,12 @@ ticket_extract_ids_from_pr() {
       echo "$body" | grep -oE '#[0-9]+' | sed 's/#//' | sort -u
       ;;
     local|none)
-      # Look for "Ticket: ID" pattern in PR body
+      # Look for "Ticket: ID" pattern in PR body. IDs are non-numeric for the
+      # local provider (e.g. seed-0001), so match the full slug charset — a
+      # [0-9]+ pattern would never match the seeded tickets.
       local body
       body=$(gh pr view "$pr_number" --json body -q '.body' 2>/dev/null || echo "")
-      echo "$body" | grep -oE 'Ticket: [0-9]+' | sed 's/Ticket: //' | sort -u
+      echo "$body" | grep -oE 'Ticket: [A-Za-z0-9_-]+' | sed 's/Ticket: //' | sort -u
       ;;
   esac
 }

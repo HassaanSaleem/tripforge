@@ -1,6 +1,15 @@
 # Kitchen Loop - Backlog Grooming (Autonomous)
 
-You are running **autonomously** as part of the Kitchen Loop. There is no human operator to interact with. You must make all decisions yourself.
+You are running **autonomously** as part of the Kitchen Loop. No interactive operator is available — never use `AskUserQuestion`; any ask goes to `OPERATOR-DESK.md` as a row. You make all in-scope decisions yourself; anything on DIRECTIVE.md's ALWAYS-HALT list becomes an `OPERATOR-DESK.md` row instead of an action.
+
+## Control Plane — READ FIRST (before any other action)
+
+1. **HALT sentinel.** Check whether `{{REPO_ROOT}}/.kitchenloop/HALT` exists. If it does, print its contents, output the halted sentinel below, and STOP immediately — do no other work this phase:
+   ```
+   [backlog] HALTED -- .kitchenloop/HALT present, iteration {{ITERATION_NUM}}
+   ```
+2. **Read `DIRECTIVE.md`** (the human setpoint) before doing anything else. It lists what ALWAYS halts: constitution amendments; canonical itinerary schema version bumps/migrations; changes to revenue-share or client-ownership semantics; changes to the loop's own gates (quality bar, regression oracle, UAT protocol, sweep rules, DIRECTIVE itself); `git push` to a remote outside the gated pr-manager merge pipeline; deploys. For ANY work item that matches the ALWAYS-HALT list: do NOT do it — append a row to `OPERATOR-DESK.md` in the documented format (one table row `| ID | Say | Question | Recommendation | Since | Blocks |` plus a one-paragraph context block beneath the table), then SKIP that item and continue.
+3. **No interactive operator.** The operator is asynchronous; the ONLY channel to them is an `OPERATOR-DESK.md` row. A gate that is not on the desk was not asked.
 
 ## Autonomous Mode Rules
 
@@ -9,10 +18,20 @@ You are running **autonomously** as part of the Kitchen Loop. There is no human 
 3. In autonomous mode, you ARE the approver. Evaluate and promote without waiting for confirmation.
 4. **Do NOT use the Write tool to output status messages.** Never create files with names like "=== Done ===", "Exit code:", etc. Only use Write/Edit for actual code and documentation files.
 
+## Ticketing Provider Dispatch
+
+Read `ticketing.provider` from `kitchenloop.yaml` first:
+- `provider: "none"` (this repo): ALL ticket operations read/write `.kitchenloop/backlog.json`
+  (states `todo` / `backlog` / `in_progress` / `in_review` / `done`; fields `id`, `title`, `body`,
+  `type`, `priority`, `state`, `created`, `pr_url`). Ticket ids are local (e.g. `seed-0001`) — there
+  is no `#N` issue form. Do NOT run `gh issue`/`gh pr` for ticket state.
+- `provider: "github"`: use `gh issue`/`gh pr` with the labels under `ticketing.github`. The `#N`
+  and `gh` steps below are the github path ONLY.
+
 ## Context
 - Iteration: {{ITERATION_NUM}}
 - Working directory: {{ITER_WORKTREE}}
-- Base branch: main
+- Base branch: {{BASE_BRANCH}}
 
 ## Your Task
 
@@ -34,19 +53,32 @@ Count tickets currently in "todo" state **by category**:
 
 ### Step 1.5: Abandoned Fix PR Scan
 
-Scan for tickets whose fix PRs were closed without merging — these bugs are still live:
+Scan for tickets whose fix PRs were closed without merging — these bugs are still live.
 
+**When `ticketing.provider` is `github`:**
 ```bash
 gh pr list --state closed --limit 50 \
   --json number,title,body,state,mergedAt \
   --jq '.[] | select(.mergedAt == null)'
 ```
+Extract the ticket ID from the PR title/body (look for `#N` references).
 
-For each closed-not-merged PR:
-1. Extract the ticket ID from the PR title/body (look for #N references)
-2. Check if the ticket is still open (todo/in_progress/in_review)
-3. If yes: promote back to "todo" with comment: "Fix PR #N was closed without merging. Bug is still live on main. Re-promoting for execution."
-4. If the ticket was already closed: reopen it
+**When `ticketing.provider` is `none` (this repo):** there is no `#N` linkage — key the scan to the
+local branch/ticket convention instead:
+```bash
+# Closed-not-merged fix branches follow kitchen/fix-<ticket_id>-<desc>.
+git fetch origin --prune
+git branch -r --merged origin/{{BASE_BRANCH}} | sed 's#origin/##'   # already-merged (ignore)
+```
+For each `kitchen/fix-<ticket_id>-*` branch that is NOT merged into `origin/{{BASE_BRANCH}}` and has
+no open PR, treat `<ticket_id>` (a `seed-NNNN`/local id) as an abandoned fix. Cross-check the
+ticket's `pr_url` field in `.kitchenloop/backlog.json`.
+
+For each abandoned fix, regardless of provider:
+1. Resolve the ticket ID (`#N` for github, `seed-NNNN`/local id for `none`).
+2. Check if the ticket is still open (`todo`/`in_progress`/`in_review`, or `backlog`).
+3. If yes: promote back to `todo` with a note: "Fix for `<ticket_id>` was closed/abandoned without merging. Bug is still live on `{{BASE_BRANCH}}`. Re-promoting for execution."
+4. If the ticket was already closed/`done`: reopen it (set state back to `todo`).
 
 This prevents bugs from going unfixed when AI-generated fix PRs are silently abandoned.
 
@@ -73,9 +105,14 @@ Ensure the todo queue has a healthy mix using this composition:
 
 ### Step 4: Execute Promotions
 
-Move the top-scoring tickets to "todo" state until the queue reaches 5-8 tickets:
-1. Transition state from "backlog" to "todo"
-2. Add a comment: "Promoted to todo by Kitchen Loop backlog grooming (iteration {{ITERATION_NUM}})"
+Move the top-scoring tickets to `todo` state until the queue reaches 5-8 tickets:
+1. **Do NOT promote a blocked ticket.** Skip any ticket that declares a `blockedBy` dependency (or
+   whose body names a prerequisite ticket) whose PR is not yet merged into `{{BASE_BRANCH}}`.
+   Promoting a dependent ticket sends Execute to branch it from a base that lacks the prerequisite
+   (e.g. the bootstrap seeds all depend on the app-skeleton seed). Leave it in `backlog` and note it
+   as "deferred (blocked by `<prereq>`)" in the summary.
+2. Transition state from `backlog` to `todo`.
+3. Add a note: "Promoted to todo by Kitchen Loop backlog grooming (iteration {{ITERATION_NUM}})".
 
 ### Step 5: Summary
 
@@ -86,9 +123,11 @@ Backlog grooming complete:
   Promoted: M tickets to todo
   Todo queue: X tickets (target: 5-8)
   Promoted:
-    - #123: Fix login timeout (bug, score: 13)
-    - #124: Add retry logic (improvement, score: 11)
+    - seed-0006: Fix login timeout (bug, score: 13)
+    - seed-0007: Add retry logic (improvement, score: 11)
+  Deferred (blocked): [ticket id + prerequisite, or "none"]
 ```
+(Use `#N` ids under the github provider, `seed-NNNN`/local ids under provider `none`.)
 
 ## Rules
 

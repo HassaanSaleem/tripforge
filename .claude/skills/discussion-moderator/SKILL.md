@@ -1,3 +1,8 @@
+---
+name: discussion-moderator
+description: Orchestrate a structured multi-AI debate — Gemini and Codex via CLI, Claude via an isolated subagent — with you as the impartial moderator, then synthesize a neutral report and save it into the conversation JSON. Use when the user asks to "discuss", "debate", "have the AIs argue about", or run a design/audit discussion across models.
+---
+
 # Skill: Discussion Moderator
 
 ## Description

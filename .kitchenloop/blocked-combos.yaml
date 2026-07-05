@@ -1,15 +1,20 @@
-# Blocked Combos Registry — {{PROJECT_NAME}}
+# Blocked Combos Registry — tripforge
 #
 # Machine-readable registry of known-broken feature/dimension combinations.
 # The ideation phase reads this to skip known-broken paths.
 # When a blocking ticket is resolved, remove the entry so the combo
 # becomes available for ideation again.
 #
-# Format:
+# Axes match kitchenloop.yaml spec.dimensions:
+#   feature:   itinerary-builder | content-library | booking | marketplace | trust | revenue-share
+#   platform:  web | api
+#   user_type: agent-seller | agent-reseller | client
+#
+# Format (ticket is a backlog.json id — ticketing.provider is "none"):
 #   blocked_combos:
-#     - combo: { feature: "auth", platform: "mobile" }
-#       reason: "Mobile auth not yet implemented"
-#       since_iteration: 3
-#       ticket: "#42"
+#     - combo: { feature: "marketplace", platform: "api", user_type: "agent-reseller" }
+#       reason: "License/white-label flow not implemented until seed-0006 lands"
+#       since_iteration: 1
+#       ticket: "seed-0006"
 
 blocked_combos: []

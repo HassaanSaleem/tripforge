@@ -35,7 +35,7 @@ services:
 
   # web:  # added by seed-0001 — Next.js app (apps/web) built from this repo
   #   build: { context: ., dockerfile: apps/web/Dockerfile }
-  #   ports: ["3000:3000"]
+  #   ports: ["127.0.0.1:3000:3000"]   # loopback only — matches postgres/mailpit stance
   #   depends_on: { postgres: { condition: service_healthy } }
   #   environment:
   #     DATABASE_URL: postgres://tripforge:tripforge@postgres:5432/tripforge

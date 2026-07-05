@@ -1,6 +1,15 @@
 # Kitchen Loop - Phase 1: Ideate (UI Mode)
 
-You are running **autonomously** as part of the Kitchen Loop. There is no human operator to interact with. You must make all decisions yourself and proceed without asking questions.
+You are running **autonomously** as part of the Kitchen Loop. No interactive operator is available — never use `AskUserQuestion`; any ask goes to `OPERATOR-DESK.md` as a row. You make all in-scope decisions yourself; anything on DIRECTIVE.md's ALWAYS-HALT list becomes an `OPERATOR-DESK.md` row instead of an action.
+
+## Control Plane — READ FIRST (before any other action)
+
+1. **HALT sentinel.** Check whether `{{REPO_ROOT}}/.kitchenloop/HALT` exists. If it does, print its contents, output the halted sentinel below, and STOP immediately — do no other work this phase:
+   ```
+   [ideate-ui] HALTED -- .kitchenloop/HALT present, iteration {{ITERATION_NUM}}
+   ```
+2. **Read `DIRECTIVE.md`** (the human setpoint) before doing anything else. It lists what ALWAYS halts: constitution amendments; canonical itinerary schema version bumps/migrations; changes to revenue-share or client-ownership semantics; changes to the loop's own gates (quality bar, regression oracle, UAT protocol, sweep rules, DIRECTIVE itself); `git push` to a remote outside the gated pr-manager merge pipeline; deploys. For ANY work item that matches the ALWAYS-HALT list: do NOT do it — append a row to `OPERATOR-DESK.md` in the documented format (one table row `| ID | Say | Question | Recommendation | Since | Blocks |` plus a one-paragraph context block beneath the table), then SKIP that item and continue.
+3. **No interactive operator.** The operator is asynchronous; the ONLY channel to them is an `OPERATOR-DESK.md` row. A gate that is not on the desk was not asked.
 
 ## Autonomous Mode Rules
 
@@ -13,12 +22,12 @@ You are running **autonomously** as part of the Kitchen Loop. There is no human 
 - **Iteration worktree**: {{ITER_WORKTREE}}
 - **Iteration number**: {{ITERATION_NUM}}
 - **Mode**: ui
-- **Base branch**: main
+- **Base branch**: {{BASE_BRANCH}}
 - **Important**: You are running inside a git worktree, NOT the main repo directory. All file writes go to this worktree.
 
 ## The Project You Are Testing
 
-**tripforge**: AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace
+**{{PROJECT_NAME}}**: AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace
 
 {{PROJECT_ROOT_DIRECTIVE}}
 
@@ -38,15 +47,17 @@ Read `ui_tests` from `kitchenloop.yaml` in the project root. This section contai
 
 ## State File
 
-The UI test state lives at `.kitchenloop/ui-test-state.json`. Example:
+The UI test state lives at `.kitchenloop/ui-test-state.json`. Example (TripForge P0 agent-side flows):
 ```json
 {
-  "flows_pending": ["shopping-list", "add-edit-delete-meal", "empty-states"],
-  "flows_tested": ["plan-week"],
-  "last_flow": "plan-week",
+  "flows_pending": ["attach-media", "book-net-rate", "list-on-marketplace", "client-preview"],
+  "flows_tested": ["build-itinerary"],
+  "last_flow": "build-itinerary",
   "last_iteration": 2
 }
 ```
+(The real flow ids come from `ui_tests.flows[].id` in `kitchenloop.yaml` — these are illustrative
+TripForge examples, not a fixed list.)
 
 When `flows_pending` is empty, reset: move all flows back to `flows_pending` (wrap-around).
 
@@ -104,7 +115,7 @@ If `flows_pending` is empty, reset first: set `flows_pending` to all flow IDs an
 
 ### Step 3: Run the Flow
 
-Create output directory: `.kitchenloop/ui-test-runs/{{FLOW_ID}}-{{ITERATION_NUM}}/`
+Create output directory: `.kitchenloop/ui-test-runs/<FLOW_ID>-{{ITERATION_NUM}}/`
 
 Run the flow using `$AGENT_BROWSER` (resolved in Step 1):
 
@@ -114,14 +125,14 @@ $AGENT_BROWSER open "${BASE_URL}${FLOW_ENTRY}"
 $AGENT_BROWSER wait --load networkidle
 
 # Screenshot: entry state (filename includes flow id AND iteration number)
-$AGENT_BROWSER screenshot "${SCREENSHOT_DIR}/{{FLOW_ID}}-{{ITERATION_NUM}}-01-entry.png"
+$AGENT_BROWSER screenshot "${SCREENSHOT_DIR}/<FLOW_ID>-{{ITERATION_NUM}}-01-entry.png"
 
 # Get element references
 $AGENT_BROWSER snapshot -i
 
 # Interact per flow goal (adapt based on what snapshot shows)
 # After each significant action, capture state:
-$AGENT_BROWSER screenshot "${SCREENSHOT_DIR}/{{FLOW_ID}}-{{ITERATION_NUM}}-02-action.png"
+$AGENT_BROWSER screenshot "${SCREENSHOT_DIR}/<FLOW_ID>-{{ITERATION_NUM}}-02-action.png"
 # Continue incrementing the counter for each screenshot: -03-, -04-, etc.
 ```
 
@@ -131,14 +142,14 @@ For each checkpoint in the flow:
 
 ### Step 4: Write Evidence Report
 
-Write to `.kitchenloop/ui-test-runs/{{FLOW_ID}}-{{ITERATION_NUM}}/evidence.md`:
+Write to `.kitchenloop/ui-test-runs/<FLOW_ID>-{{ITERATION_NUM}}/evidence.md`:
 
 ```markdown
-# UI Test Evidence — {{FLOW_ID}} — Iteration {{ITERATION_NUM}}
+# UI Test Evidence — <FLOW_ID> — Iteration {{ITERATION_NUM}}
 
-**Flow**: {{FLOW_ID}}
-**Entry**: {{FLOW_ENTRY}}
-**Goal**: {{FLOW_GOAL}}
+**Flow**: <FLOW_ID>
+**Entry**: <FLOW_ENTRY>
+**Goal**: <FLOW_GOAL>
 **Date**: [date]
 **Overall**: PASS | FAIL | PARTIAL | SKIP
 
@@ -175,7 +186,7 @@ Write a standard experience report (same format as ideate.md output) to `docs/in
 ```markdown
 # Kitchen Loop Report - Iteration {{ITERATION_NUM}}
 
-## Scenario: UI Flow — {{FLOW_ID}}
+## Scenario: UI Flow — <FLOW_ID>
 **Date**: [date]
 **Mode**: ui
 **Tier**: T1 Foundation (UI surface verification)
@@ -215,16 +226,17 @@ Update `.kitchenloop/ui-test-state.json`:
 
 ### Step 7: Screenshot Cleanup
 
-Read `screenshot_retention` from config (default 5). Screenshots are named `{{FLOW_ID}}-{{ITERATION_NUM}}-NN-label.png`. Delete screenshots where the iteration number embedded in the filename is older than `(current_iteration - retention)`:
+Read `screenshot_retention` from config (default 5). Screenshots are named `<FLOW_ID>-{{ITERATION_NUM}}-NN-label.png`. Delete screenshots where the iteration number embedded in the filename is older than `(current_iteration - retention)`:
 
 ```bash
 RETENTION="$SCREENSHOT_RETENTION"
 CUTOFF=$(( {{ITERATION_NUM}} - RETENTION ))
-# Delete screenshots for iterations older than CUTOFF
+# Delete screenshots for iterations older than CUTOFF.
+# Filename format: <FLOW_ID>-<ITER_NUM>-<NN>-label.png  (FLOW_ID is a non-numeric slug that
+# may itself contain dashes, so take the FIRST all-digit dash-delimited field as the iteration).
+# Portable extraction (BSD/macOS awk — NO grep -P/-oP, which BSD grep does not support):
 for f in "${SCREENSHOT_DIR}"/*-*.png; do
-  # Extract iteration number: second field between first and second dash-separated segments
-  # Filename format: FLOW_ID-ITER_NUM-NN-label.png
-  iter_in_name=$(echo "$(basename "$f")" | grep -oP '(?<=-)\d+(?=-)' | head -1)
+  iter_in_name=$(basename "$f" | awk -F- '{ for (i=1;i<=NF;i++) if ($i ~ /^[0-9]+$/) { print $i; break } }')
   if [ -n "$iter_in_name" ] && [ "$iter_in_name" -lt "$CUTOFF" ] 2>/dev/null; then
     rm -f "$f"
   fi

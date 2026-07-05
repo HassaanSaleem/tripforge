@@ -121,6 +121,10 @@ if [ "$HAS_CONFIG" = true ]; then
   BASE_BRANCH=$(config_get_default "repo.base_branch" "main")
   ITER_BRANCH_PREFIX=$(config_get_default "repo.iteration_branch_prefix" "kitchen/iter")
   ENV_FILE=$(config_get_default "repo.env_file" ".env")
+  # Direct-to-main state-sync pushes (loop-state / reports / ui-state) are an
+  # operator gate (DIRECTIVE ALWAYS-HALT on push; desk row D-002). Default OFF:
+  # when false the engine keeps state on the iteration branch and skips the push.
+  ALLOW_STATE_SYNC_PUSH=$(config_get_default "repo.allow_state_sync_push" "false")
   FULL_TEST_CMD=$(config_get_default "verification.oracle.full_command" "make test")
   QUICK_TEST_CMD=$(config_get_default "verification.oracle.quick_command" "make test")
   LINT_CMD=$(config_get_default "verification.oracle.lint_command" "make lint")
@@ -130,11 +134,17 @@ if [ "$HAS_CONFIG" = true ]; then
   PASS_RATE_FLOOR=$(config_get_default "verification.stop_conditions.pass_rate_floor" "0.95")
   MAX_CONSEC_FAIL_CFG=$(config_get_default "verification.stop_conditions.max_consecutive_failures" "3")
   TEST_COUNT_DECLINE_ITERS=$(config_get_default "verification.stop_conditions.test_count_decline_iters" "3")
+  # Skip policy: what to do when a phase gate fails. "pause" trips the HALT
+  # sentinel; anything else logs-and-continues.
+  SKIP_POLICY_IDEATE_FAIL=$(config_get_default "verification.skip_policy.ideate_fail" "continue")
+  SKIP_POLICY_EXECUTE_FAIL=$(config_get_default "verification.skip_policy.execute_fail" "continue")
+  SKIP_POLICY_REGRESS_FAIL=$(config_get_default "verification.skip_policy.regress_fail" "continue")
   LOGS_DIR=$(path_logs)
 else
   BASE_BRANCH="main"
   ITER_BRANCH_PREFIX="kitchen/iter"
   ENV_FILE=".env"
+  ALLOW_STATE_SYNC_PUSH="false"
   FULL_TEST_CMD="make test"
   QUICK_TEST_CMD="make test"
   LINT_CMD="make lint"
@@ -144,6 +154,9 @@ else
   PASS_RATE_FLOOR="0.95"
   MAX_CONSEC_FAIL_CFG="3"
   TEST_COUNT_DECLINE_ITERS="3"
+  SKIP_POLICY_IDEATE_FAIL="continue"
+  SKIP_POLICY_EXECUTE_FAIL="continue"
+  SKIP_POLICY_REGRESS_FAIL="continue"
   LOGS_DIR="$REPO_ROOT/.kitchenloop/logs"
 fi
 
@@ -236,12 +249,57 @@ load_counter() {
   fi
 }
 
+# ── HALT sentinel (operator emergency stop) ────────────────────────────
+# CLAUDE.md: "if .kitchenloop/HALT exists, every loop phase refuses to run
+# until the operator deletes it." Any phase may create it (with a reason)
+# when drift metrics or stop conditions trip. The regulator is not modifiable
+# by what it regulates: only the operator removes the sentinel.
+HALT_FILE="$REPO_ROOT/.kitchenloop/HALT"
+
+# enforce_halt — if the sentinel exists, print it and refuse to run (exit 1).
+enforce_halt() {
+  if [ -f "$HALT_FILE" ]; then
+    echo ""
+    echo "  ═══════════════════ HALT ═══════════════════"
+    echo "  Sentinel present: $HALT_FILE"
+    sed 's/^/  | /' "$HALT_FILE" 2>/dev/null || true
+    echo "  ════════════════════════════════════════════"
+    echo "  Every loop phase refuses to run until the operator deletes it:"
+    echo "    rm $HALT_FILE"
+    echo "$(date) | HALT sentinel present — refusing to run" >> "$LOG_FILE"
+    exit 1
+  fi
+}
+
+# create_halt "reason" — trip the emergency stop (drift/stop-condition breach).
+create_halt() {
+  local reason="$1"
+  mkdir -p "$(dirname "$HALT_FILE")"
+  {
+    echo "HALT created: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "Reason: $reason"
+    echo ""
+    echo "The Kitchen Loop stopped itself. Investigate, then delete this file to resume:"
+    echo "  rm $HALT_FILE"
+  } > "$HALT_FILE"
+  echo "  [halt] Created HALT sentinel: $reason"
+  echo "$(date) | HALT created — $reason" >> "$LOG_FILE"
+}
+
 AGGRESSIVE_POLISH=false
 AGGRESSIVE_POLISH_MAX_PRS=4
 
-# Drain mode: auto-trigger when PR backpressure is too high
-DRAIN_THRESHOLD=25        # Enter drain mode when open PRs exceed this
-DRAIN_EXIT_THRESHOLD=5    # Exit drain mode when open PRs drop below this
+# Drain mode: auto-trigger when PR backpressure is too high.
+# Thresholds come from runtime.drain_threshold / runtime.drain_exit_threshold
+# in kitchenloop.yaml so the operator-tuned backpressure control is honored
+# (must match the value the execute prompt/skill enforce).
+if [ "$HAS_CONFIG" = true ]; then
+  DRAIN_THRESHOLD=$(config_get_default "runtime.drain_threshold" "10")        # Enter drain mode when open PRs exceed this
+  DRAIN_EXIT_THRESHOLD=$(config_get_default "runtime.drain_exit_threshold" "5")  # Exit drain mode when open PRs drop below this
+else
+  DRAIN_THRESHOLD=10
+  DRAIN_EXIT_THRESHOLD=5
+fi
 DRAIN_MODE=false
 MAX_DRAIN_ZERO_MERGES=2   # Exit drain mode after N consecutive loops that merge 0 PRs
 DRAIN_ZERO_MERGE_COUNT=0
@@ -365,6 +423,17 @@ else
   IDEATE_PROMPT="ideate"
 fi
 
+# --mode ui requires a configured ui_tests section (base_url + flows). Without
+# it the FLOW_* placeholders in ideate-ui.md cannot be substituted, so fail
+# fast with a clear message instead of dispatching an unsubstituted prompt.
+if [ "$MODE" = "ui" ]; then
+  if [ "$HAS_CONFIG" != true ] || ! config_has "ui_tests"; then
+    echo "ERROR: --mode ui requires a 'ui_tests' section in kitchenloop.yaml."
+    echo "  Uncomment and configure ui_tests (base_url, flows) before running UI mode."
+    exit 1
+  fi
+fi
+
 # ─── Mode-specific phase defaults ────────────────────────────────────
 if [ "$MODE" = "user-only" ]; then
   if [ -z "$ONLY_PHASE" ]; then
@@ -437,15 +506,46 @@ if [ "$HAS_CONFIG" = true ]; then
   fi
 fi
 
+# ─── Pre-flight: HALT sentinel (operator emergency stop) ─────────────
+enforce_halt
+
 # ─── Pre-flight: Verify claude --print produces output ────────────────
+# NOTE: the installed CLI rejects `--print --output-format stream-json`
+# WITHOUT `--verbose` ("--output-format=stream-json requires --verbose"),
+# so both this check and run_claude_for_phase pass --verbose. Keep stderr so
+# the real CLI error surfaces instead of a misleading "no output" message.
 echo "Pre-flight: Verifying claude --print output..."
-_preflight_test_output=$(echo "respond with exactly: ok" | claude --print --output-format stream-json 2>/dev/null \
+_preflight_stderr=$(mktemp)
+_preflight_test_output=$(echo "respond with exactly: ok" | claude --print --output-format stream-json --verbose 2>"$_preflight_stderr" \
   | jq -r --unbuffered 'if .type == "assistant" then .message.content[]? | select(.type == "text") | .text elif .type == "result" and (.result // "") != "" then .result else empty end' 2>/dev/null || true)
 if [ -z "$_preflight_test_output" ]; then
   echo "  FATAL: claude --print returned no output. Check your API key and CLI version."
+  if [ -s "$_preflight_stderr" ]; then
+    echo "  claude stderr:"
+    sed 's/^/    /' "$_preflight_stderr"
+  fi
+  rm -f "$_preflight_stderr"
   exit 1
 else
   echo "Pre-flight: claude --print OK."
+fi
+rm -f "$_preflight_stderr"
+
+# ─── Pre-flight: Docker availability (INV-027 live verification) ──────
+# Live Test & Fix boots the compose image; only require Docker once the
+# live boot command is wired (pre-skeleton it is empty, so we skip the check).
+if [ "$HAS_CONFIG" = true ]; then
+  _live_boot=$(config_get_default "verification.live.boot_command" "")
+  if [ -n "$_live_boot" ]; then
+    echo "Pre-flight: Checking Docker (required for INV-027 live verification)..."
+    if ! docker info >/dev/null 2>&1; then
+      echo "  FATAL: Docker is not available or its daemon is not running, but"
+      echo "  verification.live.boot_command is set (\"$_live_boot\"). INV-027 live"
+      echo "  verification needs a running Docker daemon. Start Docker and retry."
+      exit 1
+    fi
+    echo "Pre-flight: Docker OK."
+  fi
 fi
 
 # ─── Pre-flight: Safety warning for protected branches ────────────────
@@ -518,7 +618,9 @@ run_claude_for_phase() {
   # Always use stream-json + jq extraction. The --print flag has a known bug
   # in Claude CLI v2.1.83+ where it returns empty output despite generating
   # content. stream-json is more reliable across all CLI versions.
-  local -a cmd=(claude --dangerously-skip-permissions --print --output-format stream-json)
+  # --verbose is REQUIRED: the CLI rejects `--print --output-format stream-json`
+  # without it ("--output-format=stream-json requires --verbose").
+  local -a cmd=(claude --dangerously-skip-permissions --print --output-format stream-json --verbose)
   if [ -n "$model" ]; then
     cmd+=(--model "$model")
   fi
@@ -583,8 +685,12 @@ check_iter_artifacts() {
     issues=$((issues + 1))
   fi
 
+  # grep -c prints "0" AND exits 1 when the file exists but has no match, so a
+  # `|| echo 0` would append a second "0" and break the numeric test. Suppress
+  # the non-zero exit and default an empty result to 0 instead.
   local iter_line
-  iter_line=$(grep -c '\*\*Iteration\*\*:' "$wt_path/$state_file" 2>/dev/null || echo "0")
+  iter_line=$(grep -c '\*\*Iteration\*\*:' "$wt_path/$state_file" 2>/dev/null || true)
+  iter_line=${iter_line:-0}
   if [ "$iter_line" -eq 0 ]; then
     echo "  [integrity] WARNING: loop-state.md missing iteration marker"
     issues=$((issues + 1))
@@ -618,8 +724,18 @@ check_uat_verdicts() {
   while IFS= read -r evidence; do
     local ticket_id
     ticket_id=$(basename "$(dirname "$evidence")")
+    # Parse the evaluator's documented `**Overall:** VERDICT` evidence line with
+    # portable BSD sed (NEVER grep -P/-oP — unsupported by macOS /usr/bin/grep).
+    # Matches .claude/agents/uat-evaluator.md's "**Overall:** PASS|PRODUCT_FAIL|
+    # UAT_SPEC_FAIL|EVAL_CHEAT_FAIL" format. Capture the WHOLE remainder of the
+    # line (not just the first token) and exact-match it below, so the unfilled
+    # template line `**Overall:** PASS | PRODUCT_FAIL | ...` does NOT read as a
+    # bare PASS — it falls through to the fail-closed default. FAILS CLOSED:
+    # empty/multi-token/unparseable verdict is blocking (PRODUCT_FAIL-equivalent).
     local verdict
-    verdict=$(grep -oP '\*\*(?:Overall|Verdict)\*\*:\s*\K\S+' "$evidence" 2>/dev/null | head -1)
+    verdict=$(sed -n 's/.*\*\*Overall:\*\*[[:space:]]*\(.*\)/\1/p' "$evidence" 2>/dev/null | head -1)
+    # Trim trailing whitespace / CR so an exact match still holds on the tokens.
+    verdict=$(printf '%s' "$verdict" | sed 's/[[:space:]]*$//')
 
     case "$verdict" in
       PASS)
@@ -636,8 +752,13 @@ check_uat_verdicts() {
       UAT_SPEC_FAIL)
         echo "  [uat-gate] $ticket_id: UAT_SPEC_FAIL — logged (non-blocking)"
         ;;
+      "")
+        echo "  [uat-gate] $ticket_id: EMPTY/UNPARSEABLE verdict — FAILING CLOSED (merge blocked)"
+        any_blocking=true
+        ;;
       *)
-        echo "  [uat-gate] $ticket_id: Unknown verdict '$verdict' — logged (non-blocking)"
+        echo "  [uat-gate] $ticket_id: Unknown verdict '$verdict' — FAILING CLOSED (merge blocked)"
+        any_blocking=true
         ;;
     esac
   done <<< "$evidence_files"
@@ -785,6 +906,52 @@ check_drift_thresholds() {
   return 0
 }
 
+# ─── Helper: check_pass_rate_floor ───────────────────────────────────
+# Stop condition (verification.stop_conditions.pass_rate_floor): if the latest
+# iteration ran real tests and its pass rate fell below the floor, trip HALT.
+# Pre-skeleton iterations (0 tests) are exempt so the floor never false-fires.
+check_pass_rate_floor() {
+  local metrics_file
+  if [ "$HAS_CONFIG" = true ]; then
+    metrics_file="$(path_metrics)"
+  else
+    metrics_file="${REPO_ROOT}/.kitchenloop/metrics.json"
+  fi
+  [ -f "$metrics_file" ] || return 0
+
+  local last_total last_rate
+  last_total=$(jq -r '.iterations[-1].test_total // 0' "$metrics_file" 2>/dev/null || echo 0)
+  last_rate=$(jq -r '.iterations[-1].pass_rate // 0' "$metrics_file" 2>/dev/null || echo 0)
+
+  # Only enforce once real tests exist (pre-skeleton reports test_total=0).
+  case "$last_total" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$last_total" -gt 0 ] || return 0
+
+  local below
+  below=$(awk -v r="$last_rate" -v f="$PASS_RATE_FLOOR" 'BEGIN { print ((r+0) < (f+0)) ? "yes" : "no" }')
+  if [ "$below" = "yes" ]; then
+    create_halt "Pass-rate floor breached: pass_rate=$last_rate < floor=$PASS_RATE_FLOOR at iteration ${ITER_NUM:-?} (verification.stop_conditions.pass_rate_floor)"
+    return 1
+  fi
+  return 0
+}
+
+# ─── Helper: apply_skip_policy ───────────────────────────────────────
+# Enforce verification.skip_policy.<phase>_fail. "pause" trips the HALT
+# sentinel (the loop refuses to run the next phase/iteration until the operator
+# clears it); any other value logs and continues.
+apply_skip_policy() {
+  local phase="$1" policy="$2" reason="$3"
+  case "$policy" in
+    pause)
+      create_halt "skip_policy.${phase}_fail=pause — $reason"
+      ;;
+    *)
+      echo "  [skip-policy] ${phase} failed (policy=${policy:-continue}) — logging and continuing"
+      ;;
+  esac
+}
+
 # ─── Helper: strip_ansi ───────────────────────────────────────────────
 strip_ansi() {
   perl -pe 's/\x1b\[[0-9;]*[a-zA-Z]//g; s/\x1b\([AB]//g; s/\x00//g'
@@ -830,7 +997,9 @@ build_spec_surface() {
   fi
   for dim in $dimensions; do
     local values
-    values=$(config_get_list "spec.dimensions.$dim" | paste -sd ', ' -)
+    # paste -sd ', ' cycles the delimiter char-by-char (a,b c); join on a single
+    # ',' then space it out so the list renders "a, b, c".
+    values=$(config_get_list "spec.dimensions.$dim" | paste -sd ',' - | sed 's/,/, /g')
     echo "- **${dim}**: ${values}"
   done
 }
@@ -871,14 +1040,30 @@ preprocess_prompt() {
   build_spec_surface > "$tmp_spec"
   echo "$coverage_summary" > "$tmp_coverage"
 
-  # Escape BASE_BRANCH for sed (handle slashes, dots, etc.)
-  local base_branch_escaped
-  base_branch_escaped=$(printf '%s\n' "$BASE_BRANCH" | sed 's/[&/\]/\\&/g')
+  # Escape a value for use on the RHS of a sed `s|...|...|` (delimiter is `|`,
+  # so escape backslash, ampersand and pipe). Keeps command values with special
+  # chars from corrupting the substitution.
+  _sed_rhs_escape() { printf '%s' "$1" | sed 's/[\\&|]/\\&/g'; }
 
-  # Read project name, description, and root for single-line substitution
-  local project_name project_desc project_root project_root_directive
+  local base_branch_escaped full_test_escaped quick_test_escaped
+  local lint_escaped security_escaped smoke_escaped project_name_escaped
+  base_branch_escaped=$(_sed_rhs_escape "$BASE_BRANCH")
+  full_test_escaped=$(_sed_rhs_escape "$FULL_TEST_CMD")
+  quick_test_escaped=$(_sed_rhs_escape "$QUICK_TEST_CMD")
+  lint_escaped=$(_sed_rhs_escape "$LINT_CMD")
+  security_escaped=$(_sed_rhs_escape "$SECURITY_CMD")
+  smoke_escaped=$(_sed_rhs_escape "$SMOKE_CMD")
+
+  # Coverage matrix token must expand to the WORKTREE-RELATIVE path so it
+  # resolves inside the iteration worktree, not the absolute main-repo path.
+  local coverage_matrix_rel
+  coverage_matrix_rel=$(config_get_default "paths.coverage_matrix" ".kitchenloop/coverage-matrix.yaml")
+  coverage_matrix_rel="${coverage_matrix_rel#$REPO_ROOT/}"
+
+  # Read project name and root for single-line substitution
+  local project_name project_root project_root_directive
   project_name=$(config_get_default "project.name" "unknown")
-  project_desc=$(config_get_default "project.description" "No description")
+  project_name_escaped=$(_sed_rhs_escape "$project_name")
   project_root=$(config_get "project.root")
 
   # Build project root directive (only if project.root is set)
@@ -895,22 +1080,25 @@ DIRECTIVE
     echo "" > "$tmp_root_directive"
   fi
 
+  # Token contract: substitute each placeholder explicitly. NO literal-value
+  # substitutions (e.g. s|main|...| or s|npm test|...|) — those corrupt prose
+  # ("remaining" -> "re<branch>ing") and can never inject distinct full/quick
+  # commands. Prompt templates use ONLY these placeholders.
   sed \
     -e "s|{{REPO_ROOT}}|${REPO_ROOT}|g" \
     -e "s|{{ITERATION_NUM}}|${ITER_NUM:-0}|g" \
     -e "s|{{ITER_WORKTREE}}|${ITER_WORKTREE:-$REPO_ROOT}|g" \
     -e "s|{{MODE}}|${MODE}|g" \
     -e "s|{{REGRESS_QUICK}}|${REGRESS_QUICK}|g" \
-    -e "s|main|${base_branch_escaped}|g" \
-    -e "s|npm test|${FULL_TEST_CMD}|g" \
-    -e "s|npm test|${QUICK_TEST_CMD}|g" \
-    -e "s|npm run lint|${LINT_CMD}|g" \
-    -e "s|{{SECURITY_COMMAND}}|${SECURITY_CMD}|g" \
-    -e "s||${SMOKE_CMD}|g" \
-    -e "s|{{COVERAGE_MATRIX_PATH}}|$(path_coverage_matrix)|g" \
+    -e "s|{{BASE_BRANCH}}|${base_branch_escaped}|g" \
+    -e "s|{{FULL_TEST_COMMAND}}|${full_test_escaped}|g" \
+    -e "s|{{QUICK_TEST_COMMAND}}|${quick_test_escaped}|g" \
+    -e "s|{{LINT_COMMAND}}|${lint_escaped}|g" \
+    -e "s|{{SECURITY_COMMAND}}|${security_escaped}|g" \
+    -e "s|{{SMOKE_COMMAND}}|${smoke_escaped}|g" \
+    -e "s|{{COVERAGE_MATRIX_PATH}}|${coverage_matrix_rel}|g" \
     -e "s|{{STARVATION_MODE}}|${STARVATION_MODE:-false}|g" \
-    -e "s|tripforge|${project_name}|g" \
-    -e "s|AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace|${project_desc}|g" \
+    -e "s|{{PROJECT_NAME}}|${project_name_escaped}|g" \
     "$prompt_file" \
     | awk -v blocked="$tmp_blocked" -v context="$tmp_context" -v spec="$tmp_spec" -v rootdir="$tmp_root_directive" -v coverage="$tmp_coverage" '{
         if (index($0, "{{BLOCKED_COMBOS}}")) {
@@ -937,6 +1125,8 @@ DIRECTIVE
 
 # ─── Helper: run_phase ───────────────────────────────────────────────
 run_phase() {
+  # HALT sentinel: every loop phase refuses to run while .kitchenloop/HALT exists.
+  enforce_halt
   local phase="$1"
   local loop_num="$2"
   local prompt_name="${3:-$phase}"
@@ -1221,6 +1411,19 @@ commit_iter_artifacts() {
     for path in "$reports_rel" "$scenarios_rel" "$loop_state_rel" "$patterns_rel"; do
       git -C "$wt_path" add "$path" 2>/dev/null || true
     done
+
+    # Local ticketing provider: the backlog file is git-tracked and holds ticket
+    # state (todo/in_progress/in_review/done). Stage it so transitions made inside
+    # the worktree persist to the branch (and merge to base) instead of reverting
+    # when the worktree is discarded.
+    local ticket_provider
+    ticket_provider=$(config_get_default "ticketing.provider" "github")
+    if [ "$ticket_provider" = "none" ] || [ "$ticket_provider" = "local" ]; then
+      local backlog_rel
+      backlog_rel=$(config_get_default "ticketing.local.file" ".kitchenloop/backlog.json")
+      backlog_rel="${backlog_rel#$REPO_ROOT/}"
+      git -C "$wt_path" add "$backlog_rel" 2>/dev/null || true
+    fi
 
     if [ "${MODE:-}" = "ui" ]; then
       local ui_state_rel ui_runs_rel
@@ -1567,6 +1770,17 @@ clean_agent_junk() {
 # This decouples loop-state persistence from worktree lifecycle.
 sync_loop_state_to_base() {
   local wt_path="$1" iter_num="$2"
+
+  # DIRECTIVE ALWAYS-HALTs on pushes to a remote; this direct push to
+  # $BASE_BRANCH is gated behind repo.allow_state_sync_push (default false; desk
+  # row D-002). When off, loop-state stays committed on the iteration branch and
+  # reaches base only through the gated PR merge.
+  if [ "${ALLOW_STATE_SYNC_PUSH:-false}" != "true" ]; then
+    echo "  [loop-state-sync] SKIPPED — direct push to $BASE_BRANCH gated off (repo.allow_state_sync_push=false); loop-state remains on the iteration branch. Pending operator desk row D-002."
+    echo "$(date) | Iter $iter_num | loop-state-sync | SKIPPED (allow_state_sync_push=false)" >> "$LOG_FILE"
+    return 0
+  fi
+
   local state_file
   if [ "$HAS_CONFIG" = true ]; then
     state_file="$(path_loop_state)"
@@ -1634,6 +1848,15 @@ sync_loop_state_to_base() {
 # iteration branch PR hasn't merged yet.
 persist_reports_to_main() {
   local wt_path="$1" iter_num="$2"
+
+  # Gated behind repo.allow_state_sync_push (default false; desk row D-002).
+  # When off, reports stay on the iteration branch and reach base via PR merge.
+  if [ "${ALLOW_STATE_SYNC_PUSH:-false}" != "true" ]; then
+    echo "  [persist-reports] SKIPPED — direct push to $BASE_BRANCH gated off (repo.allow_state_sync_push=false); reports remain on the iteration branch. Pending operator desk row D-002."
+    echo "$(date) | Iter $iter_num | persist-reports | SKIPPED (allow_state_sync_push=false)" >> "$LOG_FILE"
+    return 0
+  fi
+
   local reports_rel
   if [ "$HAS_CONFIG" = true ]; then
     reports_rel="$(path_reports)"; reports_rel="${reports_rel#$REPO_ROOT/}"
@@ -1681,6 +1904,15 @@ persist_reports_to_main() {
 # persists across iterations even before the iteration PR merges.
 persist_ui_state_to_main() {
   local wt_path="$1" iter_num="$2"
+
+  # Gated behind repo.allow_state_sync_push (default false; desk row D-002).
+  # When off, ui-test-state stays on the iteration branch and reaches base via PR merge.
+  if [ "${ALLOW_STATE_SYNC_PUSH:-false}" != "true" ]; then
+    echo "  [ui-state-sync] SKIPPED — direct push to $BASE_BRANCH gated off (repo.allow_state_sync_push=false); ui-test-state remains on the iteration branch. Pending operator desk row D-002."
+    echo "$(date) | Iter $iter_num | ui-state-sync | SKIPPED (allow_state_sync_push=false)" >> "$LOG_FILE"
+    return 0
+  fi
+
   local state_rel
   if [ "$HAS_CONFIG" = true ]; then
     state_rel="$(path_ui_test_state)"; state_rel="${state_rel#$REPO_ROOT/}"
@@ -1762,6 +1994,9 @@ fi
 # ─── run_iteration ─────────────────────────────────────────────────
 run_iteration() {
   local loop="$1"
+
+  # HALT sentinel: refuse to start an iteration while .kitchenloop/HALT exists.
+  enforce_halt
 
   git -C "$REPO_ROOT" fetch origin "$BASE_BRANCH" 2>/dev/null || true
   ITER_NUM=$(get_iteration_number "$REPO_ROOT")
@@ -1865,6 +2100,7 @@ run_iteration() {
     if ! run_phase "ideate" "$loop" "$IDEATE_PROMPT" "$ITER_WORKTREE"; then
       echo "  Ideate failed, continuing to next phase..."
       iter_had_failure=true
+      apply_skip_policy "ideate" "$SKIP_POLICY_IDEATE_FAIL" "ideate phase failed at iter $ITER_NUM"
     fi
     check_iter_artifacts "$ITER_WORKTREE" || true
     local ideate_log="$LOGS_DIR/loop-$(printf '%03d' "$loop")-ideate.log"
@@ -1944,6 +2180,7 @@ run_iteration() {
         EXECUTE_FAILED=true
         echo "  Execute failed, continuing to next phase..."
         iter_had_failure=true
+        apply_skip_policy "execute" "$SKIP_POLICY_EXECUTE_FAIL" "execute phase failed at iter $ITER_NUM"
       fi
 
       # B1: Detect if execute produced any work — check both worktree commits AND new PRs
@@ -1987,7 +2224,13 @@ run_iteration() {
   fi
 
   # ── Phase 3.5: Polish ──
-  if ! should_skip "polish"; then
+  # Skip Polish when this iteration's UAT gate failed: the merge path already
+  # fails closed (find_prs excludes uat-failed; merge-pr Stage 8.6 requires a
+  # PASS verdict), so running pr-manager here would only waste spawns.
+  if [ "$UAT_GATE_FAILED" = true ]; then
+    echo "  [polish] SKIPPED — UAT gate failed this iteration; merge path is blocked closed."
+    echo "$(date) | Iter $ITER_NUM | polish | SKIPPED (uat-gate failed)" >> "$LOG_FILE"
+  elif ! should_skip "polish"; then
     echo ""
     echo "  --- Phase 3.5: Polish ---"
 
@@ -2131,28 +2374,54 @@ run_iteration() {
     # Always test main — pull latest merged changes first
     local regress_dir="$REPO_ROOT"
     git -C "$REPO_ROOT" pull --ff-only origin "$BASE_BRANCH" 2>/dev/null || true
-    echo "  [regress-gate] Testing $BASE_BRANCH at $REPO_ROOT (post-merge state)"
-    echo "  [regress-gate] Running shell-enforced regression: $shell_test_cmd"
-    if ! (cd "$regress_dir" && eval "$shell_test_cmd") >> "$regress_log" 2>&1; then
-      echo "  [regress-gate] FAILED — $BASE_BRANCH has test failures after merge."
-      echo "$(date) | Iter $ITER_NUM | regress-gate | FAILED — $BASE_BRANCH broken" >> "$LOG_FILE"
-      regress_passed=false
-      iter_had_failure=true
-    else
-      echo "  [regress-gate] PASSED — $BASE_BRANCH is healthy."
-      echo "$(date) | Iter $ITER_NUM | regress-gate | PASSED" >> "$LOG_FILE"
-    fi
 
-    # Also run L3 smoke test if configured
-    if [ -n "${SMOKE_CMD}" ]; then
-      echo "  [regress-gate] Running L3 smoke test: $SMOKE_CMD"
-      if ! (cd "$regress_dir" && eval "$SMOKE_CMD") >> "$regress_log" 2>&1; then
-        echo "  [regress-gate] L3 SMOKE FAILED — product may be broken despite passing unit tests."
-        echo "$(date) | Iter $ITER_NUM | regress-gate | L3 SMOKE FAILED" >> "$LOG_FILE"
+    if [ ! -f "$regress_dir/package.json" ]; then
+      # Bootstrap guard: pre-skeleton main has no package.json, so the npm oracle
+      # cannot run. This is NOT a regression — skip the gate (no RED, no
+      # consecutive-failure increment) until the app skeleton lands (seed-0001).
+      echo "  [regress-gate] SKIPPED — pre-skeleton (no package.json at $regress_dir)"
+      echo "$(date) | Iter $ITER_NUM | regress-gate | SKIPPED (pre-skeleton, no package.json)" >> "$LOG_FILE"
+    else
+      # Install deps before running the oracle on freshly pulled main (a fresh
+      # checkout has no node_modules, which would otherwise fail the gate).
+      if [ ! -d "$regress_dir/node_modules" ]; then
+        echo "  [regress-gate] Installing dependencies (node_modules absent)..."
+        if ! (cd "$regress_dir" && npm ci) >> "$regress_log" 2>&1; then
+          (cd "$regress_dir" && npm install) >> "$regress_log" 2>&1 || \
+            echo "  [regress-gate] WARNING: dependency install failed; running oracle anyway"
+        fi
+      fi
+
+      echo "  [regress-gate] Testing $BASE_BRANCH at $REPO_ROOT (post-merge state)"
+      echo "  [regress-gate] Running shell-enforced regression: $shell_test_cmd"
+      if ! (cd "$regress_dir" && eval "$shell_test_cmd") >> "$regress_log" 2>&1; then
+        echo "  [regress-gate] FAILED — $BASE_BRANCH has test failures after merge."
+        echo "$(date) | Iter $ITER_NUM | regress-gate | FAILED — $BASE_BRANCH broken" >> "$LOG_FILE"
         regress_passed=false
         iter_had_failure=true
       else
-        echo "  [regress-gate] L3 smoke PASSED."
+        echo "  [regress-gate] PASSED — $BASE_BRANCH is healthy."
+        echo "$(date) | Iter $ITER_NUM | regress-gate | PASSED" >> "$LOG_FILE"
+      fi
+
+      # Also run L3 smoke test if configured
+      if [ -n "${SMOKE_CMD}" ]; then
+        echo "  [regress-gate] Running L3 smoke test: $SMOKE_CMD"
+        if ! (cd "$regress_dir" && eval "$SMOKE_CMD") >> "$regress_log" 2>&1; then
+          echo "  [regress-gate] L3 SMOKE FAILED — product may be broken despite passing unit tests."
+          echo "$(date) | Iter $ITER_NUM | regress-gate | L3 SMOKE FAILED" >> "$LOG_FILE"
+          regress_passed=false
+          iter_had_failure=true
+        else
+          echo "  [regress-gate] L3 smoke PASSED."
+        fi
+      fi
+
+      # skip_policy.regress_fail: "pause" trips the HALT sentinel so the loop
+      # stops for the operator; any other value just blocks this merge (via
+      # regress_passed=false) and continues.
+      if [ "$regress_passed" != true ]; then
+        apply_skip_policy "regress" "$SKIP_POLICY_REGRESS_FAIL" "regression gate failed on $BASE_BRANCH at iter $ITER_NUM (see $regress_log)"
       fi
     fi
   fi
@@ -2168,12 +2437,18 @@ run_iteration() {
     fi
   fi
 
-  # ── Record iteration metrics for drift tracking ──
+  # ── Record iteration metrics; enforce stop conditions ──
   if ! should_skip "regress" && [ "$EXECUTE_FAILED" != true ]; then
     record_iteration_metrics "$ITER_NUM" "$regress_log"
+    # Stop condition: pass-rate floor (verification.stop_conditions.pass_rate_floor)
+    # trips the HALT sentinel when real tests fall below the floor.
+    check_pass_rate_floor || true
+    # Stop condition: sustained quality drift trips the HALT sentinel so the
+    # operator investigates before the loop keeps degrading.
     if ! check_drift_thresholds; then
       DRIFT_WARNING=true
       echo "$(date) | Iter $ITER_NUM | drift | WARNING — quality metrics declining" >> "$LOG_FILE"
+      create_halt "Quality drift: pass-rate or test-count declining for ${TEST_COUNT_DECLINE_ITERS} consecutive iterations at iter $ITER_NUM (inspect .kitchenloop/metrics.json)"
     fi
   fi
 
@@ -2242,6 +2517,10 @@ for loop in $(seq 1 "$MAX_LOOPS"); do
   echo "  LOOP $loop of $MAX_LOOPS"
   echo "  $(date)"
   echo "==========================================================="
+
+  # HALT sentinel: refuse to run any loop (including drain-mode gh calls) while
+  # .kitchenloop/HALT exists. Only the operator removes it.
+  enforce_halt
 
   # ── Drain mode: auto-trigger when PR backpressure is too high ──
   # Save original values so drain mode doesn't permanently override

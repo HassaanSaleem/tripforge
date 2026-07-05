@@ -46,6 +46,7 @@ lands only through an operator gate. Review DRIFT findings cite invariant IDs
 | `packages/itinerary-schema` | THE canonical itinerary schema — zod + TS types + versioning + provenance | *(leaf)* |
 | `packages/domain` | Pure business logic: budget allocator, pricing/markup, revenue-share math | `itinerary-schema` |
 | `packages/db` | Drizzle schema + client (PostgreSQL); tenant-scoped query helpers | `itinerary-schema` |
+| `packages/marketplace` | Listing/licensing/white-label orchestration | `domain`, `itinerary-schema`, ports |
 | `packages/supply-adapter` | Supply ports (hotel/activity/transfer/car) + sandbox mocks + real aggregators later | `itinerary-schema` |
 | `packages/llm` | LLMPort + official Anthropic SDK implementation (tool use, structured outputs; metered) | `shared` |
 | `packages/shared` | Logging, config, Result types | *(leaf)* |

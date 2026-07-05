@@ -1,3 +1,8 @@
+---
+name: loop-review-meta
+description: KitchenLoop meta-review phase — read ALL loop-review reports and identify cross-period trends (quality trajectory, recurring/systemic findings, recommendation follow-through, self-improvement score) and write a meta report with systemic recommendations. Recommendations touching gates, cadences, or config keys become OPERATOR-DESK.md rows, never loop tickets. Use when running a meta review or asked to analyze loop trends across many iterations.
+---
+
 # Loop Review Meta
 
 > Macro analysis across all loop review reports -- trends, recurring themes,
@@ -17,6 +22,26 @@ and identifies patterns that span multiple review periods. While individual
 loop reviews catch per-iteration issues, the meta review catches systemic
 trends: recurring themes that never get fixed, drift in loop behavior,
 effectiveness of self-improvement over time.
+
+---
+
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop. Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[review-meta] HALTED`, and stop immediately. Run no
+   further step.
+2. **Read `DIRECTIVE.md`.** Any systemic recommendation that would touch its
+   ALWAYS-HALT list (constitution amendments; canonical itinerary schema version
+   bumps/migrations; revenue-share or client-ownership semantics; changes to the
+   loop's own gates — quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE;
+   `git push` to a remote; deploys) is NOT a loop-executable change — surface it
+   as an `OPERATOR-DESK.md` row (`| ID | Say | Question | Recommendation | Since |
+   Blocks |` plus a context paragraph) instead (see the operator-gate caveat in
+   Step 4).
+3. **No interactive operator** — never use `AskUserQuestion`. Asks go to
+   `OPERATOR-DESK.md` as rows, never buried in prose.
 
 ---
 
@@ -123,6 +148,19 @@ total = novelty + durability + escalation + throughput
 Based on the analysis, generate systemic recommendations that go beyond
 individual ticket fixes:
 
+> **Operator-gate caveat (sealed regulator).** The loop may not tune its own
+> gates or cadence. Any recommendation that would change a **gate** (quality bar,
+> regression oracle definitions, UAT protocol, quality-sweep rules, DIRECTIVE, or
+> the pr-manager review stages), a **cadence** (`runtime.review_interval`,
+> `runtime.backlog_interval`, the quality-sweep "every 3rd iteration" cadence), or
+> any `kitchenloop.yaml` **`verification.*` / `runtime.*`** key MUST be surfaced as
+> an `OPERATOR-DESK.md` row (one table row + a context paragraph) — NEVER filed as
+> a loop-executable ticket and never applied by a later Execute iteration. Only the
+> operator lands these. This applies to the "Process changes", "Configuration
+> tuning", and "Loop self-tuning" categories below and to the Suggested Config
+> Changes block in Step 5: emit those as *proposals for the operator desk*, not as
+> actionable config edits.
+
 #### Categories
 
 1. **Process changes**: Adjustments to the loop itself (e.g., "Increase
@@ -217,23 +255,29 @@ Create the report at `{paths.reports}/loop-review-meta-iter-{start}-{end}.md`:
 2. **[{category}]** {recommendation}
 ...
 
-## Suggested Config Changes
+## Suggested Config Changes (operator-desk proposals — NOT auto-applied)
 
-{Specific kitchenloop.yaml changes, if any}
+{Specific kitchenloop.yaml changes, if any. These are PROPOSALS for the operator,
+not loop-executable edits. Any change to a gate, cadence, or a `verification.*` /
+`runtime.*` key (e.g. `runtime.review_interval`) must be routed to
+`OPERATOR-DESK.md` as a row — the loop cannot land it itself.}
 
 ```yaml
-# Example:
+# Example (proposal only):
 spec:
   blocked:
     - "{new blocked combo}"
 runtime:
-  review_interval: {new value}
+  review_interval: {new value}   # operator-gated: file an OPERATOR-DESK.md row
 ```
 ```
 
-### Step 6: Update Loop State
+### Step 6: Emit Meta-Review Metadata (do NOT write loop-state)
 
-Update `paths.loop_state` with:
+**Do NOT write `loop-state.md`** — the regress phase is the sole writer of loop
+state (this avoids concurrent-write corruption of the shared file). The meta
+report is this phase's durable artifact; record the metadata in the report and
+emit it to stdout instead of editing loop state:
 - Meta review timestamp
 - Self-improvement score
 - Number of systemic issues identified
@@ -244,8 +288,10 @@ Update `paths.loop_state` with:
 ## Output Contract
 
 1. **Meta review report** at `{paths.reports}/loop-review-meta-iter-{start}-{end}.md`
-2. **Loop state updated** with meta review metadata
-3. **Actionable recommendations** with specific config change suggestions
+2. **Meta-review metadata** emitted to stdout / the report (loop state is written
+   by regress, not here)
+3. **Actionable recommendations**, with any gate/cadence/config-key change routed
+   to `OPERATOR-DESK.md` as a proposal rather than a loop-executable ticket
 
 ---
 

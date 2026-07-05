@@ -1,3 +1,8 @@
+---
+name: kitchenloop-triage
+description: KitchenLoop triage phase — read the latest experience report, extract each friction-log finding, deduplicate against the existing queue, and create one well-labeled ticket per unique finding. Use when running the loop's triage phase or turning an experience report into tickets.
+---
+
 # KitchenLoop: Triage
 
 > Phase 2 -- Read experience reports, extract findings, create deduplicated tickets.
@@ -16,6 +21,46 @@ The Triage phase converts the raw friction log from an experience report into
 actionable, well-labeled tickets. Every finding becomes exactly one ticket --
 no more, no less. Deduplication against existing tickets prevents the backlog
 from filling with clones.
+
+---
+
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop. Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[triage] HALTED -- iteration {N}`, and stop immediately.
+   Run no further step.
+2. **Read `DIRECTIVE.md`.** Any work item matching its ALWAYS-HALT list
+   (constitution amendments; canonical itinerary schema version bumps/migrations;
+   revenue-share or client-ownership semantics; changes to the loop's own gates —
+   quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE; `git push` to a
+   remote; deploys) must NOT be done. Instead write one row to `OPERATOR-DESK.md`
+   (`| ID | Say | Question | Recommendation | Since | Blocks |` plus a context
+   paragraph below it) and skip that item, continuing with other work.
+3. **No interactive operator** — never use `AskUserQuestion`. Create tickets with
+   your best judgment; asks go to `OPERATOR-DESK.md` as rows, never buried in prose.
+
+---
+
+## Ticketing Provider Dispatch
+
+All ticket operations MUST honor `ticketing.provider` from `kitchenloop.yaml`.
+**This repo sets `provider: "none"`**, so the loop's queue lives in
+`.kitchenloop/backlog.json`, NOT in a GitHub issue tracker.
+
+- **`none` / `local`** (this repo): tickets are a JSON array in
+  `.kitchenloop/backlog.json`; each object has `id, title, body, type, priority,
+  state, created, pr_url` and moves through states
+  `backlog → todo → in_progress → in_review → done`. Create/inspect/comment via
+  the `scripts/kitchenloop/lib/tickets.sh` helpers — `ticket_create`,
+  `ticket_list_by_state`, `ticket_get`, `ticket_add_comment`,
+  `ticket_transition` — never with `gh issue` commands.
+- **`github`**: the `gh issue ...` snippets below are the GitHub path.
+
+Reading a fix PR's merge state via `gh pr view` (the abandoned-PR override) works
+under either provider — those are real GitHub PRs. Only the ticket/issue queue is
+local.
 
 ---
 
@@ -48,6 +93,10 @@ Before creating any ticket, search for existing tickets that cover the same issu
 ```bash
 gh issue list --state open --limit 100 --json number,title,body,labels
 ```
+
+> **Local provider (`none`)**: enumerate open tickets by concatenating
+> `ticket_list_by_state todo|in_progress|in_review|backlog` (from
+> `lib/tickets.sh`) and dedup against those, instead of `gh issue list`.
 
 For each candidate ticket:
 1. Search by keywords from the finding title.
@@ -136,6 +185,12 @@ EOF
   --label "{ticketing.github.state_labels.todo}"
 ```
 
+> **Local provider (`none`)**: create the ticket with
+> `ticket_create "{title}" "{body}" "{type}" "{priority}"` (from
+> `lib/tickets.sh`), then `ticket_transition {id} todo` to land it in the queue.
+> `ticket_create` writes the object into `.kitchenloop/backlog.json`; the body
+> above is passed verbatim as the `body` field.
+
 <!-- CUSTOMIZE: Adapt ticket creation for your ticketing provider.
      If using a non-GitHub provider, replace gh issue commands with
      the appropriate API calls (e.g., Linear GraphQL mutations). -->
@@ -158,16 +213,17 @@ New tickets:
   ...
 ```
 
-Update loop state at `paths.loop_state` with triage results.
+Emit the triage summary to stdout. **Do NOT write `loop-state.md`** — the regress
+phase is the sole writer of loop state (this avoids concurrent-write corruption).
 
 ---
 
 ## Output Contract
 
 1. **One ticket per unique finding** from the experience report
-2. **No duplicate tickets** -- checked against all open issues
+2. **No duplicate tickets** -- checked against the open queue
 3. **All tickets labeled** with category, priority, and todo state
-4. **Loop state updated** with triage summary
+4. **Triage summary** emitted to stdout (loop state is written by regress)
 
 ---
 

@@ -8,12 +8,12 @@
 # Each entry records a tested combination with its iteration and result.
 
 last_updated: null
-total_combos: 0
+total_combos: 36   # 6 features x 2 platforms x 3 user_types (kitchenloop.yaml spec.dimensions)
 tested_combos: 0
 coverage_pct: 0.0
 
 tested: []
-#  - combo: { feature: "auth", action: "login" }
+#  - combo: { feature: "itinerary-builder", platform: "web", user_type: "agent-seller" }
 #    iteration: 5
 #    result: "pass"
 #    tier: "T1"

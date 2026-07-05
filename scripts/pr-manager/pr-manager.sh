@@ -3,19 +3,22 @@
 #
 # Finds eligible PRs, runs audit/fix cycles, and merges them.
 #
-# Sequential (default for --pr N, or --no-parallel):
-#   1. Find eligible PRs (not draft, not skipped/stuck)
-#   2. Sort by merge readiness (CLEAN > BEHIND > UNSTABLE)
-#   3. Spawn a claude --print session per PR with merge-pr.md prompt
-#   4. Parse result, update state, loop
+# Sequential (one PR at a time — the only mode):
+#   1. Refuse to run if the operator HALT sentinel (.kitchenloop/HALT) exists
+#   2. Find eligible PRs (not draft, not skipped/stuck/needs-attention/uat-failed)
+#   3. Sort by merge readiness (CLEAN > BEHIND > UNSTABLE)
+#   4. Mechanical sealed-path guard: never merge changes to the loop's own gates
+#   5. Spawn a claude --print session per PR with the prep+merge prompt
+#      (--dry-run composes prep only -> RESULT: PREPPED, no merge stage reachable)
+#   6. Parse the RESULT: line, update state, loop
 #
 # Usage:
 #   ./scripts/pr-manager/pr-manager.sh              # Continuous
 #   ./scripts/pr-manager/pr-manager.sh --once        # One batch then exit
 #   ./scripts/pr-manager/pr-manager.sh --pr 42       # Single PR
-#   ./scripts/pr-manager/pr-manager.sh --dry-run     # Everything except merge
+#   ./scripts/pr-manager/pr-manager.sh --dry-run     # Prep only, never merge
 #   ./scripts/pr-manager/pr-manager.sh --max-prs 5   # Up to 5 PRs then exit
-#   ./scripts/pr-manager/pr-manager.sh --no-parallel  # Force sequential mode
+#   ./scripts/pr-manager/pr-manager.sh --no-parallel  # Accepted no-op (sequential is the only mode)
 
 set -euo pipefail
 
@@ -38,8 +41,6 @@ if [ -n "$LIB_DIR" ] && [ -f "$LIB_DIR/config.sh" ]; then
     source "$LIB_DIR/tickets.sh"
     HAS_CONFIG=true
   fi
-  # Cross-platform timeout with process-group kill (macOS zombie fix)
-  [ -f "$LIB_DIR/timeout.sh" ] && source "$LIB_DIR/timeout.sh"
 fi
 
 # ── Base branch: env var > config > default ────────────────────────
@@ -67,8 +68,6 @@ VERBOSE=0
 BUDGET=0
 BUDGET_START=0
 CLAUDE_MAX_TURNS=80
-USE_PARALLEL=false
-USE_TMUX=false
 
 # Author allowlist (empty = trust all)
 AUTHOR_ALLOWLIST=""
@@ -81,8 +80,8 @@ fi
 while [[ $# -gt 0 ]]; do
   case $1 in
     --once)         ONCE=true; shift ;;
-    --pr)           SPECIFIC_PR="$2"; ONCE=true; USE_PARALLEL=false; shift 2 ;;
-    --pr=*)         SPECIFIC_PR="${1#*=}"; ONCE=true; USE_PARALLEL=false; shift ;;
+    --pr)           SPECIFIC_PR="$2"; ONCE=true; shift 2 ;;
+    --pr=*)         SPECIFIC_PR="${1#*=}"; ONCE=true; shift ;;
     --dry-run)      DRY_RUN=true; shift ;;
     --max-prs)      MAX_PRS="$2"; shift 2 ;;
     --max-prs=*)    MAX_PRS="${1#*=}"; shift ;;
@@ -94,8 +93,8 @@ while [[ $# -gt 0 ]]; do
     --budget=*)     BUDGET="${1#*=}"; BUDGET_START=$(date +%s); shift ;;
     --max-turns)    CLAUDE_MAX_TURNS="$2"; shift 2 ;;
     --max-turns=*)  CLAUDE_MAX_TURNS="${1#*=}"; shift ;;
-    --no-parallel)  USE_PARALLEL=false; USE_TMUX=false; shift ;;
-    --no-tmux)      USE_TMUX=false; shift ;;
+    --no-parallel)  shift ;;   # accepted no-op (sequential is the only mode; kept for caller compat)
+    --no-tmux)      shift ;;   # accepted no-op (kept for caller compat)
     -v|--verbose)   VERBOSE=1; shift ;;
     -vv|--debug)    VERBOSE=2; shift ;;
     --help|-h)
@@ -104,12 +103,12 @@ while [[ $# -gt 0 ]]; do
       echo "Options:"
       echo "  --once              Process one batch and exit"
       echo "  --pr <number>       Process specific PR only"
-      echo "  --dry-run           Everything except actual merge"
+      echo "  --dry-run           Prep only (RESULT: PREPPED); never merges"
       echo "  --max-prs <N>       Process up to N PRs then exit"
       echo "  --timeout <secs>    Per-PR timeout (default: 2700)"
       echo "  --budget <secs>     Overall time budget"
       echo "  --max-turns <N>     Max turns per Claude session (default: 80)"
-      echo "  --no-parallel       Force sequential mode"
+      echo "  --no-parallel       Accepted no-op (sequential is the only mode)"
       echo "  -v, --verbose       Verbose output"
       echo "  -vv, --debug        Debug output"
       echo "  --help              Show this help"
@@ -119,9 +118,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── Setup ────────────────────────────────────────────────────────────
-PROMPT_TEMPLATE="$SCRIPT_DIR/prompts/merge-pr.md"
+# The agent prompt is composed at spawn time: prep-pr.md (Stages 1-8) always,
+# then merge-pr.md (Stages 8.5-10) concatenated ONLY when not --dry-run.
+# resolve-conflicts.md is an inline reference for prep Stage 5, not a standalone
+# templated prompt, so it is not assigned here.
 PREP_PROMPT_TEMPLATE="$SCRIPT_DIR/prompts/prep-pr.md"
-RESOLVE_PROMPT_TEMPLATE="$SCRIPT_DIR/prompts/resolve-conflicts.md"
+PROMPT_TEMPLATE="$SCRIPT_DIR/prompts/merge-pr.md"
 STATE_FILE="$SCRIPT_DIR/state.json"
 LOG_FILE="$SCRIPT_DIR/pr-manager.log"
 
@@ -155,6 +157,10 @@ has_budget() {
   local rem; rem=$(budget_remaining); [ "$rem" -ge 300 ]
 }
 
+if [ ! -f "$PREP_PROMPT_TEMPLATE" ]; then
+  echo "ERROR: Missing prompt template: $PREP_PROMPT_TEMPLATE"
+  exit 1
+fi
 if [ ! -f "$PROMPT_TEMPLATE" ]; then
   echo "ERROR: Missing prompt template: $PROMPT_TEMPLATE"
   exit 1
@@ -163,37 +169,6 @@ fi
 if [ ! -f "$STATE_FILE" ]; then
   echo '{"pr_attempts": {}, "total_merged": 0, "total_stuck": 0}' > "$STATE_FILE"
 fi
-
-# ── Cross-platform timeout helper ────────────────────────────────────
-# macOS doesn't ship GNU timeout. Finds gtimeout (Homebrew) or falls
-# back to bash with process-group kill (catches grandchildren).
-_timeout() {
-  local secs="$1"; shift
-  if command -v timeout >/dev/null 2>&1 && timeout --version >/dev/null 2>&1; then
-    timeout "$secs" "$@"; return $?
-  fi
-  local gtimeout_path=""
-  for p in /opt/homebrew/bin/gtimeout /usr/local/bin/gtimeout; do
-    [ -x "$p" ] && gtimeout_path="$p" && break
-  done
-  if [ -n "$gtimeout_path" ]; then
-    "$gtimeout_path" "$secs" "$@"; return $?
-  fi
-  # Bash fallback: kill entire process group on timeout
-  "$@" &
-  local cmd_pid=$!
-  ( sleep "$secs"
-    kill -- -"$(ps -o pgid= -p "$cmd_pid" 2>/dev/null | tr -d ' ')" 2>/dev/null || true
-    kill "$cmd_pid" 2>/dev/null || true
-    sleep 5
-    kill -9 -- -"$(ps -o pgid= -p "$cmd_pid" 2>/dev/null | tr -d ' ')" 2>/dev/null || true
-    kill -9 "$cmd_pid" 2>/dev/null || true
-  ) &
-  local wdog=$!
-  wait "$cmd_pid" 2>/dev/null; local exit_code=$?
-  kill "$wdog" 2>/dev/null || true; wait "$wdog" 2>/dev/null 2>&1 || true
-  return $exit_code
-}
 
 # ── ANSI stripping ───────────────────────────────────────────────────
 strip_ansi() {
@@ -205,6 +180,40 @@ log() {
   local msg="$(date '+%Y-%m-%d %H:%M:%S') | $*"
   echo "$msg"
   echo "$msg" >> "$LOG_FILE"
+}
+
+# ── Operator control plane ───────────────────────────────────────────
+HALT_FILE="$REPO_ROOT/.kitchenloop/HALT"
+OPERATOR_DESK="$REPO_ROOT/OPERATOR-DESK.md"
+
+# The operator's emergency brake. When the sentinel exists, no loop phase may
+# run — pr-manager's output (a squash merge to the base branch) is irreversible,
+# so it must refuse to spawn any session while HALT is set.
+halt_active() { [ -f "$HALT_FILE" ]; }
+
+# Escape a value for use as a sed replacement (delimiter '|'); strip newlines.
+_sed_escape() { printf '%s' "$1" | sed 's/[&|\]/\\&/g' | tr -d '\n'; }
+
+# Append an ask to OPERATOR-DESK.md (idempotent by ID). Every halt-for-the-operator
+# is one row here — never buried in prose or a PR comment. Inserts the row as the
+# last row of the desk table and its context paragraph at the end of the file.
+add_operator_desk_row() {
+  local id="$1" say="$2" question="$3" recommendation="$4" blocks="$5" context="$6"
+  [ -f "$OPERATOR_DESK" ] || return 0
+  # Idempotent: skip if a row/context for this ID already exists.
+  if grep -qF "| $id |" "$OPERATOR_DESK" 2>/dev/null; then
+    return 0
+  fi
+  local since; since=$(date -u +"%Y-%m-%d")
+  local row="| $id | \`$say\` | $question | $recommendation | $since | $blocks |"
+  local ctx="**$id context:** $context"
+  local tmp; tmp=$(mktemp)
+  awk -v row="$row" -v ctx="$ctx" '
+    /^\|/ { last_was_table=1; print; next }
+    { if (last_was_table==1) { print row; last_was_table=0 } print }
+    END { print ""; print ctx }
+  ' "$OPERATOR_DESK" > "$tmp" 2>/dev/null && mv "$tmp" "$OPERATOR_DESK" || rm -f "$tmp"
+  log "OPERATOR-DESK: filed ask $id (say: $say)"
 }
 
 # ── Memory management ────────────────────────────────────────────────
@@ -234,15 +243,18 @@ check_memory_budget() {
 
 cleanup_orphan_processes() {
   local killed=0
-  for pid in $(pgrep -f 'claude.*pr-merger' 2>/dev/null || true); do
+  # Spawned sessions run as `exec -a claude-pr-merger claude ...` so their argv
+  # carries a stable tag this pattern can match (the claude prompt is on stdin,
+  # so the temp-file path never appears in claude's own command line).
+  for pid in $(pgrep -f 'claude-pr-merger' 2>/dev/null || true); do
     if [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
       kill "$pid" 2>/dev/null && killed=$((killed + 1)) || true
     fi
   done
-  # Clean up temp files but EXCLUDE active output files (pr-merger-out-*)
-  # to avoid the race condition where cleanup deletes a file mid-processing
-  find /tmp -maxdepth 1 -name 'pr-merger-*' ! -name 'pr-merger-out-*' -delete 2>/dev/null || true
-  rm -f /tmp/pr-prep-* 2>/dev/null || true
+  # Clean up temp files in the SAME dir where we create them (${TMPDIR:-/tmp};
+  # on macOS TMPDIR is /var/folders/..., not /tmp), but EXCLUDE active output
+  # files (pr-merger-out-*) to avoid deleting a file mid-processing.
+  find "${TMPDIR:-/tmp}" -maxdepth 1 -name 'pr-merger-*' ! -name 'pr-merger-out-*' -delete 2>/dev/null || true
   [ "$killed" -gt 0 ] && log "Cleaned up $killed orphan processes" || true
 }
 
@@ -267,7 +279,7 @@ update_state() {
     .pr_attempts[$pr].attempts += 1 |
     .pr_attempts[$pr].last_result = $res |
     .pr_attempts[$pr].ts = $ts |
-    if $res == "MERGED" then .total_merged = ((.total_merged // 0) + 1) | del(.pr_attempts[$pr].followup_ticket) else . end |
+    if $res == "MERGED" then .total_merged = ((.total_merged // 0) + 1) | del(.pr_attempts[$pr].followup_ticket) | del(.pr_attempts[$pr].escalated) else . end |
     if $res == "STUCK" then .total_stuck = ((.total_stuck // 0) + 1) else . end
   ' "$STATE_FILE" > "$tmp" && mv "$tmp" "$STATE_FILE"
 }
@@ -305,21 +317,35 @@ update_tickets_on_merge() {
 }
 
 # ── Template helper ──────────────────────────────────────────────────
+# Substitutes each {{TOKEN}} explicitly. The base branch is a {{BASE_BRANCH}}
+# placeholder (NOT a literal 's|main|...|' rewrite, which would corrupt any
+# prompt word containing 'main' such as 'remains'/'domain'). Every replacement
+# value is sed-escaped so a PR title containing | & or \ cannot break or inject
+# into the sed program.
 template_prompt() {
   local template_file="$1" output_file="$2" pr_num="$3" pr_title="$4"
   local head_branch="$5" base_branch="$6" pr_url="$7" merge_state="$8"
   local worktree="${9:-}"
+  local pr_title_e head_branch_e base_branch_e pr_url_e merge_state_e repo_root_e worktree_e sha_e
+  pr_title_e=$(_sed_escape "$pr_title")
+  head_branch_e=$(_sed_escape "$head_branch")
+  base_branch_e=$(_sed_escape "$base_branch")
+  pr_url_e=$(_sed_escape "$pr_url")
+  merge_state_e=$(_sed_escape "$merge_state")
+  repo_root_e=$(_sed_escape "$REPO_ROOT")
+  worktree_e=$(_sed_escape "$worktree")
+  sha_e=$(_sed_escape "${VERIFIED_HEAD_SHA:-}")
   sed \
     -e "s|{{PR_NUMBER}}|${pr_num}|g" \
-    -e "s|{{PR_TITLE}}|${pr_title}|g" \
-    -e "s|{{HEAD_BRANCH}}|${head_branch}|g" \
-    -e "s|main|${base_branch}|g" \
-    -e "s|{{PR_URL}}|${pr_url}|g" \
-    -e "s|{{MERGE_STATE}}|${merge_state}|g" \
-    -e "s|{{REPO_ROOT}}|${REPO_ROOT}|g" \
+    -e "s|{{PR_TITLE}}|${pr_title_e}|g" \
+    -e "s|{{HEAD_BRANCH}}|${head_branch_e}|g" \
+    -e "s|{{BASE_BRANCH}}|${base_branch_e}|g" \
+    -e "s|{{PR_URL}}|${pr_url_e}|g" \
+    -e "s|{{MERGE_STATE}}|${merge_state_e}|g" \
+    -e "s|{{REPO_ROOT}}|${repo_root_e}|g" \
     -e "s|{{DRY_RUN}}|${DRY_RUN}|g" \
-    -e "s|{{WORKTREE}}|${worktree}|g" \
-    -e "s|{{VERIFIED_HEAD_SHA}}|${VERIFIED_HEAD_SHA:-}|g" \
+    -e "s|{{WORKTREE}}|${worktree_e}|g" \
+    -e "s|{{VERIFIED_HEAD_SHA}}|${sha_e}|g" \
     "$template_file" > "$output_file"
 }
 
@@ -371,7 +397,7 @@ find_prs() {
     --jq "
       [.[] | select(.isDraft == false) |
        select(.labels | map(.name) |
-         (contains([\"pr-manager:skip\"]) or contains([\"pr-manager:stuck\"]) or contains([\"pr-manager:needs-attention\"])) | not
+         (contains([\"pr-manager:skip\"]) or contains([\"pr-manager:stuck\"]) or contains([\"pr-manager:needs-attention\"]) or contains([\"uat-failed\"])) | not
        )] |
       sort_by(
         (if .mergeStateStatus == \"CLEAN\" then 0
@@ -476,6 +502,54 @@ check_pr_deletions() {
   return 0
 }
 
+# ── Sealed-path guard ────────────────────────────────────────────────
+# The loop may not merge changes to its own gates. Mechanical deny-list check,
+# run BEFORE spawning the agent: any PR that touches a sealed artifact is
+# NOT_MERGEABLE and gets an OPERATOR-DESK row (a loop-authored gate change is an
+# operator decision, never a loop merge).
+SEALED_PATHS="\
+.kitchenloop/quality-bar.md
+.kitchenloop/unbeatable-tests.md
+.kitchenloop/uat-cards/
+scripts/pr-manager/
+scripts/kitchenloop/prompts/
+kitchenloop.yaml
+DIRECTIVE.md
+OPERATOR-DESK.md
+.specify/memory/constitution.md
+docs/architecture/system-architecture.md
+.claude/agents/uat-evaluator.md
+.claude/skills/kitchenloop-quality-sweep/"
+
+# Sets two globals (must be called directly, NOT in $(...), so the assignments
+# land in the current shell): SEALED_CHECK_OK=1 when `gh pr diff` was readable
+# (0 when it failed — the agent's own Stage 1.5 check is the backstop then), and
+# SEALED_HIT_FILE to the first sealed path the PR touches (empty = none).
+SEALED_CHECK_OK=0
+SEALED_HIT_FILE=""
+sealed_path_hit() {
+  local pr_num="$1"
+  SEALED_CHECK_OK=0
+  SEALED_HIT_FILE=""
+  local changed
+  changed=$(gh pr diff "$pr_num" --name-only 2>/dev/null) || return 1
+  SEALED_CHECK_OK=1
+  local f sp
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    while IFS= read -r sp; do
+      [ -z "$sp" ] && continue
+      case "$sp" in
+        */)  # directory prefix
+          case "$f" in "$sp"*) SEALED_HIT_FILE="$f"; return 0 ;; esac ;;
+        *)   # exact file
+          [ "$f" = "$sp" ] && { SEALED_HIT_FILE="$f"; return 0; } ;;
+      esac
+    done <<< "$SEALED_PATHS"
+  done <<< "$changed"
+  return 1
+}
+
 # ── Security/design-blocked PR retirement ────────────────────────────
 # PRs blocked by security guardrails or architecture constraints should
 # not be retried — they need human intervention by design.
@@ -528,6 +602,71 @@ RETIRE
   fi
 }
 
+# ── Escalation (fires when a PR is skipped/capped) ───────────────────
+# Creates a follow-up ticket (idempotent) and posts a one-time escalation
+# comment with the failure history. Called at the moment the needs-attention /
+# stuck label is applied, so the escalation ladder is reachable regardless of
+# skip_after_failures (once needs-attention is set, find_prs stops returning the
+# PR, so nothing fires on "later attempts" — the trigger must be here).
+escalate_stuck_pr() {
+  local pr_num="$1" attempts="$2"
+
+  # 1. Follow-up ticket (idempotent via .followup_ticket)
+  if [ "$HAS_CONFIG" = true ]; then
+    local has_followup
+    has_followup=$(jq -r --arg pr "$pr_num" '.pr_attempts[$pr].followup_ticket // ""' "$STATE_FILE" 2>/dev/null || echo "")
+    if [ -z "$has_followup" ]; then
+      local failure_type="retryable"
+      is_design_blocked "$pr_num" && failure_type="needs_redesign"
+      local rejection_reason pr_title followup_id
+      rejection_reason=$(jq -r --arg pr "$pr_num" '.pr_attempts[$pr].rejection_reason // "unknown"' "$STATE_FILE" 2>/dev/null || echo "unknown")
+      pr_title=$(gh pr view "$pr_num" --json title --jq '.title' 2>/dev/null || echo "PR #$pr_num")
+      log "PR #$pr_num: creating follow-up ticket ($failure_type) after $attempts failures"
+      followup_id=$(ticket_create \
+        "Follow-up: PR #$pr_num blocked ($failure_type)" \
+        "PR #$pr_num ($pr_title) has failed $attempts merge attempts.\n\n**Failure type**: $failure_type\n**Last rejection**: $rejection_reason\n\nOriginal PR: #$pr_num\n\n_Created by PR Manager escalation_" \
+        2>/dev/null || echo "")
+      if [ -n "$followup_id" ]; then
+        local tmp_state
+        tmp_state=$(jq --arg pr "$pr_num" --arg tid "$followup_id" \
+          '.pr_attempts[$pr].followup_ticket = $tid' "$STATE_FILE" 2>/dev/null) && \
+          echo "$tmp_state" > "$STATE_FILE"
+        gh pr comment "$pr_num" --body "Follow-up ticket created: #$followup_id ($failure_type)" 2>/dev/null || true
+        log "PR #$pr_num: follow-up ticket #$followup_id created"
+      fi
+    fi
+  fi
+
+  # 2. One-time escalation comment with failure history (idempotent via .escalated)
+  local escalated
+  escalated=$(jq -r --arg pr "$pr_num" '.pr_attempts[$pr].escalated // false' "$STATE_FILE" 2>/dev/null || echo "false")
+  if [ "$escalated" != "true" ]; then
+    local failure_history
+    failure_history=$(jq -r --arg pr "$pr_num" '
+      .pr_attempts[$pr] | "Attempts: \(.attempts), Last result: \(.last_result // "unknown"), Last SHA: \(.rejected_sha // "unknown"), Reason: \(.rejection_reason // "unknown")"
+    ' "$STATE_FILE" 2>/dev/null || echo "unknown")
+    gh pr comment "$pr_num" --body "$(cat <<ESCALATION
+## PR Manager Escalation — needs human attention after $attempts attempt(s)
+
+This PR has failed $attempts merge attempt(s) and has been set aside for a human.
+
+**Failure history**: $failure_history
+
+**Action needed**: Either:
+1. Fix the underlying issue and push new commits
+2. Close the PR if the approach needs rethinking
+3. Remove the \`pr-manager:needs-attention\` label to retry
+
+_Escalated by PR Manager_
+ESCALATION
+)" 2>/dev/null || true
+    local tmp_esc
+    tmp_esc=$(jq --arg pr "$pr_num" '.pr_attempts[$pr].escalated = true' "$STATE_FILE" 2>/dev/null) && \
+      echo "$tmp_esc" > "$STATE_FILE"
+    log "PR #$pr_num: escalation comment posted"
+  fi
+}
+
 # ── BLOCKED PR fast-skip check ───────────────────────────────────────
 # After N failed attempts on a BLOCKED PR with only CI failures (no human
 # review changes requested), skip spawning Claude and label for human attention.
@@ -564,81 +703,33 @@ process_pr() {
   done
 
   local attempts; attempts=$(get_attempts "$pr_num")
+
+  # Hard cap: after MAX_ATTEMPTS_PER_PR, mark stuck permanently and escalate.
+  # (With skip_after_failures < MAX this is a safety net; whichever threshold is
+  # lower fires first.)
   if [ "$attempts" -ge "$MAX_ATTEMPTS_PER_PR" ]; then
-    log "PR #$pr_num: exceeded $MAX_ATTEMPTS_PER_PR attempts — escalating"
+    log "PR #$pr_num: exceeded $MAX_ATTEMPTS_PER_PR attempts — escalating (stuck)"
     add_label "$pr_num" "pr-manager:stuck"
     update_state "$pr_num" "STUCK"
-
-    # Graduated escalation based on failure count
-    if [ "$attempts" -ge 3 ]; then
-      # After 3 failures: create a human-readable summary with failure history
-      local failure_history
-      failure_history=$(jq -r --arg pr "$pr_num" '
-        .pr_attempts[$pr] | "Attempts: \(.attempts), Last result: \(.last_result // "unknown"), Last SHA: \(.rejected_sha // "unknown"), Reason: \(.rejection_reason // "unknown")"
-      ' "$STATE_FILE" 2>/dev/null || echo "unknown")
-      log "PR #$pr_num: 3+ failures — creating summary for human triage"
-      gh pr comment "$pr_num" --body "$(cat <<ESCALATION
-## PR Manager Escalation — Stuck after $attempts attempts
-
-This PR has failed $attempts merge attempts without resolution.
-
-**Failure history**: $failure_history
-
-**Action needed**: Human review required. Either:
-1. Fix the underlying issue and push new commits
-2. Close the PR if the approach needs rethinking
-3. Remove the \`pr-manager:stuck\` label to retry
-
-_Escalated by PR Manager_
-ESCALATION
-)" 2>/dev/null || true
-      add_label "$pr_num" "needs-attention"
-    fi
+    escalate_stuck_pr "$pr_num" "$attempts"
+    add_label "$pr_num" "pr-manager:needs-attention"
     return 1
   fi
-  # After 2 failures: create a follow-up ticket if one doesn't already exist
-  # (runs before skip-after-failures guard so it fires even with low thresholds)
-  if [ "$attempts" -ge 2 ]; then
-    local has_followup
-    has_followup=$(jq -r --arg pr "$pr_num" '.pr_attempts[$pr].followup_ticket // ""' "$STATE_FILE" 2>/dev/null || echo "")
-    if [ -z "$has_followup" ] && [ "$HAS_CONFIG" = true ]; then
-      local failure_type="retryable"
-      if is_design_blocked "$pr_num"; then
-        failure_type="needs_redesign"
-      fi
-      local rejection_reason
-      rejection_reason=$(jq -r --arg pr "$pr_num" '.pr_attempts[$pr].rejection_reason // "unknown"' "$STATE_FILE" 2>/dev/null || echo "unknown")
-      local pr_title
-      pr_title=$(gh pr view "$pr_num" --json title --jq '.title' 2>/dev/null || echo "PR #$pr_num")
 
-      log "PR #$pr_num: creating follow-up ticket ($failure_type) after $attempts failures"
-      local followup_id=""
-      followup_id=$(ticket_create \
-        "Follow-up: PR #$pr_num blocked ($failure_type)" \
-        "PR #$pr_num ($pr_title) has failed $attempts merge attempts.\n\n**Failure type**: $failure_type\n**Last rejection**: $rejection_reason\n\nOriginal PR: #$pr_num\n\n_Created by PR Manager escalation_" \
-        2>/dev/null || echo "")
-
-      if [ -n "$followup_id" ]; then
-        # Record follow-up ticket in state to prevent duplicates
-        local tmp_state
-        tmp_state=$(jq --arg pr "$pr_num" --arg tid "$followup_id" \
-          '.pr_attempts[$pr].followup_ticket = $tid' "$STATE_FILE" 2>/dev/null) && \
-          echo "$tmp_state" > "$STATE_FILE"
-        gh pr comment "$pr_num" --body "Follow-up ticket created: #$followup_id ($failure_type)" 2>/dev/null || true
-        log "PR #$pr_num: follow-up ticket #$followup_id created"
-      fi
-    fi
-  fi
-
+  # Skip + escalate the moment the failure threshold is reached. The escalation
+  # (follow-up ticket + comment) MUST fire here: once needs-attention is applied,
+  # find_prs excludes the PR, so no "later attempt" can ever trigger it.
   if [ "$attempts" -ge "$SKIP_AFTER_FAILURES" ]; then
+    # PRs blocked by a security/architecture concern are retired for human
+    # redesign rather than retried.
+    if is_design_blocked "$pr_num"; then
+      retire_design_blocked_pr "$pr_num"
+      update_state "$pr_num" "STUCK"
+      return 1
+    fi
     log "PR #$pr_num: $attempts prior failure(s), skipping (needs-attention)"
-    add_label "$pr_num" "pr-manager:needs-attention"; return 1
-  fi
-
-  # Retire PRs blocked by security/architecture concerns after 2+ NOT_MERGEABLE attempts
-  if [ "$attempts" -ge 2 ] && is_design_blocked "$pr_num"; then
-    retire_design_blocked_pr "$pr_num"
-    update_state "$pr_num" "STUCK"
+    escalate_stuck_pr "$pr_num" "$attempts"
+    add_label "$pr_num" "pr-manager:needs-attention"
     return 1
   fi
 
@@ -667,6 +758,29 @@ ESCALATION
   add_label "$pr_num" "pr-manager:processing"
   log "Processing PR #$pr_num: $pr_title (state: $merge_state, attempt: $((attempts+1)))"
 
+  # Sealed-path guard (mechanical, before spawning): the loop may not merge
+  # changes to its own gates. Any hit -> NOT_MERGEABLE + OPERATOR-DESK row + skip.
+  # Called directly (not in $(...)) so SEALED_CHECK_OK/SEALED_HIT_FILE land here.
+  sealed_path_hit "$pr_num" || true
+  if [ "$SEALED_CHECK_OK" = "1" ] && [ -n "$SEALED_HIT_FILE" ]; then
+    local sealed_file="$SEALED_HIT_FILE"
+    log "PR #$pr_num: NOT_MERGEABLE — touches sealed gate '$sealed_file' (operator decision)"
+    add_operator_desk_row \
+      "PRM-SEAL-$pr_num" \
+      "review pr $pr_num" \
+      "PR #$pr_num changes a sealed loop gate (\`$sealed_file\`); the loop may not merge it." \
+      "Review the change by hand; land it yourself if intended, or close the PR. The loop will not auto-merge sealed-gate edits." \
+      "PR #$pr_num merge" \
+      "The mechanical sealed-path guard matched \`$sealed_file\` in PR #$pr_num's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside."
+    remove_label "$pr_num" "pr-manager:processing"
+    add_label "$pr_num" "pr-manager:needs-attention"
+    update_state "$pr_num" "NOT_MERGEABLE"
+    local sealed_head_sha
+    sealed_head_sha=$(gh pr view "$pr_num" --json headRefOid --jq '.headRefOid' 2>/dev/null || echo "")
+    [ -n "$sealed_head_sha" ] && record_rejection_sha "$pr_num" "$sealed_head_sha" "NOT_MERGEABLE"
+    return 1
+  fi
+
   # Pre-merge deletion check: block PRs with unexpected file deletions
   # On success, VERIFIED_HEAD_SHA is set to the pinned commit for merge
   VERIFIED_HEAD_SHA=""
@@ -678,8 +792,19 @@ ESCALATION
     return 1
   fi
 
+  # Compose the agent prompt: prep-pr.md (Stages 1-8) always; merge-pr.md
+  # (Stages 8.5-10) concatenated ONLY when NOT --dry-run. With DRY_RUN=true the
+  # merge stages are literally absent from the prompt (no merge stage reachable);
+  # the prep pipeline's Gate Decision ends at RESULT: PREPPED.
   local prompt_tmp; prompt_tmp=$(mktemp "${TMPDIR:-/tmp}/pr-merger-XXXXXX")
-  template_prompt "$PROMPT_TEMPLATE" "$prompt_tmp" "$pr_num" "$pr_title" "$head_branch" "$base_branch" "$pr_url" "$merge_state"
+  template_prompt "$PREP_PROMPT_TEMPLATE" "$prompt_tmp" "$pr_num" "$pr_title" "$head_branch" "$base_branch" "$pr_url" "$merge_state"
+  if [ "$DRY_RUN" != true ]; then
+    local merge_tmp; merge_tmp=$(mktemp "${TMPDIR:-/tmp}/pr-merger-XXXXXX")
+    template_prompt "$PROMPT_TEMPLATE" "$merge_tmp" "$pr_num" "$pr_title" "$head_branch" "$base_branch" "$pr_url" "$merge_state"
+    printf '\n\n' >> "$prompt_tmp"
+    cat "$merge_tmp" >> "$prompt_tmp"
+    rm -f "$merge_tmp"
+  fi
 
   # Deterministic output file path per PR number (not mktemp) to avoid race
   # condition where cleanup_orphan_processes deletes the active output file
@@ -699,7 +824,12 @@ ESCALATION
 
   while true; do
     start_ts=$(date +%s)
-    cat "$prompt_tmp" | (cd "$REPO_ROOT" && claude --dangerously-skip-permissions --print \
+    # `exec -a claude-pr-merger` tags the process argv so cleanup_orphan_processes
+    # can find leftover sessions (the prompt is piped on stdin, so no temp-file
+    # path appears in claude's own command line). exec also makes claude_pid the
+    # real claude PID for the watchdog's process-group kill.
+    cat "$prompt_tmp" | (cd "$REPO_ROOT" && exec -a claude-pr-merger \
+      claude --dangerously-skip-permissions --print \
       --max-turns "$CLAUDE_MAX_TURNS") > "$outfile" 2>&1 &
     local claude_pid=$!
     CHILD_PIDS="$CHILD_PIDS $claude_pid"
@@ -804,13 +934,12 @@ ESCALATION
   log "PR #$pr_num: Result=$result (exit=$exit_code)"
   update_state "$pr_num" "$result"
 
-  # C8: Reset attempt count on CLEAN merge state (PR is in good shape)
-  if [ "$merge_state" = "CLEAN" ]; then
-    local tmp_reset; tmp_reset=$(mktemp)
-    jq --arg pr "$pr_num" '
-      .pr_attempts[$pr].attempts = 0
-    ' "$STATE_FILE" > "$tmp_reset" 2>/dev/null && mv "$tmp_reset" "$STATE_FILE" || rm -f "$tmp_reset"
-  fi
+  # NOTE: the attempt counter is reset ONLY on result=MERGED (in the case block
+  # below). A previous version also reset it whenever mergeStateStatus was CLEAN,
+  # regardless of the session result — that let a CLEAN PR whose session kept
+  # timing out / crashing / emitting an unparseable sentinel (TIMEOUT/FAILED/
+  # UNKNOWN) retry forever, since the counter never reached SKIP_AFTER_FAILURES.
+  # A successful session is the only thing that earns a counter reset.
 
   case "$result" in
     MERGED)
@@ -853,9 +982,26 @@ cleanup_orphan_processes
 MERGED_COUNT=0
 PROCESSED_COUNT=0
 
+# Operator emergency brake: refuse to start if the HALT sentinel is present.
+# pr-manager's output (a squash merge to $BASE_BRANCH) is irreversible, so it
+# must not spawn any session while the operator's brake is set.
+if halt_active; then
+  log "HALT sentinel present ($HALT_FILE) — refusing to run. Contents:"
+  sed 's/^/  | /' "$HALT_FILE" 2>/dev/null || true
+  exit 0
+fi
+
 log "PR Manager started (base=$BASE_BRANCH, max_prs=$MAX_PRS, once=$ONCE, budget=$BUDGET)"
 
 while true; do
+  # HALT check at the top of every poll cycle — the operator may set the brake
+  # while the daemon is sleeping between batches.
+  if halt_active; then
+    log "HALT sentinel appeared ($HALT_FILE) — stopping. Merged: $MERGED_COUNT, Processed: $PROCESSED_COUNT"
+    sed 's/^/  | /' "$HALT_FILE" 2>/dev/null || true
+    break
+  fi
+
   if ! has_budget; then
     log "Budget exhausted. Merged: $MERGED_COUNT, Processed: $PROCESSED_COUNT"
     break
@@ -875,6 +1021,12 @@ while true; do
 
   while IFS= read -r pr_json; do
     [ -z "$pr_json" ] && continue
+
+    # HALT check before EACH PR — never start a merge session once the brake is set.
+    if halt_active; then
+      log "HALT sentinel appeared ($HALT_FILE) — stopping mid-batch."
+      break 2
+    fi
 
     if [ "$MAX_PRS" -gt 0 ] && [ "$PROCESSED_COUNT" -ge "$MAX_PRS" ]; then
       log "Reached max PRs ($MAX_PRS). Stopping."

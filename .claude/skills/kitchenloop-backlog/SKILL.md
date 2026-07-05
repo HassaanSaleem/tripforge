@@ -1,3 +1,8 @@
+---
+name: kitchenloop-backlog
+description: KitchenLoop backlog-grooming phase — scan open tickets, score them on urgency/accessibility/impact, promote the best candidates to the todo queue, retire stale ones, and keep category balance. Use when running the loop's backlog phase or when asked to groom/promote tickets.
+---
+
 # KitchenLoop: Backlog
 
 > Scan the backlog, evaluate tickets, promote to todo queue, maintain balance.
@@ -16,6 +21,47 @@ The Backlog phase keeps the todo queue healthy. It scans all open tickets,
 scores them on urgency/accessibility/impact, promotes the best candidates
 to the todo queue, and retires stale tickets. The goal is to maintain a
 todo queue of 5-8 tickets with good category balance.
+
+---
+
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop. Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[backlog] HALTED -- iteration {N}`, and stop immediately.
+   Run no further step.
+2. **Read `DIRECTIVE.md`.** Any work item matching its ALWAYS-HALT list
+   (constitution amendments; canonical itinerary schema version bumps/migrations;
+   revenue-share or client-ownership semantics; changes to the loop's own gates —
+   quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE; `git push` to a
+   remote; deploys) must NOT be done. Instead write one row to `OPERATOR-DESK.md`
+   (`| ID | Say | Question | Recommendation | Since | Blocks |` plus a context
+   paragraph below it) and skip that item, continuing with other work.
+3. **No interactive operator** — never use `AskUserQuestion`. Asks go to
+   `OPERATOR-DESK.md` as rows, never buried in prose or a PR comment.
+
+---
+
+## Ticketing Provider Dispatch
+
+All ticket operations MUST honor `ticketing.provider` from `kitchenloop.yaml`.
+**This repo sets `provider: "none"`**, so the loop's queue lives in
+`.kitchenloop/backlog.json`, NOT in a GitHub issue tracker.
+
+- **`none` / `local`** (this repo): tickets are a JSON array in
+  `.kitchenloop/backlog.json`; each object has `id, title, body, type, priority,
+  state, created, pr_url` and moves through states
+  `backlog → todo → in_progress → in_review → done`. Read/write them through the
+  `scripts/kitchenloop/lib/tickets.sh` helpers — `ticket_list_by_state`,
+  `ticket_transition`, `ticket_add_comment`, `ticket_set_pr_url` — never with
+  `gh issue` commands (there is no GitHub issue queue for the loop).
+- **`github`**: the `gh issue ...` snippets below are the GitHub path.
+
+The `gh issue`/`gh pr list --state closed` snippets in this skill are the
+**github-provider illustration**; under `none` use the `lib/tickets.sh`
+equivalents noted at each step. Reading real fix PRs via `gh pr` is fine under
+either provider (PRs are real GitHub PRs); only the ticket/issue queue is local.
 
 ---
 
@@ -43,6 +89,11 @@ For each closed-not-merged PR:
 3. If yes: promote back to "todo" with comment: "Fix PR #N was closed without merging. Bug is still live on main. Re-promoting for execution."
 4. If the ticket was already closed: reopen it
 
+> The `gh pr list --state closed` read above works under either provider (PRs are
+> real GitHub PRs). The follow-up ticket ops (promote/reopen) are ticket-queue
+> operations — under the `none` provider use `ticket_transition {id} todo` and
+> `ticket_add_comment`, not `gh issue`.
+
 This prevents bugs from going unfixed when AI-generated fix PRs are silently abandoned.
 
 ### Step 2: Inventory Current State
@@ -62,6 +113,10 @@ gh issue list --label "{ticketing.github.state_labels.in_review}" --json number,
 # Full backlog (unlabeled state)
 gh issue list --state open --json number,title,labels,createdAt,body --limit 200
 ```
+
+> **Local provider (`none`)**: replace all four `gh issue list` queries with
+> `ticket_list_by_state todo|in_progress|in_review|backlog` (from
+> `lib/tickets.sh`), which read `.kitchenloop/backlog.json`.
 
 <!-- CUSTOMIZE: Adapt inventory queries for your ticketing provider. -->
 
@@ -124,6 +179,9 @@ gh issue edit {ticket_number} --add-label "{ticketing.github.state_labels.todo}"
 gh issue comment {ticket_number} --body "Promoted to todo queue by KitchenLoop backlog grooming (iteration {N}). Score: {score}/9 (U:{urgency} A:{accessibility} I:{impact})"
 ```
 
+> **Local provider (`none`)**: `ticket_transition {id} todo` then
+> `ticket_add_comment {id} "Promoted to todo ... Score: {score}/9"`.
+
 ### Step 7: Retire Stale Tickets
 
 Identify tickets that should be closed:
@@ -136,6 +194,10 @@ For each stale ticket:
 ```bash
 gh issue close {ticket_number} --comment "Closed by KitchenLoop backlog grooming: {reason}"
 ```
+
+> **Local provider (`none`)**: `ticket_add_comment {id} "Retired: {reason}"` then
+> `ticket_transition {id} done` (there is no separate "closed" state — `done`
+> retires it from the active queue).
 
 ### Step 8: Report
 
@@ -166,7 +228,10 @@ Category Distribution (todo queue):
   Exploration:  {count} ({pct}%)
 ```
 
-Update loop state at `paths.loop_state`.
+Emit this health summary as the phase's stdout output. **Do NOT write
+`loop-state.md`** — the regress phase is the sole writer of loop state (this
+avoids concurrent-write corruption of the shared file). Backlog-health metrics
+are surfaced in the summary above; regress records them when it runs.
 
 ---
 
@@ -174,12 +239,10 @@ Update loop state at `paths.loop_state`.
 
 1. **Todo queue at 5-8 tickets** with category balance
 2. **Stale tickets retired** with clear reasons
-3. **Loop state updated** with backlog health metrics
+3. **Backlog health summary** emitted to stdout (loop state is written by regress)
 4. **Promotion comments** on all promoted tickets
 
 ---
-
-## Configuration Reference
 
 ## Shared State Safety
 

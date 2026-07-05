@@ -88,5 +88,6 @@ Every PR is evaluated against these before merge:
    agent's brand, never TripForge's (Constitution II).
 
 5. **Marketplace-First** — Features must deepen marketplace liquidity or grow
-   the agent base (Constitution I). Anything on the constitution's v2+ deferred
-   list is rejected at triage, not implemented.
+   the agent base (Constitution I). Anything in the constitution's Non-Goals
+   section or P1+ roadmap phases (MVP Scope Discipline) is rejected at triage,
+   not implemented.

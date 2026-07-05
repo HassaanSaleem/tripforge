@@ -1,6 +1,15 @@
 # Kitchen Loop - Phase 1: Ideate (Autonomous)
 
-You are running **autonomously** as part of the Kitchen Loop. There is no human operator to interact with. You must make all decisions yourself and proceed without asking questions.
+You are running **autonomously** as part of the Kitchen Loop. No interactive operator is available — never use `AskUserQuestion`; any ask goes to `OPERATOR-DESK.md` as a row. You make all in-scope decisions yourself; anything on DIRECTIVE.md's ALWAYS-HALT list becomes an `OPERATOR-DESK.md` row instead of an action.
+
+## Control Plane — READ FIRST (before any other action)
+
+1. **HALT sentinel.** Check whether `{{REPO_ROOT}}/.kitchenloop/HALT` exists. If it does, print its contents, output the halted sentinel below, and STOP immediately — do no other work this phase:
+   ```
+   [ideate] HALTED -- .kitchenloop/HALT present, iteration {{ITERATION_NUM}}
+   ```
+2. **Read `DIRECTIVE.md`** (the human setpoint) before doing anything else. It lists what ALWAYS halts: constitution amendments; canonical itinerary schema version bumps/migrations; changes to revenue-share or client-ownership semantics; changes to the loop's own gates (quality bar, regression oracle, UAT protocol, sweep rules, DIRECTIVE itself); `git push` to a remote outside the gated pr-manager merge pipeline; deploys. For ANY work item that matches the ALWAYS-HALT list: do NOT do it — append a row to `OPERATOR-DESK.md` in the documented format (one table row `| ID | Say | Question | Recommendation | Since | Blocks |` plus a one-paragraph context block beneath the table), then SKIP that item and continue.
+3. **No interactive operator.** The operator is asynchronous; the ONLY channel to them is an `OPERATOR-DESK.md` row. A gate that is not on the desk was not asked.
 
 ## Autonomous Mode Rules
 
@@ -14,13 +23,13 @@ You are running **autonomously** as part of the Kitchen Loop. There is no human 
 - **Iteration worktree**: {{ITER_WORKTREE}}
 - **Iteration number**: {{ITERATION_NUM}}
 - **Mode**: {{MODE}}
-- **Base branch**: main
+- **Base branch**: {{BASE_BRANCH}}
 - **Important**: You are running inside a git worktree, NOT the main repo directory.
   All file writes go to this worktree. Do NOT `cd` to the repo root.
 
 ## The Project You Are Testing
 
-**tripforge**: AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace
+**{{PROJECT_NAME}}**: AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace
 
 {{PROJECT_ROOT_DIRECTIVE}}
 
@@ -56,12 +65,17 @@ If your chosen scenario matches any of these, pick a different idea immediately.
 - Create a minimal L3 smoke test that starts the real app and verifies it works
 - The test must follow the 4-layer pattern: Compile → Execute → Parse → **State Deltas**
 - Add it as a test script (e.g., `tests/smoke.sh`, `tests/smoke/`, or `tests/e2e/smoke.spec.ts`)
-- Update `kitchenloop.yaml` → `verification.oracle.smoke_command` to point to it
-- Update `.kitchenloop/unbeatable-tests.md` with what you created
+- **Do NOT edit `verification.oracle.smoke_command` in `kitchenloop.yaml` or
+  `.kitchenloop/unbeatable-tests.md` yourself** — those are sealed loop gates (DIRECTIVE
+  ALWAYS-HALT: "changes to the loop's own gates (…oracle…, sweep rules, this file)"). Writing the
+  test file is allowed; wiring it into the oracle is an operator gate. Append an `OPERATOR-DESK.md`
+  row proposing the wiring (Question: "Wire `verification.oracle.smoke_command` to
+  `<path to the smoke test you created>` and record it in `.kitchenloop/unbeatable-tests.md`?";
+  Recommendation: the exact command string). Leave the config unchanged until the operator answers.
 - File a ticket for any L4 (E2E scenario) tests that should be added next
 - Skip the normal tier selection below — this IS the most important thing to do
 
-**Why this is Priority Zero**: Without an L3 test, the regression gate (`npm test`)
+**Why this is Priority Zero**: Without an L3 test, the regression gate (`{{FULL_TEST_COMMAND}}`)
 only runs L1/L2 unit tests. The loop can make changes that break the real application
 while all tests pass. This is exactly the "38 passing unit tests, completely broken service"
 anti-pattern from the paper.
@@ -70,11 +84,29 @@ anti-pattern from the paper.
 
 ## Your Task — Three-Tier Scenario Generation
 
-You are a **synthetic user** of **tripforge**. Your job is to USE the project the way a real user would, discover what breaks, and document everything.
+You are a **synthetic user** of **{{PROJECT_NAME}}**. Your job is to USE the project the way a real user would, discover what breaks, and document everything.
 
 **You must act AS A USER, not as a code reviewer.** Do not browse source code looking for bugs. Instead, run commands, call APIs, use the tool — and document the experience.
 
-**CRITICAL**: Your scenario MUST exercise **tripforge** — the project described above. Do NOT test the KitchenLoop framework, build scripts, or orchestration tooling. Focus exclusively on features from the spec surface.
+**CRITICAL**: Your scenario MUST exercise **{{PROJECT_NAME}}** — the project described above. Do NOT test the KitchenLoop framework, build scripts, or orchestration tooling. Focus exclusively on features from the spec surface.
+
+**Read the source of truth before choosing a scenario.** Read the documents listed under `spec.docs`
+in `kitchenloop.yaml` — for this repo: the PRD `docs/product/Trellis_Product_Charter_PRD.pdf` (open
+it with the Read tool), the architecture map `docs/architecture/system-architecture.md`, and the
+constitution `.specify/memory/constitution.md`. Your scenario must fit what these define.
+
+**HARD ROADMAP SCOPE (P0 only) — reject out-of-phase scenarios at ideation.** The PRD roadmap (see
+the comment block under `spec:` in `kitchenloop.yaml`) restricts the loop to the **P0 agent-side
+MVP**. Do NOT ideate, and immediately pick a different scenario if a candidate touches:
+- **P2+**: consumer surface (self-serve planner, self-drive/agent fork), the whats-hot feed
+- **P3+**: flights-as-merchant-of-record, direct-supplier-contracting, multi-region catalogue,
+  consortium/host-agency tooling
+- **Never (PRD non-goals)**: ride-hailing/driver fleet, Airbnb-sourced inventory, generic consumer
+  trip-planner play, scraped/AI-fabricated place imagery
+
+These phases are unlocked only by an operator decision. If you believe a deferred scenario is
+important, do NOT test it — note it as a Missing Feature in the experience report so triage can
+surface it (it will not become a ticket while out of phase).
 
 ### Pick a Tier
 
@@ -154,7 +186,7 @@ Before implementing, run a quick feasibility check:
 ```bash
 codex exec "FEASIBILITY CHECK for Kitchen Loop iteration {{ITERATION_NUM}}:
 
-Project: tripforge — AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace
+Project: {{PROJECT_NAME}} — AI-native itinerary platform for travel professionals — build itineraries with AI, book net-rate inventory, and trade finished trips on a two-sided marketplace
 
 [Describe your scenario in 2-3 sentences]
 
@@ -180,7 +212,7 @@ This is the critical step. **Do not skip to reading source code.**
 2. Run the commands or API calls a real user would run for your scenario
 3. Observe the output — is it correct? Helpful? Confusing?
 4. Try edge cases a real user might hit (typos, empty input, missing data)
-5. Run the test suite to verify nothing breaks: `npm test`
+5. Run the test suite to verify nothing breaks: `{{QUICK_TEST_COMMAND}}`
 6. Write tests that capture your scenario as a regression test
 7. Document every friction point, confusing error message, missing feature
 

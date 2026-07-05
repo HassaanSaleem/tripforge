@@ -1,3 +1,8 @@
+---
+name: kitchenloop-ideate
+description: KitchenLoop ideate phase — act as a synthetic user, pick a realistic scenario (T1/T2/T3), implement and test it against the project's public surface, and write a structured experience report that triage later converts into tickets. Use when running the loop's ideate phase or brainstorming a usage scenario.
+---
+
 # KitchenLoop: Ideate
 
 > Phase 1 -- Brainstorm a usage scenario, implement it, test it, write an experience report.
@@ -17,6 +22,30 @@ user** of the project: pick a realistic scenario, try to implement it using the
 project's public API and tooling, document what works and what doesn't, and
 produce a structured experience report that the Triage phase will later convert
 into tickets.
+
+> **Ideate files no tickets.** Findings go into the experience report's Friction
+> Log; the **triage** phase converts them into tickets under the configured
+> `ticketing.provider`. Ideate therefore issues no `gh issue` / ticket commands
+> and is provider-agnostic.
+
+---
+
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop. Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[ideate] HALTED -- iteration {N}`, and stop immediately.
+   Run no further step.
+2. **Read `DIRECTIVE.md`.** Any work item matching its ALWAYS-HALT list
+   (constitution amendments; canonical itinerary schema version bumps/migrations;
+   revenue-share or client-ownership semantics; changes to the loop's own gates —
+   quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE; `git push` to a
+   remote; deploys) must NOT be done. Instead write one row to `OPERATOR-DESK.md`
+   (`| ID | Say | Question | Recommendation | Since | Blocks |` plus a context
+   paragraph below it) and skip that item, continuing with other work.
+3. **No interactive operator** — never use `AskUserQuestion`. Make reasonable
+   decisions; asks go to `OPERATOR-DESK.md` as rows, never buried in prose.
 
 ---
 
@@ -165,14 +194,13 @@ Create the report at `{paths.reports}/experience-report-iter-{N}.md`:
 {List of all files created or modified}
 ```
 
-### Step 7: Update Loop State
+### Step 7: Report Iteration Summary
 
-Update the loop state file (`paths.loop_state`) with:
-- Iteration number incremented
-- Scenario description and tier
-- Pass/fail status
-- Timestamp
-- Number of friction items found
+Emit a short summary to stdout (scenario description and tier, pass/fail status,
+number of friction items found). **Do NOT write `loop-state.md`** — the regress
+phase is the sole writer of loop state, so ideate never edits it (this avoids
+concurrent-write corruption). The experience report is ideate's durable artifact;
+regress records the iteration into loop state when it runs.
 
 ---
 
@@ -183,7 +211,7 @@ At the end of the Ideate phase, the following artifacts MUST exist:
 1. **Scenario code** in `{paths.scenarios}/{scenario_slug}/`
 2. **Scenario test** in the same directory
 3. **Experience report** at `{paths.reports}/experience-report-iter-{N}.md`
-4. **Updated loop state** at `{paths.loop_state}`
+4. **Iteration summary** emitted to stdout (loop state is written by regress)
 
 ---
 

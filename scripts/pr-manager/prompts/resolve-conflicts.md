@@ -1,6 +1,9 @@
 # Resolve Merge Conflicts
 
-You are resolving merge conflicts on a PR branch.
+Inline helper for prep-pr.md **Stage 5** (branch update). You are resolving merge
+conflicts on a PR's own feature branch (`{{HEAD_BRANCH}}`). Pushes here go ONLY
+to that feature branch — never to `{{BASE_BRANCH}}`, a new remote, or via
+force-push (those ALWAYS halt to OPERATOR-DESK.md; see the control-plane preamble).
 
 ## Steps
 
@@ -26,15 +29,15 @@ You are resolving merge conflicts on a PR branch.
    - Run quick tests to ensure nothing is broken
    - If lint/tests fail, fix and commit again
 
-5. **Push**:
+5. **Push to the PR's own feature branch**:
    ```bash
-   git push
+   git push origin HEAD:{{HEAD_BRANCH}}
    ```
 
 ## Output
 
-- `RESOLVED` — All conflicts resolved, lint passes, pushed
-- `STUCK` — Could not resolve conflicts automatically (explain which files and why)
+- `RESULT: RESOLVED` — All conflicts resolved, lint passes, pushed to the feature branch
+- `RESULT: STUCK: [reason]` — Could not resolve conflicts automatically (explain which files and why)
 
 ## Rules
 

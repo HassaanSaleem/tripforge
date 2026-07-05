@@ -1,6 +1,16 @@
 # Kitchen Loop - Phase 4: Regress (Autonomous)
 
-You are running **autonomously** as part of the Kitchen Loop. There is no human operator to interact with. You must make all decisions yourself.
+You are running **autonomously** as part of the Kitchen Loop. No interactive operator is available — never use `AskUserQuestion`; any ask goes to `OPERATOR-DESK.md` as a row. You make all in-scope decisions yourself; anything on DIRECTIVE.md's ALWAYS-HALT list becomes an `OPERATOR-DESK.md` row instead of an action.
+
+## Control Plane — READ FIRST (before any other action)
+
+1. **HALT sentinel.** Check whether `{{REPO_ROOT}}/.kitchenloop/HALT` exists. If it does, print its contents, output the halted sentinel below, and STOP immediately — do no other work this phase:
+   ```
+   [regress] HALTED -- .kitchenloop/HALT present, iteration {{ITERATION_NUM}}
+   ```
+   Regress is also the phase that MAY create `{{REPO_ROOT}}/.kitchenloop/HALT` (with a reason inside) when a stop condition trips in Step 3 — see that step.
+2. **Read `DIRECTIVE.md`** (the human setpoint) before doing anything else. It lists what ALWAYS halts: constitution amendments; canonical itinerary schema version bumps/migrations; changes to revenue-share or client-ownership semantics; changes to the loop's own gates (quality bar, regression oracle, UAT protocol, sweep rules, DIRECTIVE itself); `git push` to a remote outside the gated pr-manager merge pipeline; deploys. For ANY work item that matches the ALWAYS-HALT list: do NOT do it — append a row to `OPERATOR-DESK.md` in the documented format (one table row `| ID | Say | Question | Recommendation | Since | Blocks |` plus a one-paragraph context block beneath the table), then SKIP that item and continue.
+3. **No interactive operator.** The operator is asynchronous; the ONLY channel to them is an `OPERATOR-DESK.md` row. A gate that is not on the desk was not asked.
 
 ## Autonomous Mode Rules
 
@@ -13,7 +23,7 @@ You are running **autonomously** as part of the Kitchen Loop. There is no human 
 - **Iteration worktree**: {{ITER_WORKTREE}}
 - **Iteration number**: {{ITERATION_NUM}}
 - **Mode**: {{MODE}}
-- **Base branch**: main
+- **Base branch**: {{BASE_BRANCH}}
 - **Regress quick**: {{REGRESS_QUICK}}
 - **Important**: You are running inside a git worktree, NOT the main repo directory.
   All file writes go to this worktree. Do NOT `cd` to the repo root.
@@ -36,7 +46,7 @@ Print `[regress] Step 1/6: Running pre-flight checks...`
 
 Verify the working directory is clean and the project builds:
 ```bash
-npm run lint
+{{LINT_COMMAND}}
 ```
 
 ### Step 1.5: Security Scan (if configured)
@@ -51,11 +61,11 @@ If `{{SECURITY_COMMAND}}` is not empty:
 
 If `{{REGRESS_QUICK}}` is `true` (quick mode):
 - Print `[regress] Step 2/6: Running quick tests...`
-- Run: `npm test`
+- Run: `{{QUICK_TEST_COMMAND}}`
 
 If `{{REGRESS_QUICK}}` is `false` (full mode):
 - Print `[regress] Step 2/6: Running full test suite...`
-- Run: `npm test`
+- Run: `{{FULL_TEST_COMMAND}}`
 
 Capture:
 - Total tests run
@@ -64,14 +74,14 @@ Capture:
 
 ### Step 2.5: L3 Smoke Test (Integration Gate)
 
-If `` is not empty:
+If `{{SMOKE_COMMAND}}` is not empty:
 - Print `[regress] Step 2.5/6: Running L3 smoke test (integration gate)...`
-- Run: ``
+- Run: `{{SMOKE_COMMAND}}`
 - This is the **unbeatable test** — it verifies the real application works end-to-end.
 - A smoke test failure is **more critical** than L1/L2 failures — it means the product is broken even if unit tests pass.
 - If it fails: flag as `SMOKE_FAIL` in the summary and recommend pausing for investigation.
 
-If `` is empty:
+If `{{SMOKE_COMMAND}}` is empty:
 - Print `[regress] Step 2.5/6: WARNING — No L3 smoke test configured.`
 - Print `  The regression gate only covers L1/L2 (unit/adapter tests).`
 - Print `  This means the loop cannot detect "all tests pass but the app is broken".`
@@ -85,6 +95,13 @@ Print `[regress] Step 3/6: Evaluating stop conditions...`
 1. **Pass rate**: Calculate pass_rate = passed / total. If below the configured floor, flag it.
 2. **Test count trend**: If total test count has declined for 3+ consecutive iterations, flag it.
 3. **Consecutive failures**: If this is the 3rd consecutive regress failure, the orchestrator will pause automatically.
+
+**Trip the HALT sentinel when a hard stop condition fires.** If the smoke gate failed (`SMOKE_FAIL`),
+or the pass rate is below floor, or this is the 3rd consecutive regress failure, create
+`{{REPO_ROOT}}/.kitchenloop/HALT` with a short reason inside (which condition tripped, iteration
+number, and the failing numbers). This makes every subsequent loop phase refuse to run until the
+operator deletes the file. Do NOT create HALT for a warning-only condition (e.g. a security-scan
+warning or a missing L3 smoke test) — those are reported, not halting.
 
 ### Step 3.5: Report Coverage Stats
 
@@ -132,6 +149,28 @@ Review the experience reports from recent iterations and update memory/codebase-
 - If an existing pattern is contradicted by this iteration's evidence, UPDATE or REMOVE it.
 - Keep it concise — patterns file should be < 200 lines
 
+### Step 5b: Quality Sweep (every 3rd iteration)
+
+Run this step ONLY when **`{{ITERATION_NUM}}` is a multiple of 3** (`{{ITERATION_NUM}} % 3 == 0`,
+same cadence as `runtime.review_interval` in `kitchenloop.yaml`) **and the oracle passed this
+iteration** (tests green and, if configured, `{{SMOKE_COMMAND}}` green). Otherwise print
+`[regress] Step 5b: quality sweep skipped (not a 3rd iteration / oracle not green)` and move on.
+
+When it applies:
+- Print `[regress] Step 5b: Running quality sweep...`
+- Invoke the **`kitchenloop-quality-sweep`** skill and run its procedure end to end (dead code,
+  duplication/compactness, completeness, and architecture-boundary conformance). The skill:
+  - skips with a one-line report if the app skeleton doesn't exist yet (no `package.json`) — expected pre-seed-0001;
+  - produces `docs/internal/reports/quality-sweep-iter-{{ITERATION_NUM}}.md`;
+  - files each finding as an `improvement` ticket via the active ticketing provider (when
+    `ticketing.provider` is `none`, that means appending tickets to `.kitchenloop/backlog.json`),
+    deduped against open tickets — it NEVER deletes code directly (removals go through the normal
+    Execute → review → UAT pipeline).
+- The sweep is a report-and-ticket meta-phase; it is NOT part of the pass/fail regression gate. If
+  the sweep tooling itself fails, note it in the summary and continue — do not fail the iteration on it.
+- This is the loop's own quality debt control (DIRECTIVE item 4). Do not modify any sealed gate
+  file while running it; findings that touch sealed files become `OPERATOR-DESK.md` rows, not edits.
+
 ### Step 6: Iteration Summary
 
 Print `[regress] Step 6/6: Writing iteration summary...`
@@ -144,7 +183,8 @@ Iteration {{ITERATION_NUM}} Summary:
   Smoke (L3): [PASS / FAIL / NOT CONFIGURED]
   New failures: [list or "none"]
   Patterns updated: [yes/no]
-  Stop conditions: [all clear / WARNING: pass rate below floor / WARNING: no L3 smoke test]
+  Quality sweep: [ran (N tickets filed) / skipped (not 3rd iter or oracle not green) / N/A (pre-skeleton)]
+  Stop conditions: [all clear / WARNING: pass rate below floor / WARNING: no L3 smoke test / HALT created: <reason>]
 ```
 
 ## Rules

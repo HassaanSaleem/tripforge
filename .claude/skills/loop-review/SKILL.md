@@ -1,3 +1,8 @@
+---
+name: loop-review
+description: KitchenLoop periodic loop-review phase — read the last N iterations' experience reports, regression results, merged PRs, and tickets; run external auditors (Codex/Gemini); and write a synthesis report with severity-ranked findings, filing Blocker/Important findings as tickets. Use when running an automated loop review or asked to review recent loop iterations.
+---
+
 # Loop Review
 
 > Review N iterations -- read logs, inspect PRs and code, run external auditors,
@@ -20,6 +25,47 @@ with findings categorized by severity.
 
 This phase runs every `runtime.review_interval` iterations automatically, or
 on demand.
+
+---
+
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop (the orchestrator invokes it as an
+autonomous run). Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[review] HALTED -- iterations {start}-{end}`, and stop
+   immediately. Run no further step.
+2. **Read `DIRECTIVE.md`.** Any recommendation or ticket that would touch its
+   ALWAYS-HALT list (constitution amendments; canonical itinerary schema version
+   bumps/migrations; revenue-share or client-ownership semantics; changes to the
+   loop's own gates — quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE;
+   `git push` to a remote; deploys) must NOT be auto-created as a loop ticket —
+   write one row to `OPERATOR-DESK.md`
+   (`| ID | Say | Question | Recommendation | Since | Blocks |` plus a context
+   paragraph below it) instead, and continue reviewing.
+3. **No interactive operator** — never use `AskUserQuestion`. Make reasonable
+   decisions; asks go to `OPERATOR-DESK.md` as rows, never buried in prose.
+
+---
+
+## Ticketing Provider Dispatch
+
+All ticket operations MUST honor `ticketing.provider` from `kitchenloop.yaml`.
+**This repo sets `provider: "none"`**, so the loop's queue lives in
+`.kitchenloop/backlog.json`, NOT in a GitHub issue tracker. If loop-review filed
+Blocker findings as GitHub Issues under this provider they would be invisible to
+the Execute phase and never worked.
+
+- **`none` / `local`** (this repo): tickets are a JSON array in
+  `.kitchenloop/backlog.json`; create/inspect/comment via the
+  `scripts/kitchenloop/lib/tickets.sh` helpers — `ticket_create`,
+  `ticket_list_by_state`, `ticket_transition`, `ticket_add_comment` — never with
+  `gh issue` commands.
+- **`github`**: the `gh issue ...` snippets below are the GitHub path.
+
+Reading merged PRs and PR review threads via `gh pr` / `gh api` is correct under
+either provider — those are real GitHub PRs; only the ticket/issue queue is local.
 
 ---
 
@@ -88,9 +134,15 @@ gh pr view {pr_number} --json title,body,additions,deletions,files,reviews,comme
 #### 2d. Tickets Created and Resolved
 
 ```bash
-# Tickets created during the period
+# Tickets created during the period (GitHub provider)
 gh issue list --state all --json number,title,labels,createdAt,closedAt --limit 100
 ```
+
+> **Local provider (`none`, this repo)**: there is no GitHub issue tracker to
+> query — read `.kitchenloop/backlog.json` (via `ticket_list_by_state` across
+> `todo|in_progress|in_review|done|backlog`, or parse the JSON directly) and use
+> each ticket's `created`/`state` fields for inflow/outflow. Querying `gh issue`
+> here returns an empty set and would understate the loop's real throughput.
 
 Filter to the review period. Count:
 - Tickets created (inflow)
@@ -321,21 +373,32 @@ Create the review report at `{paths.reports}/loop-review-iter-{start}-{end}.md`:
 ### Step 7: Create Tickets for Blockers
 
 Any finding categorized as **Blocker** should be automatically converted to a
-ticket:
+ticket **through the active ticketing provider** (a finding that touches a
+DIRECTIVE ALWAYS-HALT / sealed-gate area is NOT a loop ticket — file an
+`OPERATOR-DESK.md` row instead, per the Control-Plane Preamble):
 
-```bash
-gh issue create \
-  --title "BLOCKER from loop review: {finding title}" \
-  --body "{finding description and evidence}" \
-  --label "{ticketing.github.labels.bug}" \
-  --label "priority:high" \
-  --label "{ticketing.github.state_labels.todo}"
-```
+- **Local provider (`none`, this repo)**: `ticket_create "BLOCKER from loop
+  review: {finding title}" "{finding description and evidence}" bug high` (from
+  `lib/tickets.sh`), then `ticket_transition {id} todo`. This lands the blocker in
+  `.kitchenloop/backlog.json` where the Execute phase will actually pick it up.
+- **GitHub provider**:
+  ```bash
+  gh issue create \
+    --title "BLOCKER from loop review: {finding title}" \
+    --body "{finding description and evidence}" \
+    --label "{ticketing.github.labels.bug}" \
+    --label "priority:high" \
+    --label "{ticketing.github.state_labels.todo}"
+  ```
 
-### Step 8: Update Loop State
+### Step 8: Emit Review Metadata (do NOT write loop-state)
 
-Update `paths.loop_state` with:
-- Last reviewed iteration number
+**Do NOT write `loop-state.md`** — the regress phase is the sole writer of loop
+state (this avoids concurrent-write corruption of the shared file). The review
+report is loop-review's durable artifact; record the review metadata in the
+report header and emit it to stdout instead of editing loop state:
+- Last reviewed iteration number (the orchestrator passes the explicit range, so
+  loop-review does not need to persist it to loop state)
 - Review report path
 - Blocker count
 - Overall health assessment (healthy / warning / critical)
@@ -345,8 +408,10 @@ Update `paths.loop_state` with:
 ## Output Contract
 
 1. **Review report** at `{paths.reports}/loop-review-iter-{start}-{end}.md`
-2. **Blocker tickets created** for any blocker-severity findings
-3. **Loop state updated** with review metadata
+2. **Blocker tickets created** via the active ticketing provider for any
+   blocker-severity findings (operator-gated findings go to `OPERATOR-DESK.md`)
+3. **Review metadata** emitted to stdout / the report header (loop state is
+   written by regress, not here)
 4. **External auditor results** recorded (even if timed out)
 
 ---

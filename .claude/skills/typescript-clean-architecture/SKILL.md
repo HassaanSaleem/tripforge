@@ -95,7 +95,7 @@ tripforge/
 | `packages/db` | Drizzle schema, client, tenant-scoped helpers | `itinerary-schema` |
 | `packages/marketplace` | Listing/licensing/white-label orchestration | `domain`, `itinerary-schema`, ports |
 | `packages/supply-adapter` | Supply ports + concrete adapters | `itinerary-schema` (nothing else) |
-| `packages/llm` | LLMPort + AI SDK provider wiring, metering | `shared` |
+| `packages/llm` | LLMPort + Anthropic SDK wiring, metering | `shared` |
 | `packages/shared` | Logging, config, `Result`/error types | *(stdlib/3rd-party only)* |
 
 Dependencies point inward. `domain` never imports adapters or apps. `shared` is a
@@ -113,14 +113,16 @@ and **nothing outside `packages/supply-adapter` may mention a supplier's API sha
   queue messages) — one schema per endpoint, inferred TS types (`z.infer`).
 - Internal state uses plain typed objects/interfaces; don't re-validate
   mid-pipeline what a boundary already validated.
-- Ports (interfaces) live next to the domain that needs them; adapters implement
-  them. Handlers depend on the port type, never the adapter class.
+- Supply ports live in `packages/supply-adapter/src/ports` (INV-005); other
+  ports colocate with the layer that needs them. Adapters implement them;
+  handlers depend on the port type, never the adapter class.
 
 ### Composition & Dependency Injection
 
-- One composition root per app (`apps/api/src/container.ts` or equivalent).
-  Handlers receive dependencies as constructor/factory args — never construct
-  adapters inline, never import an adapter directly in a handler.
+- One composition root, in the api package (`packages/api/src/container.ts`),
+  consumed by both apps. Handlers receive dependencies as constructor/factory
+  args — never construct adapters inline, never import an adapter directly in a
+  handler.
 - Do not introduce a DI framework without an operator gate; explicit factory
   wiring at the composition root is the default.
 

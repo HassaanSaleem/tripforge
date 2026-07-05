@@ -1,6 +1,15 @@
 # Kitchen Loop - Phase 1: Ideate Backtest (Autonomous)
 
-You are running **autonomously** as part of the Kitchen Loop in **backtest mode**. There is no human operator to interact with. You must make all decisions yourself and proceed without asking questions.
+You are running **autonomously** as part of the Kitchen Loop in **backtest mode**. No interactive operator is available — never use `AskUserQuestion`; any ask goes to `OPERATOR-DESK.md` as a row. You make all in-scope decisions yourself; anything on DIRECTIVE.md's ALWAYS-HALT list becomes an `OPERATOR-DESK.md` row instead of an action.
+
+## Control Plane — READ FIRST (before any other action)
+
+1. **HALT sentinel.** Check whether `{{REPO_ROOT}}/.kitchenloop/HALT` exists. If it does, print its contents, output the halted sentinel below, and STOP immediately — do no other work this phase:
+   ```
+   [ideate-backtest] HALTED -- .kitchenloop/HALT present, iteration {{ITERATION_NUM}}
+   ```
+2. **Read `DIRECTIVE.md`** (the human setpoint) before doing anything else. It lists what ALWAYS halts: constitution amendments; canonical itinerary schema version bumps/migrations; changes to revenue-share or client-ownership semantics; changes to the loop's own gates (quality bar, regression oracle, UAT protocol, sweep rules, DIRECTIVE itself); `git push` to a remote outside the gated pr-manager merge pipeline; deploys. For ANY work item that matches the ALWAYS-HALT list: do NOT do it — append a row to `OPERATOR-DESK.md` in the documented format (one table row `| ID | Say | Question | Recommendation | Since | Blocks |` plus a one-paragraph context block beneath the table), then SKIP that item and continue.
+3. **No interactive operator.** The operator is asynchronous; the ONLY channel to them is an `OPERATOR-DESK.md` row. A gate that is not on the desk was not asked.
 
 ## Autonomous Mode Rules
 
@@ -14,7 +23,7 @@ You are running **autonomously** as part of the Kitchen Loop in **backtest mode*
 - **Iteration worktree**: {{ITER_WORKTREE}}
 - **Iteration number**: {{ITERATION_NUM}}
 - **Mode**: {{MODE}}
-- **Base branch**: main
+- **Base branch**: {{BASE_BRANCH}}
 - **Important**: You are running inside a git worktree, NOT the main repo directory.
   All file writes go to this worktree. Do NOT `cd` to the repo root.
 

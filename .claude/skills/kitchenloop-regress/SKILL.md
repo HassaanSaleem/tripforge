@@ -1,3 +1,8 @@
+---
+name: kitchenloop-regress
+description: KitchenLoop regress phase — run lint + the full test suite (and the L3 smoke gate) against the iteration worktree, evaluate stop conditions, consolidate patterns, run the quality sweep every 3rd iteration, and write loop state. Regress is the SOLE writer of loop-state.md. Use when running the loop's regress phase or asked to run the regression gate.
+---
+
 # KitchenLoop: Regress
 
 > Phase 4 -- Run full regression, evaluate stop conditions, update loop state.
@@ -19,6 +24,27 @@ triggered, the loop pauses until a human intervenes.
 
 ---
 
+## Control-Plane Preamble (run before anything else)
+
+This skill runs inside the autonomous loop. Before the procedure below:
+
+1. **HALT sentinel** — if `.kitchenloop/HALT` exists, print its contents, output
+   the phase sentinel `[regress] HALTED -- iteration {N}`, and stop immediately.
+   Run no further step. (Regress is also the phase that MAY *create*
+   `.kitchenloop/HALT` — with a reason inside — when a hard stop condition trips
+   in Step 4; see that step.)
+2. **Read `DIRECTIVE.md`.** Any work item matching its ALWAYS-HALT list
+   (constitution amendments; canonical itinerary schema version bumps/migrations;
+   revenue-share or client-ownership semantics; changes to the loop's own gates —
+   quality bar, oracle, UAT protocol, sweep rules, DIRECTIVE; `git push` to a
+   remote; deploys) must NOT be done. Instead write one row to `OPERATOR-DESK.md`
+   (`| ID | Say | Question | Recommendation | Since | Blocks |` plus a context
+   paragraph below it) and skip that item, continuing with other work.
+3. **No interactive operator** — never use `AskUserQuestion`. Make reasonable
+   decisions; asks go to `OPERATOR-DESK.md` as rows, never buried in prose.
+
+---
+
 ## Procedure
 
 ### Step 1: Pre-Flight Checks
@@ -26,11 +52,12 @@ triggered, the loop pauses until a human intervenes.
 1. Load `kitchenloop.yaml` -- read `verification`, `paths`, and `repo`.
 2. Verify all `verification.preflight_env_vars` are set. If any are missing,
    record them and STOP -- regression results would be misleading.
-3. Ensure you are on the correct branch (`repo.base_branch`) with latest changes:
-   ```bash
-   git checkout {repo.base_branch}
-   git pull origin {repo.base_branch}
-   ```
+3. **Run in the iteration worktree.** This phase runs inside the loop's iteration
+   git worktree (matching `prompts/regress.md`), where `{repo.base_branch}` is
+   already checked out at the repo root. Do NOT `git checkout {repo.base_branch}`
+   or `git pull` inside the worktree — that fails with "already checked out" and
+   would violate worktree isolation. Run the regression against the worktree's
+   current tree as-is; the iteration branch already carries the merged work.
 4. Read loop state at `paths.loop_state` for:
    - Current iteration number
    - Previous pass rate and test count
@@ -133,10 +160,13 @@ If `iteration % 3 == 0` and the regression passed, run the quality sweep per
 duplication/compactness (jscpd + outliers), completeness (TODO/stub scan +
 spec↔code mapping for features merged since the last sweep), and architecture
 boundary conformance (dependency-cruiser). File `improvement` tickets for
-findings; write the report to `docs/internal/reports/quality-sweep-iter-{N}.md`.
-A skipped scan must be reported as skipped, never as clean. If any finding
-category grew two sweeps in a row, add a drift warning to the iteration report
-header.
+findings **through the active ticketing provider** — when `ticketing.provider`
+is `none` (this repo) that means appending tickets to `.kitchenloop/backlog.json`
+via `lib/tickets.sh`, not `gh issue create`; write the report to
+`docs/internal/reports/quality-sweep-iter-{N}.md`. A skipped scan must be
+reported as skipped, never as clean. Findings that touch a sealed gate file
+become `OPERATOR-DESK.md` rows, not tickets or edits. If any finding category
+grew two sweeps in a row, add a drift warning to the iteration report header.
 
 ### Step 6: Write Regression Report
 
