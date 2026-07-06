@@ -60,6 +60,7 @@ echo $$ > "$LOCK_DIR/pid"
 
 # ─── Cleanup on exit ────────────────────────────────────────────────
 cleanup() {
+  local rc=$?
   for pid in ${CHILD_PIDS[@]+"${CHILD_PIDS[@]}"}; do
     pkill -P "$pid" 2>/dev/null || true
     kill "$pid" 2>/dev/null || true
@@ -70,6 +71,19 @@ cleanup() {
     echo ""
     echo "  [cleanup] Worktree preserved: $ITER_WORKTREE"
     echo "  [cleanup] Remove with: git worktree remove $ITER_WORKTREE"
+  fi
+  # Crash-notify. A signal kill (rc>128 — SIGKILL/OOM 137, SIGTERM 143, timeout,
+  # external kill) is an UNEXPECTED death, never a halt. The loop is designed to
+  # STOP only for a human gate — and it does that by writing an OPERATOR-DESK row
+  # or the HALT sentinel, both of which already self-notify. So dying by signal
+  # means something is wrong (usually memory pressure), and an unattended batch
+  # must not just vanish. Best-effort, never fatal (notify_operator swallows all
+  # channel errors). Intentional non-zero exits (bad args rc=1, enforce_halt
+  # rc=1) are <=128 and correctly do NOT trip this.
+  if [ "$rc" -gt 128 ] && command -v notify_operator >/dev/null 2>&1; then
+    local _sig=$((rc - 128))
+    notify_operator "KitchenLoop CRASHED — killed by signal ${_sig} (exit ${rc})" \
+      "Unexpected termination (not a halt) at iter ${ITER_NUM:-?} — usually memory pressure/OOM, a timeout, or an external kill. The loop never dies for a human gate (those go to OPERATOR-DESK). Worktree preserved; logs: ${LOGS_DIR:-.kitchenloop/logs}. Investigate, then re-run in a resourced shell."
   fi
 }
 CHILD_PIDS=()
@@ -2412,8 +2426,8 @@ run_iteration() {
       # checkout has no node_modules, which would otherwise fail the gate).
       if [ ! -d "$regress_dir/node_modules" ]; then
         echo "  [regress-gate] Installing dependencies (node_modules absent)..."
-        if ! (cd "$regress_dir" && npm ci) >> "$regress_log" 2>&1; then
-          (cd "$regress_dir" && npm install) >> "$regress_log" 2>&1 || \
+        if ! (cd "$regress_dir" && pnpm install --frozen-lockfile) >> "$regress_log" 2>&1; then
+          (cd "$regress_dir" && pnpm install) >> "$regress_log" 2>&1 || \
             echo "  [regress-gate] WARNING: dependency install failed; running oracle anyway"
         fi
       fi

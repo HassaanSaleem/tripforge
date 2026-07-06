@@ -107,10 +107,10 @@ spec:
 verification:
   oracle:
     type: "deterministic"
-    full_command: "npm test"
-    quick_command: "npm test"
+    full_command: "pnpm test"                           # npm→pnpm 2026-07-06 (repo is a pnpm workspace; npm can't install workspace deps)
+    quick_command: "pnpm test"                          # npm→pnpm 2026-07-06
     smoke_command: "node tests/integration/smoke.mjs"   # wired D-004 (2026-07-05)
-    lint_command: "npm run lint"
+    lint_command: "pnpm run lint"                        # npm→pnpm 2026-07-06
   # Live Test & Fix (INV-027, ADR-0003) — every product-behavior ticket is
   # verified against the BUILT compose image before its PR is done:
   # boot -> smoke + Playwright specs -> QA browser journey (Playwright MCP,
