@@ -1,0 +1,16 @@
+{
+  "_comment": "Tracked build/test/read allowlist so fresh worktrees (incl. the isolated UAT-evaluator worktree) can build their env and run the integrity check WITHOUT auto-approving arbitrary code. Deliberately NO general-interpreter wildcards (node/npx), NO bare `pnpm *`/`npm *` (would allow pnpm exec/dlx = arbitrary download+run), NO `docker compose run/exec`, and only read-only, subcommand-anchored git. Sensitive commands (push/merge/commit) stay in the git-ignored settings.local.json, never here.",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install --frozen-lockfile)",
+      "Bash(pnpm install)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm run lint*)",
+      "Bash(pnpm run build*)",
+      "Bash(pnpm run typecheck*)",
+      "Bash(git status*)",
+      "Bash(git diff --name-only*)",
+      "Bash(git ls-files --others*)"
+    ]
+  }
+}

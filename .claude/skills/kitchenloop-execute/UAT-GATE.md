@@ -125,7 +125,20 @@ Before handing off to the UAT evaluator, validate the test card:
 
 If validation fails, the test card is defective. Log it but don't block the PR — the UAT gate reports UAT_SPEC_FAIL instead.
 
-## Step 3: Spawn UAT Evaluator
+## Step 3: Build Environment, then Spawn UAT Evaluator
+
+The evaluator runs in a fresh `isolation: "worktree"` — clean git state, which is
+required for the Step 4 integrity check. A clean worktree has **no `node_modules`**
+(it is git-ignored, so it is never copied into a new worktree), so any card step
+that touches the toolchain — a CLI run, `pnpm test`, a booted app — would
+otherwise fail as `ENVIRONMENT_BLOCKED` before it can produce a real verdict.
+
+So the evaluator's FIRST action MUST be to **build its environment**, prepended to
+its prompt as a mandatory setup preamble (below). Installing dependencies is NOT a
+product change — `node_modules` and the pnpm store are git-ignored, and
+`--frozen-lockfile` leaves the lockfile untouched, so this does **not** trip the
+Step 4 integrity check (which only flags tracked/untracked *product* files). This
+repo is a pnpm workspace; use pnpm.
 
 ```python
 # Pseudo-code for the execute phase
@@ -134,6 +147,17 @@ Agent(
     isolation="worktree",           # clean git state, separate copy
     model="haiku",                  # deliberately weakest model = "dumb user" proxy
     prompt=f"""Execute the following User Test Card. You have NO other context.
+
+## Step 0 — Environment setup (run this FIRST, before any test-card step)
+From the worktree root, install dependencies so the card's steps can run:
+
+    pnpm install --frozen-lockfile || pnpm install
+
+Then, if the card has browser steps, confirm the live stack the implementer
+booted is reachable (the card's prerequisites say how). If BOTH install commands
+fail, STOP and report `ENVIRONMENT_BLOCKED` with the install error — that is a
+real, fixable environment fault to surface, not a silent PR block. Otherwise
+proceed to the test card below and return a real PASS/PRODUCT_FAIL verdict.
 
 {test_card_contents}
 
