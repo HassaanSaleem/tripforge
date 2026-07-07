@@ -12,5 +12,16 @@
       "Bash(git diff --name-only*)",
       "Bash(git ls-files --others*)"
     ]
+  },
+  "sandbox": {
+    "_comment": "ENV-PNPM-DENY: the sandbox network allowlist previously lived only in the git-ignored settings.local.json, so it was ABSENT in the loop's fresh worktrees — pnpm's registry fetches got sandbox-blocked and the agent read it as 'denied'. Tracked here so worktrees inherit it. Package-registry domains only; no arbitrary egress.",
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "*.npmjs.org",
+        "registry.yarnpkg.com",
+        "*.yarnpkg.com"
+      ]
+    }
   }
 }
