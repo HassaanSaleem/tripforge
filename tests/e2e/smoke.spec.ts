@@ -22,4 +22,9 @@ test("workspace surface prompts sign-in for an anonymous visitor", async ({ page
 test("client view carries the agent's brand, not the platform's (INV-020)", async ({ page }) => {
   await page.goto("/view");
   await expect(page.getByRole("heading", { name: /Your trip/i })).toBeVisible();
+  // INV-020 is a NEGATIVE guarantee: the white-labeled client view must expose the
+  // agent's brand and NOT the platform's. Without these absence assertions this test
+  // could not fail for its stated reason (a "TripForge"/"Trellis" leak would slip by).
+  await expect(page.getByText(/TripForge/i)).toHaveCount(0);
+  await expect(page.getByText(/Trellis/i)).toHaveCount(0);
 });
