@@ -18,6 +18,11 @@ test("client view leaks NO platform branding (INV-020 negative)", async ({ page 
   // The platform name must NOT appear anywhere in the client-facing output.
   await expect(page.getByText(/TripForge/i)).toHaveCount(0);
   await expect(page.getByText(/Trellis/i)).toHaveCount(0);
+  // getByText only sees rendered BODY text — document <title> and metadata live
+  // outside it, so without this negative the guard is blind to the exact leak it
+  // exists to catch (iteration-2 report [BUG-2]/[BUG-3]: /view inherited the root
+  // layout's platform <title> while this spec passed).
+  await expect(page).not.toHaveTitle(/TripForge|Trellis/i);
 });
 
 test("workspace never leaks into the client view (INV-024 surface separation)", async ({ page }) => {
