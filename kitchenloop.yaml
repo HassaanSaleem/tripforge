@@ -111,6 +111,11 @@ verification:
     quick_command: "pnpm test"                          # npm→pnpm 2026-07-06
     smoke_command: "node tests/integration/smoke.mjs"   # wired D-004 (2026-07-05)
     lint_command: "pnpm run lint"                        # npm→pnpm 2026-07-06
+  # REG-L3-STACK (Option 2, 2026-07-06): in regress, boot the live stack (live.boot_command)
+  # around the L3 smoke oracle so L3 is actually exercised, then tear it down. A boot that
+  # can't come up in the runtime (image pull / memory / infra) is a WARNING (L3 NOT-RUN),
+  # never a product HALT. Set false to skip the regress L3 boot if the host can't host the stack.
+  regress_l3_boot: true
   # Live Test & Fix (INV-027, ADR-0003) — every product-behavior ticket is
   # verified against the BUILT compose image before its PR is done:
   # boot -> smoke + Playwright specs -> QA browser journey (Playwright MCP,

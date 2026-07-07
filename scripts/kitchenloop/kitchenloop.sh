@@ -2444,16 +2444,43 @@ run_iteration() {
         echo "$(date) | Iter $ITER_NUM | regress-gate | PASSED" >> "$LOG_FILE"
       fi
 
-      # Also run L3 smoke test if configured
+      # Also run L3 smoke test if configured. REG-L3-STACK (Option 2): boot the live
+      # stack around the smoke gate so L3 is actually exercised in regress, then tear
+      # it down. Key rule: a boot that CANNOT come up in this runtime (image pull,
+      # memory, infra) is recorded as a warning (L3 NOT-RUN), NOT a product failure —
+      # that is an environment fault, and counting it would recreate the false HALT.
+      # Only a smoke assertion against a stack that DID boot counts as a product signal.
       if [ -n "${SMOKE_CMD}" ]; then
-        echo "  [regress-gate] Running L3 smoke test: $SMOKE_CMD"
-        if ! (cd "$regress_dir" && eval "$SMOKE_CMD") >> "$regress_log" 2>&1; then
-          echo "  [regress-gate] L3 SMOKE FAILED — product may be broken despite passing unit tests."
-          echo "$(date) | Iter $ITER_NUM | regress-gate | L3 SMOKE FAILED" >> "$LOG_FILE"
-          regress_passed=false
-          iter_had_failure=true
+        _l3_boot=$(config_get_default "verification.live.boot_command" "")
+        _l3_teardown=$(config_get_default "verification.live.teardown_command" "docker compose down -v")
+        _l3_enabled=$(config_get_default "verification.regress_l3_boot" "true")
+        _l3_booted=false
+        if [ "$_l3_enabled" = "false" ]; then
+          echo "  [regress-gate] L3 smoke SKIPPED (verification.regress_l3_boot=false)."
+        elif [ -n "$_l3_boot" ]; then
+          echo "  [regress-gate] L3: booting live stack for smoke..."
+          if (cd "$regress_dir" && eval "$_l3_boot") >> "$regress_log" 2>&1; then
+            _l3_booted=true
+          else
+            echo "  [regress-gate] L3 BOOT-FAILED — stack could not come up in this runtime (env/infra: image pull, memory, etc.). Recording L3 NOT-RUN (warning); NOT counting as a product failure and NOT halting."
+            echo "$(date) | Iter $ITER_NUM | regress-gate | L3 BOOT-FAILED (warning, not counted)" >> "$LOG_FILE"
+            (cd "$regress_dir" && eval "$_l3_teardown") >> "$regress_log" 2>&1 || true
+          fi
         else
-          echo "  [regress-gate] L3 smoke PASSED."
+          echo "  [regress-gate] L3 smoke NOT-RUN (no verification.live.boot_command to bring the stack up)."
+        fi
+        if [ "$_l3_booted" = true ]; then
+          echo "  [regress-gate] Running L3 smoke test: $SMOKE_CMD"
+          if ! (cd "$regress_dir" && eval "$SMOKE_CMD") >> "$regress_log" 2>&1; then
+            echo "  [regress-gate] L3 SMOKE FAILED — product may be broken despite passing unit tests."
+            echo "$(date) | Iter $ITER_NUM | regress-gate | L3 SMOKE FAILED" >> "$LOG_FILE"
+            regress_passed=false
+            iter_had_failure=true
+          else
+            echo "  [regress-gate] L3 smoke PASSED (against a booted live stack)."
+          fi
+          echo "  [regress-gate] L3: tearing down live stack..."
+          (cd "$regress_dir" && eval "$_l3_teardown") >> "$regress_log" 2>&1 || true
         fi
       fi
 

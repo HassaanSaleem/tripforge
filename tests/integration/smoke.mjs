@@ -48,6 +48,16 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("L3 smoke crashed:", err);
+  // REG-L3-MSG: when nothing is listening, print a legible gate verdict instead of a
+  // raw fetch stack dump. Behaviour is unchanged — still a real failure, still exit 1.
+  const code = err?.cause?.code || err?.code || "";
+  const unreachable =
+    /ECONNREFUSED|ENOTFOUND|ECONNRESET|EHOSTUNREACH|ETIMEDOUT/.test(code) ||
+    /fetch failed/i.test(String(err?.message ?? ""));
+  if (unreachable) {
+    console.error(`FAIL: app not reachable at ${BASE}${code ? ` (${code})` : ""}`);
+  } else {
+    console.error("L3 smoke crashed:", err);
+  }
   process.exit(1);
 });
