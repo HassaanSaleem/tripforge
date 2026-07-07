@@ -1,0 +1,33 @@
+# Keep the image build hermetic (INV-019/027): the host's installed deps and
+# local state must never leak into `COPY . .` — deps come from the deps stage.
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.kitchenloop
+.claude
+
+# Secrets must never be baked into an image layer (INV-019). Compose reads .env
+# from the host directory at up-time; the build context never needs it.
+.env
+.env.*
+!.env.example
+
+# Host build/tooling artifacts (mirrors .gitignore): a dirty host tree must
+# produce the same image as a fresh clone.
+next-env.d.ts
+**/next-env.d.ts
+dist
+**/dist
+.turbo
+**/.turbo
+coverage
+**/coverage
+*.tsbuildinfo
+**/*.tsbuildinfo
+.vercel
+playwright-report
+test-results
+.DS_Store
+**/.DS_Store

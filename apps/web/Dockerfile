@@ -20,14 +20,19 @@ COPY packages/supply-adapter/package.json packages/supply-adapter/package.json
 RUN pnpm install --frozen-lockfile
 
 # ─── migrate: one-shot schema push (drizzle-kit) before the app boots ────────
+# Copy the WHOLE installed workspace from deps, not just the root node_modules:
+# pnpm places each package's bins in its own node_modules (apps/web/node_modules/
+# .bin/next, packages/db/node_modules/.bin/drizzle-kit). Copying only the root
+# breaks every fresh checkout — it only ever worked when a host's node_modules
+# leaked in through `COPY . .` (now excluded via .dockerignore).
 FROM base AS migrate
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app ./
 COPY . .
 CMD ["pnpm", "--filter", "@tripforge/db", "run", "db:push"]
 
 # ─── build: compile the Next.js standalone output ────────────────────────────
 FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app ./
 COPY . .
 RUN pnpm --filter @tripforge/web build
 
