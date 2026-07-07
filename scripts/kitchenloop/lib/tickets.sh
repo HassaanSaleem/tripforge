@@ -105,7 +105,7 @@ ticket_create() {
         '{id: $id, title: $title, body: $body, type: $type, priority: $priority, state: $state, created: $created, pr_url: ""}')
       local updated
       updated=$(jq ". + [$entry]" "$f")
-      echo "$updated" > "$f"
+      printf '%s\n' "$updated" > "$f"
       echo "$id"
       ;;
     *)
@@ -182,7 +182,7 @@ ticket_transition() {
       fi
       local updated
       updated=$(jq --arg i "$id" --arg s "$new_state" 'map(if .id == $i then .state = $s else . end)' "$f")
-      echo "$updated" > "$f"
+      printf '%s\n' "$updated" > "$f"
       ;;
   esac
 }
@@ -212,7 +212,7 @@ ticket_add_comment() {
       fi
       local updated
       updated=$(jq --arg i "$id" --arg c "$comment" 'map(if .id == $i then .notes = ((.notes // "") | if . == "" then $c else . + "\n" + $c end) else . end)' "$f")
-      echo "$updated" > "$f"
+      printf '%s\n' "$updated" > "$f"
       ;;
   esac
 }
@@ -274,7 +274,7 @@ ticket_set_pr_url() {
       fi
       local updated
       updated=$(jq --arg i "$id" --arg u "$url" 'map(if .id == $i then .pr_url = $u else . end)' "$f")
-      echo "$updated" > "$f"
+      printf '%s\n' "$updated" > "$f"
       ;;
     *)
       echo "ERROR: Unknown ticketing provider '$provider'" >&2
@@ -343,7 +343,7 @@ ticket_recover_stale() {
       f=$(_local_backlog_file)
       local updated
       updated=$(jq '[.[] | if .state == "in_progress" and .pr_url == "" then .state = "todo" else . end]' "$f")
-      echo "$updated" > "$f"
+      printf '%s\n' "$updated" > "$f"
       ;;
   esac
 }
