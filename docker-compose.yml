@@ -62,6 +62,12 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
+      # Next.js standalone binds to $HOSTNAME; Docker auto-sets HOSTNAME to the
+      # container id, so without this the server listens only on the container's own
+      # IP and the loopback healthcheck (wget localhost:3000) is refused — marking web
+      # `unhealthy` and failing `docker compose up --wait` (which breaks INV-027 live
+      # boot + the regress L3 gate). Bind to all interfaces so loopback works.
+      HOSTNAME: "0.0.0.0"
       DATABASE_URL: postgres://tripforge:tripforge@postgres:5432/tripforge
       SMTP_URL: smtp://mailpit:1025
       BETTER_AUTH_URL: http://localhost:3000
@@ -71,10 +77,14 @@ services:
       # for later seeds. Empty is fine.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health || exit 1"]
+      # Use 127.0.0.1, NOT `localhost`: the app listens on IPv4 0.0.0.0 only, but
+      # `localhost` resolves to ::1 (IPv6) inside the container, so `wget localhost`
+      # is refused and the container never goes healthy (fails `--wait`).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
+      start_period: 40s   # Next.js standalone can be slow to first-listen under memory load
 
 volumes:
   pgdata:
