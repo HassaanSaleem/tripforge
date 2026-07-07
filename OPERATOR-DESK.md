@@ -14,14 +14,7 @@ Rules for the loop:
 
 | ID | Say | Question | Recommendation | Since | Blocks |
 |----|-----|----------|----------------|-------|--------|
-| REG-L3-STACK | `wire l3 stack` | The regress phase runs the L3 smoke oracle (`node tests/integration/smoke.mjs`) but nothing boots the live stack it requires, so in regress it crashes on connect (ECONNREFUSED) and L3 coverage is a no-op. How should live-stack boot be wired into the regression gate? | Either boot+teardown the stack around the smoke gate in regress (reusing `verification.live.boot_command`/`teardown_command`), or explicitly scope L3 to the execute-phase Live Test & Fix gate and record it NOT-RUN in regress. This changes the regression-oracle/gate definition (sealed) → your call. | 2026-07-06 | L3 coverage in the regression gate |
-| REG-L3-MSG | `soften l3 msg` | May the loop wrap the "app unreachable" failure in the sealed L3 oracle `tests/integration/smoke.mjs` so it prints a clean `FAIL: app not reachable at ${BASE_URL}` instead of a raw `L3 smoke crashed: TypeError: fetch failed` stack dump? Behavior is unchanged (still exits non-zero); only the message wording changes. `smoke.mjs` is the wired L3 oracle (sealed), so the loop may not edit it without your say. | Approve — it's a cosmetic clarity fix, no gate-behavior change. Cheapest to fold into whatever REG-L3-STACK resolves (both touch the L3 smoke path), so the operator can batch them into one edit. | 2026-07-06 | nothing (cosmetic; a crashy message today reads as a loop bug, not a gate verdict) |
-
-**REG-L3-STACK context:** In iteration 1's regress the L3 smoke gate crashed on connect — no server listening at `http://localhost:3000` and the Docker daemon was unavailable, so the compose stack could not be booted from within the phase. `verification.oracle.smoke_command` was wired by D-004, but the boot/teardown of the live stack lives in `verification.live` and is only invoked by the execute-phase Live Test & Fix gate (which tears the stack down afterward). Consequently the regress phase invokes the smoke oracle against a stack that is never up, so L3 is effectively unexercised in regress — the exact "unit tests pass but the app is broken" blind spot the gate exists to close. This iteration was **not** halted: the gate could not be evaluated (a warning-class condition, like a missing L3 test), it did not run-and-fail a product assertion, and all exercisable gates (lint + 17/17 L1/L2) are green. The fix — booting the live stack inside regress vs. scoping L3 to execute-only — is a change to the regression-oracle/gate definition, which is sealed, so it is your decision rather than a loop edit. Until resolved, regress reports L3 as NOT-RUN and the loop cannot detect an app-level break between execute cycles.
-
-**REG-L3-STACK — iteration-2 update (environmental feasibility, from report [IMP-1]):** Iteration 2 confirmed the blocker is deeper than *wiring*. The Docker daemon was UP this time, but `docker compose up --build --wait` **failed pulling base images** (`cannot allocate memory` / no HTTPS proxy while pulling `postgres:17-alpine`) — the host had ~114 MB free and **no base images cached**. The lighter fallbacks were also unavailable: no local Postgres (`psql`/`pg_ctl`/Postgres.app all absent), and `next dev`/`pnpm exec next dev` is **permission-gated in autonomous mode** (no operator online to grant it). So even a perfectly-wired regress boot would still fail in this runtime. Please fold environmental feasibility into the REG-L3-STACK decision, not just wiring: e.g. **pre-pull & cache** `postgres:17-alpine` + `axllent/mailpit` and build the web image once so `--wait` never hits the registry; and/or **raise the Docker VM memory** allocation; and/or define a **host-run L3 fallback** (`next start` + an embedded/ephemeral Postgres) for when the compose image can't build. This is filed under REG-L3-STACK (not a new row) because that ask already owns the L3-boot question — this iteration just proved the answer must include *how the stack can physically boot in the loop runtime*.
-
-**REG-L3-MSG context:** From report [IMP-2]. When nothing is listening, the sealed L3 oracle `tests/integration/smoke.mjs` prints a raw `L3 smoke crashed: TypeError: fetch failed` stack dump. It still exits non-zero (correct — it is not a silent no-op), but the wording reads like the oracle itself crashed rather than like a gate verdict ("app not reachable"). A one-line wrap (`FAIL: app not reachable at ${BASE_URL}`) would make the failure legible without changing behavior. Because `smoke.mjs` is the wired L3 regression oracle — a sealed-regulator file the loop may not edit — this cosmetic change is your call. Recommendation: approve and batch with REG-L3-STACK, since resolving REG-L3-STACK may relocate/rewrite the L3 path anyway (in which case this becomes moot). Nothing is blocked on it.
+_Empty — nothing is asked of the operator._
 
 <!-- Resolved 2026-07-05 (operator ratified both at iteration-1 kickoff):
      D-002 `scope pushes` — DIRECTIVE item 2 push rule scoped to halt only on
@@ -74,3 +67,15 @@ Rules for the loop:
        codex clean, zero deletions). Merged squash 05f182d (#5); seed-0007 done.
      The UAT env-build fix (b9c6a19, option A) now installs deps in the evaluator
        worktree so future non-UI PRs reach a real verdict, not ENVIRONMENT_BLOCKED. -->
+
+<!-- Resolved 2026-07-06 (REG-L3-STACK Option 2 + REG-L3-MSG, operator-authorized):
+     REG-L3-STACK `wire l3 stack` — operator chose Option 2 (real L3 in regress).
+       regress-gate now boots verification.live.boot_command around the L3 smoke and
+       tears down; a boot that can't come up is L3 NOT-RUN (warning), never a HALT
+       (commit 5d2246a). Fixed the two bugs that kept the stack from going healthy so
+       `docker compose --wait` now exits 0: Next.js bound to $HOSTNAME (-> HOSTNAME=0.0.0.0)
+       and the IPv6 `localhost` healthcheck (-> 127.0.0.1) + start_period (commit eab3ec7).
+       Verified: web healthy ~10s, --wait exits 0, L3 smoke 5/5 green. Also unblocks the
+       execute-phase INV-027 live gate (same --wait path).
+     REG-L3-MSG `soften l3 msg` — smoke.mjs prints `FAIL: app not reachable at <url>`
+       instead of a raw fetch stack dump on connection failure (commit 5d2246a). -->
