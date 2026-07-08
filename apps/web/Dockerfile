@@ -25,10 +25,12 @@ RUN pnpm install --frozen-lockfile
 # .bin/next, packages/db/node_modules/.bin/drizzle-kit). Copying only the root
 # breaks every fresh checkout — it only ever worked when a host's node_modules
 # leaked in through `COPY . .` (now excluded via .dockerignore).
+# After the schema push, apply the PMF metric views (spec 004 FR-009) — kept in
+# a plain SQL file because drizzle-kit view push is uncertain on this toolchain.
 FROM base AS migrate
 COPY --from=deps /app ./
 COPY . .
-CMD ["pnpm", "--filter", "@tripforge/db", "run", "db:push"]
+CMD ["sh", "-c", "pnpm --filter @tripforge/db run db:push && pnpm --filter @tripforge/db run db:views"]
 
 # ─── build: compile the Next.js standalone output ────────────────────────────
 FROM base AS build

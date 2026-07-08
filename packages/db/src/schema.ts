@@ -6,7 +6,7 @@
 // as `agencyId` (INV-004). Tenant-owned product tables (itineraries, listings,
 // ledgers) are added by later seeds and MUST carry `agencyId` referencing
 // `organization.id`.
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid, bigint, index } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -98,6 +98,34 @@ export const invitation = pgTable("invitation", {
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
+// ─── PMF instrumentation (INV-021, Constitution MVP Scope Discipline) ─────────
+
+// Append-only PMF metric event store. Events are written in the SAME transaction
+// as the business action they measure (INV-021) via recordPmfEvent — never
+// updated or deleted by application code. Money columns are integer minor units
+// + explicit currency (INV-009); the closed type vocabulary and per-type field
+// rules live in pmf-events.ts (TS-validated — the itineraries table does not
+// exist yet, so itinerary_id is an opaque reference, not an FK).
+export const pmfEvent = pgTable(
+  "pmf_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: text("type").notNull(),
+    agencyId: text("agency_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
+    itineraryId: text("itinerary_id"),
+    source: text("source"),
+    amountMinor: bigint("amount_minor", { mode: "number" }),
+    currency: text("currency"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    typeAgencyIdx: index("pmf_event_type_agency_idx").on(table.type, table.agencyId),
+  }),
+);
+
 export const schema = {
   user,
   session,
@@ -106,6 +134,7 @@ export const schema = {
   organization,
   member,
   invitation,
+  pmfEvent,
 };
 
 export type Schema = typeof schema;

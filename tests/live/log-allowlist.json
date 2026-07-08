@@ -1,0 +1,4 @@
+{
+  "_readme": "Documented-benign log lines only. Each entry: { substring, justification } — an entry with an empty justification allowlists NOTHING (log-scan.mjs enforces this). Additions require justification in the PR body (quality bar: allowlisting a real error to get green is an assertion-weakening violation).",
+  "entries": []
+}
