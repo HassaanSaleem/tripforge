@@ -2483,6 +2483,41 @@ run_iteration() {
           echo "  [regress-gate] L3 smoke SKIPPED (verification.regress_l3_boot=false)."
         elif [ -n "$_l3_boot" ]; then
           echo "  [regress-gate] L3: booting live stack for smoke..."
+          # REG-L3-PORTS (2026-07-08, operator-authorized): free the host ports the
+          # L3 stack needs BEFORE booting. boot_command's own `down -v` clears only
+          # the CURRENT compose project; an orphaned PR-gate/regress stack from a
+          # crashed prior run keeps a DIFFERENT-named project alive on the same
+          # ports, so `up --wait` fails "port is already allocated". That boot
+          # failure previously cratered the pass-rate metric and tripped a FALSE
+          # HALT (iter-3 vs PR #13, 2026-07-08). The loop is single-instance
+          # (kitchenloop.lock), so at regress time any stack holding these ports is
+          # stale — tear it down by compose label (works even if the orphan's
+          # worktree/compose file is already gone). Only ports actually held are
+          # touched; a genuinely current stack is cleared by boot_command's own down.
+          if command -v docker >/dev/null 2>&1; then
+            _l3_ports=$(config_get_default "verification.live.required_ports" "3000 5432 8025 1025")
+            _freed_projects=""
+            for _p in $_l3_ports; do
+              for _cid in $(docker ps --filter "publish=${_p}" -q 2>/dev/null); do
+                _proj=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$_cid" 2>/dev/null)
+                if [ -n "$_proj" ]; then
+                  case " $_freed_projects " in
+                    *" $_proj "*) : ;;
+                    *)
+                      echo "  [regress-gate] L3: port $_p held by orphaned compose project '$_proj' — tearing it down before boot." | tee -a "$regress_log"
+                      _pcids=$(docker ps -aq --filter "label=com.docker.compose.project=${_proj}" 2>/dev/null)
+                      [ -n "$_pcids" ] && docker rm -f $_pcids >> "$regress_log" 2>&1 || true
+                      docker network rm "${_proj}_default" >> "$regress_log" 2>&1 || true
+                      _freed_projects="$_freed_projects $_proj"
+                      ;;
+                  esac
+                else
+                  echo "  [regress-gate] L3: port $_p held by non-compose container $_cid — removing before boot." | tee -a "$regress_log"
+                  docker rm -f "$_cid" >> "$regress_log" 2>&1 || true
+                fi
+              done
+            done
+          fi
           if (cd "$regress_dir" && eval "$_l3_boot") >> "$regress_log" 2>&1; then
             _l3_booted=true
           else
