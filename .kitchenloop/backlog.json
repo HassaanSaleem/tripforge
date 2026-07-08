@@ -37,9 +37,9 @@
     "body": "Build the 4-layer verification harness (compile -> execute -> parse -> state deltas) for TripForge:\n- L3 helpers: start real app + DB, perform an action via API, assert exact DB state deltas (e.g., booking writes reservation + markup ledger rows; failed booking leaves state unchanged \u2014 conservation assertion)\n- L4 helpers (INV-027, ADR-0003): Playwright journey suite run against the built compose image; per-run evidence archiving (screenshots/traces + compose log) into .kitchenloop/evidence/<iteration>/<ticket>/; a log-scan helper that fails on non-allowlisted ERROR/FATAL/Unhandled lines (allowlist starts empty, additions need PR justification)\n- Money-path conservation checks per Constitution VI\n- Emit the PMF metrics events from day one: marketplace take-rate revenue per active agent, resold-vs-self-built trip ratio\n\nAcceptance: `verification.oracle.smoke_command` runs the harness in bounded time; the L4 suite + log scan run green against `docker compose up --build`; quality-bar L3 requirement and the INV-027 live-evidence requirement are enforceable in Polish.\n\nDepends on: seed-0001.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-03T00:00:00Z",
-    "pr_url": "",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/11",
     "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 2). Score: 8/9 (U:3 A:2 I:3) \u2014 unblocks seed-0005 and strengthens the verification pipeline (L3/L4 harness + PMF events); dependency seed-0001 merged (PR #1)."
   },
   {
