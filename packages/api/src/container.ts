@@ -1,7 +1,12 @@
 // Composition root factory. Wires the concrete adapters the app runs with. Tests
 // build their own Container (often with the sandbox hotel + FakeLLM) so no handler
 // constructs an adapter inline (clean-arch DI rule).
-import { SandboxHotelAdapter } from "@tripforge/supply-adapter";
+import {
+  SandboxActivityAdapter,
+  SandboxCarRentalAdapter,
+  SandboxHotelAdapter,
+  SandboxTransferAdapter,
+} from "@tripforge/supply-adapter";
 import { FakeLLM, type LLMPort } from "@tripforge/llm";
 import type { Db } from "@tripforge/db";
 import type { Container } from "./context.js";
@@ -19,6 +24,9 @@ export interface BuildContainerOptions {
 export function buildContainer(options: BuildContainerOptions = {}): Container {
   return {
     hotel: new SandboxHotelAdapter(),
+    activity: new SandboxActivityAdapter(),
+    transfer: new SandboxTransferAdapter(),
+    carRental: new SandboxCarRentalAdapter(),
     llm: options.llm ?? new FakeLLM(),
     db: options.db,
   };

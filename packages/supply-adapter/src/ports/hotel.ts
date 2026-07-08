@@ -1,10 +1,9 @@
-// Supplier-agnostic HOTEL port (Constitution V, INV-005). These are OUR contract
-// shapes — NO bedbank/aggregator (RateHawk/Hotelbeds/TBO/WebBeds) API shapes appear
-// here or anywhere outside a concrete adapter. seed-0003 adds the full port family
-// (activities/transfers/car) + the quote-then-book realities (hold/expiry, re-quote,
-// multi-currency, partial-failure, merchant-of-record); seed-0001 establishes the
-// boundary with the hotel port's four verbs.
-import type { Money } from "@tripforge/domain";
+// Supplier-agnostic HOTEL port (Constitution V, INV-005) — bedbank net rates,
+// the primary margin driver (PRD §9.3). Shapes are OUR contract, never a
+// bedbank's (RateHawk/Hotelbeds/TBO/WebBeds class). Quotes expose NET rates
+// only: markup/sell-price math is pure domain code (INV-010), applied by the
+// booking flow (seed-0005), never by a port.
+import type { OfferBase, QuoteBase, SupplyPort } from "./common.js";
 
 export interface HotelSearchCriteria {
   destination: string;
@@ -13,34 +12,14 @@ export interface HotelSearchCriteria {
   guests: number;
 }
 
-export interface HotelOffer {
-  offerId: string;
-  name: string;
-  /** Net rate from the aggregator — money is integer minor units (INV-009). */
-  netRate: Money;
-}
+/** Hotel inventory result — descriptive content separated from the net rate (INV-025/026). */
+export type HotelOffer = OfferBase;
 
-export interface HotelQuote {
-  quoteId: string;
-  offerId: string;
-  netRate: Money;
-  /** Quote-then-book: a quote is only valid until it expires (INV-006). */
-  expiresAt: string; // ISO datetime
-}
-
-export interface HotelBooking {
-  bookingId: string;
-  quoteId: string;
-  status: "confirmed" | "failed";
-}
+/** Firm hotel price hold (INV-006). */
+export type HotelQuote = QuoteBase;
 
 /**
  * The hotel supply port. Handlers depend on THIS type, never a concrete adapter
  * class (clean-arch: "handlers depend on the port type").
  */
-export interface HotelPort {
-  search(criteria: HotelSearchCriteria): Promise<HotelOffer[]>;
-  quote(offerId: string): Promise<HotelQuote>;
-  book(quoteId: string): Promise<HotelBooking>;
-  cancel(bookingId: string): Promise<void>;
-}
+export type HotelPort = SupplyPort<HotelSearchCriteria, HotelOffer, HotelQuote>;

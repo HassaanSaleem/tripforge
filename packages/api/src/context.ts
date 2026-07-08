@@ -1,7 +1,12 @@
 // Request context (application layer). The SessionContext is derived by the app
 // from the Better Auth session + active organization — packages/api never touches
 // Better Auth's runtime types, so it is unit-testable with a plain object.
-import type { HotelPort } from "@tripforge/supply-adapter";
+import type {
+  ActivityPort,
+  CarRentalPort,
+  HotelPort,
+  TransferPort,
+} from "@tripforge/supply-adapter";
 import type { LLMPort } from "@tripforge/llm";
 import type { Db } from "@tripforge/db";
 
@@ -33,6 +38,9 @@ export interface AgentSessionContext extends SessionContext {
  */
 export interface Container {
   hotel: HotelPort;
+  activity: ActivityPort;
+  transfer: TransferPort;
+  carRental: CarRentalPort;
   llm: LLMPort;
   db?: Db;
 }
