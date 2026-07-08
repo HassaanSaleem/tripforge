@@ -191,7 +191,7 @@ runtime:
   timeouts:
     ideate: 2700
     triage: 1200
-    execute: 3600
+    execute: 7200   # 3600->7200 (operator, 2026-07-08): seed-0005 built fully (172/172 green) but timed out at 60m during the final Live Test & Fix step, before commit/push. A money-path feature with L3 + live-verify fix cycles needs headroom to reach its PR.
     polish: 5400
     regress: 9000
     backlog: 900

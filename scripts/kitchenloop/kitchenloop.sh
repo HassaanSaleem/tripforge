@@ -1730,8 +1730,32 @@ verify_merge() {
 # ─── Helper: cleanup_iter_worktree ────────────────────────────────────
 cleanup_iter_worktree() {
   local wt_path="$1" iter_num="$2"
+  # SAFETY NET (operator fix 2026-07-08): a worktree can hold fully-built but
+  # UNCOMMITTED product code — e.g. execute times out during the final Live
+  # Test & Fix step, AFTER building + passing tests but BEFORE its commit/push.
+  # The old `git worktree remove || rm -rf` then silently destroyed it (this cost
+  # seed-0005 its work — a complete, 172/172-green build — twice). So before
+  # removing, if the worktree has ANY uncommitted change (tracked OR untracked,
+  # gitignored excluded), snapshot it to a rescue/ branch pinned in the shared
+  # object store so the work is ALWAYS recoverable. Rescue branches are cheap
+  # refs; prune stale ones with `git branch -D rescue/...` once reviewed.
+  if [ -d "$wt_path" ] && [ -n "$(git -C "$wt_path" status --porcelain 2>/dev/null)" ]; then
+    local rescue="rescue/iter-${iter_num}-$(git -C "$wt_path" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    echo "  [cleanup] Uncommitted work in worktree — rescuing to '$rescue' before removal."
+    git -C "$wt_path" add -A 2>/dev/null || true
+    if git -C "$wt_path" commit -q -m "rescue(iter-${iter_num}): uncommitted worktree snapshot before cleanup" 2>/dev/null; then
+      local snap; snap="$(git -C "$wt_path" rev-parse HEAD 2>/dev/null)"
+      git -C "$REPO_ROOT" branch -f "$rescue" "$snap" 2>/dev/null \
+        && echo "  [cleanup] Rescued: $rescue -> ${snap:0:12} (recover: git checkout $rescue)"
+    else
+      # Could not snapshot — do NOT destroy the work. Leave the worktree in place.
+      echo "  [cleanup] WARNING: rescue commit failed — leaving worktree in place (NOT removing) so work is not lost: $wt_path"
+      ITER_WORKTREE="$wt_path"
+      return 0
+    fi
+  fi
   echo "  [cleanup] Removing iteration worktree..."
-  git -C "$REPO_ROOT" worktree remove "$wt_path" 2>/dev/null || rm -rf "$wt_path"
+  git -C "$REPO_ROOT" worktree remove --force "$wt_path" 2>/dev/null || rm -rf "$wt_path"
   git -C "$REPO_ROOT" branch -D "${ITER_BRANCH_PREFIX}-${iter_num}" 2>/dev/null || true
   git -C "$REPO_ROOT" push origin --delete "${ITER_BRANCH_PREFIX}-${iter_num}" 2>/dev/null || true
   ITER_WORKTREE=""
