@@ -189,12 +189,15 @@ reviewers:
 
 runtime:
   timeouts:
-    ideate: 2700
-    triage: 1200
-    execute: 7200   # 3600->7200 (operator, 2026-07-08): seed-0005 built fully (172/172 green) but timed out at 60m during the final Live Test & Fix step, before commit/push. A money-path feature with L3 + live-verify fix cycles needs headroom to reach its PR.
-    polish: 5400
-    regress: 9000
-    backlog: 900
+    # All phase timeouts doubled from baseline (operator, 2026-07-08) — headroom
+    # so no phase gets SIGTERM'd mid-work on a slow/loaded host (execute already
+    # doubled 3600->7200 earlier for the seed-0005 timeout; the rest follow suit).
+    ideate: 5400     # 2700->5400
+    triage: 2400     # 1200->2400
+    execute: 7200    # 3600->7200: seed-0005 built fully (172/172 green) but timed out at 60m during the final Live Test & Fix step, before commit/push. A money-path feature with L3 + live-verify fix cycles needs headroom to reach its PR.
+    polish: 10800    # 5400->10800
+    regress: 18000   # 9000->18000
+    backlog: 1800    # 900->1800
   backlog_interval: 3
   review_interval: 3
   polish_max_prs: 2
