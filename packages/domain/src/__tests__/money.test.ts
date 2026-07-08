@@ -1,5 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { money, addMoney, subtractMoney, splitEvenMinorUnits, MoneyError } from "../money.js";
+import {
+  money,
+  addMoney,
+  subtractMoney,
+  splitEvenMinorUnits,
+  splitByWeightsMinorUnits,
+  applyMarkupBps,
+  markupOf,
+  convertMoney,
+  MoneyError,
+} from "../money.js";
 
 describe("money constructor (INV-009 integer minor units)", () => {
   it("rejects non-integer minor units", () => {
@@ -60,5 +70,146 @@ describe("splitEvenMinorUnits — conservation (no lost/created cents)", () => {
   it("rejects non-positive parts", () => {
     expect(() => splitEvenMinorUnits(money(100, "USD"), 0)).toThrow(MoneyError);
     expect(() => splitEvenMinorUnits(money(100, "USD"), -2)).toThrow(MoneyError);
+  });
+});
+
+describe("splitByWeightsMinorUnits — weighted conservation (spec 005 FR-001)", () => {
+  it("splits exactly by weights when divisible", () => {
+    const parts = splitByWeightsMinorUnits(money(1000, "USD"), [40, 35, 12, 7, 6]);
+    expect(parts.map((p) => p.amountMinor)).toEqual([400, 350, 120, 70, 60]);
+  });
+
+  it("distributes leftover cents by largest remainder, deterministically", () => {
+    // 100 over weights [1,1,1] → 34/33/33 (ties broken by position).
+    const parts = splitByWeightsMinorUnits(money(100, "USD"), [1, 1, 1]);
+    expect(parts.map((p) => p.amountMinor)).toEqual([34, 33, 33]);
+  });
+
+  it("gives zero-weight categories exactly zero", () => {
+    const parts = splitByWeightsMinorUnits(money(999, "USD"), [0, 1, 0]);
+    expect(parts.map((p) => p.amountMinor)).toEqual([0, 999, 0]);
+  });
+
+  it("conserves the total across many (amount, weight-profile) combinations", () => {
+    const profiles = [
+      [40, 35, 12, 7, 6],
+      [1, 2, 3],
+      [7, 11],
+      [3, 0, 5, 1],
+      [1, 1, 1, 1, 1, 1, 1],
+    ];
+    for (let total = 0; total <= 500; total += 13) {
+      for (const weights of profiles) {
+        const split = splitByWeightsMinorUnits(money(total, "USD"), weights);
+        const sum = split.reduce((acc, p) => acc + p.amountMinor, 0);
+        expect(sum).toBe(total); // conservation — no lost/created minor units
+        expect(split).toHaveLength(weights.length);
+      }
+    }
+  });
+
+  it("conserves for negative totals", () => {
+    const split = splitByWeightsMinorUnits(money(-100, "USD"), [1, 1, 1]);
+    expect(split.reduce((acc, p) => acc + p.amountMinor, 0)).toBe(-100);
+  });
+
+  it("rejects empty, negative, non-integer, and all-zero weights", () => {
+    expect(() => splitByWeightsMinorUnits(money(100, "USD"), [])).toThrow(MoneyError);
+    expect(() => splitByWeightsMinorUnits(money(100, "USD"), [1, -1])).toThrow(MoneyError);
+    expect(() => splitByWeightsMinorUnits(money(100, "USD"), [1.5, 1])).toThrow(MoneyError);
+    expect(() => splitByWeightsMinorUnits(money(100, "USD"), [0, 0])).toThrow(MoneyError);
+  });
+});
+
+describe("applyMarkupBps — sell = net + markup exactly (INV-010)", () => {
+  it("applies a plain percentage markup", () => {
+    // 12500 net + 15% = 14375
+    expect(applyMarkupBps(money(12_500, "USD"), 1500)).toEqual({ amountMinor: 14_375, currency: "USD" });
+  });
+
+  it("rounds the markup component half-up", () => {
+    // 333 × 1500bps = 49.95 → 50
+    expect(applyMarkupBps(money(333, "USD"), 1500).amountMinor).toBe(383);
+    // 333 × 100bps = 3.33 → 3
+    expect(applyMarkupBps(money(333, "USD"), 100).amountMinor).toBe(336);
+    // 50 × 100bps = 0.5 → 1 (half rounds up)
+    expect(applyMarkupBps(money(50, "USD"), 100).amountMinor).toBe(51);
+  });
+
+  it("zero bps is the identity", () => {
+    expect(applyMarkupBps(money(9_900, "EUR"), 0)).toEqual({ amountMinor: 9_900, currency: "EUR" });
+  });
+
+  it("the ledger identity holds: (sell − net) is an exact integer markup", () => {
+    for (let net = 1; net < 2_000; net += 37) {
+      for (const bps of [0, 1, 250, 1500, 10_000]) {
+        const sell = applyMarkupBps(money(net, "USD"), bps);
+        const markup = sell.amountMinor - net;
+        expect(Number.isInteger(markup)).toBe(true);
+        expect(markup).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it("rejects negative or fractional bps", () => {
+    expect(() => applyMarkupBps(money(100, "USD"), -1)).toThrow(MoneyError);
+    expect(() => applyMarkupBps(money(100, "USD"), 12.5)).toThrow(MoneyError);
+  });
+});
+
+describe("markupOf — the ledger margin, sell − net exactly (INV-010)", () => {
+  it("returns sell − net in the shared currency", () => {
+    expect(markupOf(money(14_375, "USD"), money(12_500, "USD"))).toEqual({ amountMinor: 1_875, currency: "USD" });
+  });
+
+  it("zero markup is legal (0 bps quotes)", () => {
+    expect(markupOf(money(9_900, "EUR"), money(9_900, "EUR")).amountMinor).toBe(0);
+  });
+
+  it("closes the loop with applyMarkupBps: markupOf(applyMarkupBps(net, bps), net) is the exact markup", () => {
+    for (let net = 1; net < 2_000; net += 37) {
+      for (const bps of [0, 1, 250, 1500, 10_000]) {
+        const sell = applyMarkupBps(money(net, "USD"), bps);
+        expect(markupOf(sell, money(net, "USD")).amountMinor).toBe(sell.amountMinor - net);
+      }
+    }
+  });
+
+  it("rejects cross-currency margins", () => {
+    expect(() => markupOf(money(100, "USD"), money(100, "EUR"))).toThrow(MoneyError);
+  });
+
+  it("rejects a sell below net (corrupted quote data, never a valid ledger row)", () => {
+    expect(() => markupOf(money(99, "USD"), money(100, "USD"))).toThrow(MoneyError);
+  });
+});
+
+describe("convertMoney — explicit integer-ratio conversion (INV-009)", () => {
+  const eurToUsd = { from: "EUR", to: "USD", numerator: 108, denominator: 100 };
+
+  it("converts with the declared ratio, rounding half-up", () => {
+    expect(convertMoney(money(10_000, "EUR"), eurToUsd)).toEqual({ amountMinor: 10_800, currency: "USD" });
+    // 3300 × 108/100 = 3564
+    expect(convertMoney(money(3_300, "EUR"), eurToUsd).amountMinor).toBe(3_564);
+    // 55 × 108/100 = 59.4 → 59 ; 50 × 108/100 = 54 ; half-up case: 25 × 110/100 = 27.5 → 28
+    expect(convertMoney(money(55, "EUR"), eurToUsd).amountMinor).toBe(59);
+    expect(convertMoney(money(25, "EUR"), { from: "EUR", to: "USD", numerator: 110, denominator: 100 }).amountMinor).toBe(28);
+  });
+
+  it("is reproducible from the recorded numerator/denominator (FR-008)", () => {
+    const amount = money(4_500, "EUR");
+    const first = convertMoney(amount, eurToUsd);
+    expect(convertMoney(amount, eurToUsd)).toEqual(first);
+  });
+
+  it("throws on currency mismatch with the rate", () => {
+    expect(() => convertMoney(money(100, "USD"), eurToUsd)).toThrow(MoneyError);
+  });
+
+  it("rejects non-positive or fractional ratios and negative amounts", () => {
+    expect(() => convertMoney(money(100, "EUR"), { ...eurToUsd, numerator: 0 })).toThrow(MoneyError);
+    expect(() => convertMoney(money(100, "EUR"), { ...eurToUsd, denominator: -5 })).toThrow(MoneyError);
+    expect(() => convertMoney(money(100, "EUR"), { ...eurToUsd, numerator: 1.5 })).toThrow(MoneyError);
+    expect(() => convertMoney(money(-100, "EUR"), eurToUsd)).toThrow(MoneyError);
   });
 });

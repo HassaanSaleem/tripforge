@@ -14,9 +14,13 @@
   },
   "dependencies": {
     "@tripforge/db": "workspace:*",
+    "@tripforge/domain": "workspace:*",
+    "@tripforge/itinerary-schema": "workspace:*",
     "@tripforge/llm": "workspace:*",
+    "@tripforge/shared": "workspace:*",
     "@tripforge/supply-adapter": "workspace:*",
-    "@trpc/server": "^11.0.0"
+    "@trpc/server": "^11.0.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

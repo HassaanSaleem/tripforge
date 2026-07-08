@@ -6,7 +6,7 @@
 // as `agencyId` (INV-004). Tenant-owned product tables (itineraries, listings,
 // ledgers) are added by later seeds and MUST carry `agencyId` referencing
 // `organization.id`.
-import { pgTable, text, timestamp, boolean, uuid, bigint, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid, bigint, index, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -126,6 +126,136 @@ export const pmfEvent = pgTable(
   }),
 );
 
+// ─── Build → Book (spec 005: budget allocator + quote-then-book) ─────────────
+//
+// All five tables are tenant-owned (agency_id → organization.id, INV-004).
+// Money columns are integer minor units + explicit currency (INV-009).
+// The canonical itinerary document is stored WHOLE as jsonb — the DB never
+// forks its shape (INV-001); it is validated by parseItinerary at the api
+// boundary on write and read. `trip_request` is adjacent persistence context
+// (supply-search re-derivation), not a canonical-schema extension.
+
+export const itinerary = pgTable(
+  "itinerary",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: text("agency_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    currency: text("currency").notNull(),
+    document: jsonb("document").notNull(),
+    tripRequest: jsonb("trip_request").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    agencyIdx: index("itinerary_agency_idx").on(table.agencyId),
+  }),
+);
+
+// A server-held firm price for one itinerary item (spec 005 FR-009). Rows are
+// dead at expires_at — never served past it (INV-006; INV-026 carve-out) —
+// and consumed by at most one booking. rate_* record the explicit conversion
+// applied when the supplier priced in a foreign currency (FR-008).
+export const bookingQuote = pgTable(
+  "booking_quote",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: text("agency_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    itineraryId: uuid("itinerary_id")
+      .notNull()
+      .references(() => itinerary.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull(),
+    port: text("port").notNull(),
+    offerId: text("offer_id").notNull(),
+    supplierQuoteId: text("supplier_quote_id").notNull(),
+    netMinor: bigint("net_minor", { mode: "number" }).notNull(),
+    netCurrency: text("net_currency").notNull(),
+    rateNumerator: bigint("rate_numerator", { mode: "number" }),
+    rateDenominator: bigint("rate_denominator", { mode: "number" }),
+    convertedNetMinor: bigint("converted_net_minor", { mode: "number" }).notNull(),
+    markupBps: bigint("markup_bps", { mode: "number" }).notNull(),
+    sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
+    currency: text("currency").notNull(),
+    merchantOfRecord: text("merchant_of_record").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    consumedAt: timestamp("consumed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    agencyItineraryIdx: index("booking_quote_agency_itinerary_idx").on(table.agencyId, table.itineraryId),
+  }),
+);
+
+// One booking attempt that confirmed at least one component; an attempt where
+// every component fails writes NOTHING (FR-011 conservation).
+export const booking = pgTable("booking", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  agencyId: text("agency_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  itineraryId: uuid("itinerary_id")
+    .notNull()
+    .references(() => itinerary.id, { onDelete: "cascade" }),
+  status: text("status").notNull(), // confirmed | partially_confirmed
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// The reservation row per CONFIRMED component (FR-010) — written in the same
+// transaction as its booking, ledger row, and PMF event.
+export const bookingComponent = pgTable("booking_component", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  bookingId: uuid("booking_id")
+    .notNull()
+    .references(() => booking.id, { onDelete: "cascade" }),
+  agencyId: text("agency_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  itineraryId: uuid("itinerary_id")
+    .notNull()
+    .references(() => itinerary.id, { onDelete: "cascade" }),
+  itemId: text("item_id").notNull(),
+  port: text("port").notNull(),
+  offerId: text("offer_id").notNull(),
+  // UNIQUE backstop for FR-009 "consumed by at most one booking": the atomic
+  // consumed_at flip in the booking service is the guard; this constraint makes
+  // a double-record impossible even if a future caller bypasses it.
+  quoteRowId: uuid("quote_row_id")
+    .notNull()
+    .unique()
+    .references(() => bookingQuote.id),
+  supplierBookingId: text("supplier_booking_id").notNull(),
+  netMinor: bigint("net_minor", { mode: "number" }).notNull(),
+  netCurrency: text("net_currency").notNull(),
+  rateNumerator: bigint("rate_numerator", { mode: "number" }),
+  rateDenominator: bigint("rate_denominator", { mode: "number" }),
+  sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
+  currency: text("currency").notNull(),
+  merchantOfRecord: text("merchant_of_record").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// The agency margin record per confirmed component: markup = sell − net
+// EXACTLY (Money-Safe ledger identity; the row revenue-share/take-rate
+// features build on — Constitution VI).
+export const markupLedger = pgTable("markup_ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  agencyId: text("agency_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  bookingComponentId: uuid("booking_component_id")
+    .notNull()
+    .references(() => bookingComponent.id, { onDelete: "cascade" }),
+  netMinor: bigint("net_minor", { mode: "number" }).notNull(),
+  sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
+  markupMinor: bigint("markup_minor", { mode: "number" }).notNull(),
+  currency: text("currency").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const schema = {
   user,
   session,
@@ -135,6 +265,11 @@ export const schema = {
   member,
   invitation,
   pmfEvent,
+  itinerary,
+  bookingQuote,
+  booking,
+  bookingComponent,
+  markupLedger,
 };
 
 export type Schema = typeof schema;

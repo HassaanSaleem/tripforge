@@ -10,6 +10,7 @@ import {
   snapshotTables,
   assertDelta,
   assertConserved,
+  createHttpSession,
   sql,
 } from "./harness.mjs";
 
@@ -196,6 +197,133 @@ async function main() {
     preCount !== undefined && preCount === postCount,
     `pre=${preCount} post=${postCount}`,
   );
+
+  // ─── 8. Build→Book walk (spec 005): draft → quote → book, exact deltas ────
+  // The full money path against the BUILT stack with the deterministic planner
+  // fake (no key), asserting per-step state deltas and failure-branch
+  // conservation (FR-014, SC-003/004/005/007).
+  const agent = createHttpSession(BASE);
+  const stamp = `${Date.now()}-${process.pid}`;
+
+  // 8a. Agent bootstrap: sign-up → agency (organization) → active org.
+  const su = await agent.api("POST", "/api/auth/sign-up/email", {
+    name: "L3 Booking Agent",
+    email: `l3-book-${stamp}@example.test`,
+    password: "l3-booking-password-1",
+  });
+  check("build→book: agent sign-up (2xx)", su.res.ok, `got ${su.res.status}`);
+  const org = await agent.api("POST", "/api/auth/organization/create", {
+    name: `L3 Booking Agency ${stamp}`,
+    slug: `l3-book-${stamp}`,
+  });
+  const orgId = org.json?.id ?? org.json?.organization?.id;
+  check("build→book: agency created", org.res.status === 200 && !!orgId, `got ${org.res.status}`);
+  const setActive = await agent.api("POST", "/api/auth/organization/set-active", { organizationId: orgId });
+  check("build→book: agency set active", setActive.res.status === 200, `got ${setActive.res.status}`);
+
+  // 8b. Draft: itinerary +1, trip_created PMF event +1, nothing else.
+  // 45s cap: with ANTHROPIC_API_KEY in the stack env this runs a REAL Haiku
+  // tool loop (INV-013); keyless stacks use the deterministic fake and answer
+  // in milliseconds. Every assertion below holds under either planner.
+  const beforeDraft = await snapshotTables();
+  const draft = await agent.api(
+    "POST",
+    "/api/trpc/workspace.itinerary.draft",
+    {
+      destination: "Paris",
+      checkIn: "2026-09-01",
+      checkOut: "2026-09-03",
+      party: { adults: 2, children: 0 },
+      budget: { mode: "hardCap", amountMinor: 100000, currency: "USD" },
+    },
+    { timeoutMs: 45_000 },
+  );
+  const drafted = draft.json?.result?.data;
+  check("build→book: draft returns a drafted itinerary", drafted?.status === "drafted", draft.text.slice(0, 300));
+  const afterDraft = await snapshotTables();
+  const draftDelta = assertDelta(beforeDraft, afterDraft, { itinerary: 1, pmf_event: 1 });
+  check("build→book: draft delta is itinerary +1, pmf_event +1 (others conserved)", draftDelta.ok, draftDelta.detail);
+  const allocSum = (drafted?.itinerary?.pricing?.categories ?? []).reduce(
+    (acc, c) => acc + (c.allocated?.amountMinor ?? 0),
+    0,
+  );
+  check(
+    "build→book: category allocations sum exactly to the budget (SC-001)",
+    allocSum === 100000,
+    `sum=${allocSum}`,
+  );
+  const draftItems = (drafted?.itinerary?.days ?? []).flatMap((d) => d.items ?? []);
+  check(
+    "build→book: every priced item carries a supply reference (SC-002)",
+    draftItems.length > 0 && draftItems.every((i) => i.supplyRef?.externalId),
+    `items=${draftItems.length}`,
+  );
+
+  // 8c. Quote: one hold per bookable item, hold fields present.
+  const itineraryId = drafted?.itinerary?.id;
+  const quote = await agent.api("POST", "/api/trpc/workspace.booking.quote", { itineraryId, markupBps: 1500 });
+  const quoted = quote.json?.result?.data;
+  const heldQuotes = (quoted?.items ?? []).filter((i) => i.outcome === "held");
+  check(
+    "build→book: every bookable item quoted (holds with expiry + MoR)",
+    quoted?.status === "quoted" &&
+      heldQuotes.length === draftItems.length &&
+      heldQuotes.every((h) => h.quote.expiresAt && h.quote.merchantOfRecord && h.quote.quoteRowId),
+    quote.text.slice(0, 300),
+  );
+  const afterQuote = await snapshotTables();
+  const quoteDelta = assertDelta(afterDraft, afterQuote, { booking_quote: heldQuotes.length });
+  check(`build→book: quote delta is booking_quote +${heldQuotes.length}`, quoteDelta.ok, quoteDelta.detail);
+
+  // 8d. Book: ONE transaction — booking, components, ledger, PMF events.
+  const quoteRowIds = heldQuotes.map((h) => h.quote.quoteRowId);
+  const book = await agent.api("POST", "/api/trpc/workspace.booking.book", { itineraryId, quoteRowIds });
+  const booked = book.json?.result?.data;
+  check("build→book: booking confirms every component", booked?.status === "confirmed", book.text.slice(0, 300));
+  const afterBook = await snapshotTables();
+  const bookDelta = assertDelta(afterQuote, afterBook, {
+    booking: 1,
+    booking_component: heldQuotes.length,
+    markup_ledger: heldQuotes.length,
+    pmf_event: heldQuotes.length,
+  });
+  check(
+    "build→book: book delta is booking +1, components/ledger/pmf_event +N (others conserved)",
+    bookDelta.ok,
+    bookDelta.detail,
+  );
+
+  // 8e. Ledger identity (SC-005): markup = sell − net exactly, in every row.
+  const ledgerCheck = await sql(
+    "SELECT COUNT(*) AS bad FROM markup_ledger WHERE markup_minor <> sell_minor - net_minor;",
+  );
+  check(
+    "build→book: markup ledger identity holds (markup = sell − net)",
+    /^0$/m.test(ledgerCheck.split("\n")[1] ?? ""),
+    ledgerCheck.trim(),
+  );
+
+  // 8f. Plan→book conversion computes from this flow's events (SC-007).
+  const planBook = await sql("SELECT * FROM pmf_plan_to_book;");
+  const planBookRow = planBook.split("\n")[1] ?? "";
+  const [createdCount, bookedCount] = planBookRow.split(",").map(Number);
+  check(
+    "build→book: pmf_plan_to_book counts this trip as created AND booked",
+    createdCount >= 1 && bookedCount >= 1,
+    `view row: ${planBookRow}`,
+  );
+
+  // 8g. Double-book the same holds: typed failure, ZERO state delta (SC-004).
+  const again = await agent.api("POST", "/api/trpc/workspace.booking.book", { itineraryId, quoteRowIds });
+  const againData = again.json?.result?.data;
+  check(
+    "build→book: double-book fails typed (already_consumed)",
+    againData?.status === "failed" && (againData?.components ?? []).every((c) => c.reason === "already_consumed"),
+    again.text.slice(0, 300),
+  );
+  const afterDouble = await snapshotTables();
+  const doubleConserved = assertConserved(afterBook, afterDouble);
+  check("build→book: double-book conserves state (zero delta)", doubleConserved.ok, doubleConserved.detail);
 
   if (failures > 0) {
     console.error(`\nL3 smoke FAILED: ${failures} assertion(s) failed.`);

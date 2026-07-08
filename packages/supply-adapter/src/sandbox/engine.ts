@@ -105,4 +105,15 @@ export class SandboxSupplyEngine<TOffer extends OfferBase> {
     booking.cancelled = true;
     return { status: "cancelled", bookingId };
   }
+
+  /**
+   * Read-only inspection of the bookings this supplier currently holds live
+   * (booked, not cancelled). Conservation tests (FR-011, seed-0005d) assert
+   * that after any interleaving the supplier's live bookings equal the
+   * bookings our ledger recorded — this is the supplier-side witness. Not a
+   * SupplyPort verb; it mutates nothing.
+   */
+  liveBookingIds(): string[] {
+    return [...this.bookings].filter(([, b]) => !b.cancelled).map(([id]) => id);
+  }
 }

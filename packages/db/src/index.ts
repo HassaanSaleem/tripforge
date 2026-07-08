@@ -11,9 +11,17 @@ export {
   member,
   invitation,
   pmfEvent,
+  itinerary,
+  bookingQuote,
+  booking,
+  bookingComponent,
+  markupLedger,
 } from "./schema.js";
 export type { Schema } from "./schema.js";
 export { tenantScope, scopedWhere } from "./tenant.js";
+// Query operators consumers compose scoped conditions with (the ORM itself
+// stays this package's dependency — INV-017: no deep drizzle imports outside db).
+export { and, count, eq, inArray, isNull } from "drizzle-orm";
 export { getMemberRole } from "./membership.js";
 export {
   PMF_TRIP_SOURCES,

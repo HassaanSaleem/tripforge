@@ -9,16 +9,20 @@ import {
 } from "@tripforge/supply-adapter";
 import { FakeLLM, type LLMPort } from "@tripforge/llm";
 import type { Db } from "@tripforge/db";
+import type { ExchangeRate } from "@tripforge/domain";
 import type { Container } from "./context.js";
+import { STATIC_RATES } from "./rates.js";
 
 export interface BuildContainerOptions {
   db?: Db;
   /**
-   * LLM implementation. Defaults to the deterministic FakeLLM so nothing in the
-   * skeleton makes a live provider call (INV-013). seed-0005 injects AnthropicLLM
-   * (Haiku) here at the app composition root.
+   * LLM implementation. Defaults to the deterministic FakeLLM so nothing makes
+   * a live provider call without a key (INV-013/019); the app composition root
+   * injects AnthropicLLM (Haiku) when ANTHROPIC_API_KEY is configured.
    */
   llm?: LLMPort;
+  /** Exchange-rate table override (tests); defaults to the fixed P0 table. */
+  rates?: readonly ExchangeRate[];
 }
 
 export function buildContainer(options: BuildContainerOptions = {}): Container {
@@ -28,6 +32,7 @@ export function buildContainer(options: BuildContainerOptions = {}): Container {
     transfer: new SandboxTransferAdapter(),
     carRental: new SandboxCarRentalAdapter(),
     llm: options.llm ?? new FakeLLM(),
+    rates: options.rates ?? STATIC_RATES,
     db: options.db,
   };
 }

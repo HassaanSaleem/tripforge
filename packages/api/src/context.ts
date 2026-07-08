@@ -9,6 +9,7 @@ import type {
 } from "@tripforge/supply-adapter";
 import type { LLMPort } from "@tripforge/llm";
 import type { Db } from "@tripforge/db";
+import type { ExchangeRate } from "@tripforge/domain";
 
 /** Agency org role (architecture §1.4) — kept to three at MVP. */
 export type AgencyRole = "owner" | "admin" | "member";
@@ -42,6 +43,9 @@ export interface Container {
   transfer: TransferPort;
   carRental: CarRentalPort;
   llm: LLMPort;
+  /** Fixed deterministic table at P0 (spec 005 research D8); conversions are
+   * explicit, recorded operations (INV-009). */
+  rates: readonly ExchangeRate[];
   db?: Db;
 }
 

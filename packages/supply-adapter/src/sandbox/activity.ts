@@ -65,4 +65,9 @@ export class SandboxActivityAdapter implements ActivityPort {
   async cancel(bookingId: string): Promise<CancelOutcome> {
     return this.engine.cancel(bookingId);
   }
+
+  /** Read-only supplier-state witness for conservation tests — see engine. */
+  liveBookingIds(): string[] {
+    return this.engine.liveBookingIds();
+  }
 }

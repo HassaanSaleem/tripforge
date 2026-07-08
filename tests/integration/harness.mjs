@@ -19,6 +19,13 @@ export const WATCHED_TABLES = [
   "organization",
   "member",
   "pmf_event",
+  // Build → Book money path (spec 005): delta/conservation assertions cover
+  // the whole path so an orphan row anywhere turns the gate red.
+  "itinerary",
+  "booking_quote",
+  "booking",
+  "booking_component",
+  "markup_ledger",
 ];
 
 // -q suppresses command tags (BEGIN/INSERT 0 n/ROLLBACK) so stdout carries query
@@ -121,4 +128,52 @@ export function assertDelta(before, after, expected) {
 /** Zero-delta (conservation) assertion — the money-path failure-branch shape. */
 export function assertConserved(before, after) {
   return assertDelta(before, after, {});
+}
+
+/**
+ * Cookie-carrying HTTP session against the live stack — the "perform an action
+ * via API" half of the L3 harness (spec 004 FR-003). Mirrors a real browser:
+ * folds every Set-Cookie into a jar and sends the base Origin (Better Auth
+ * CSRF-checks it on state-changing requests). Dependency-free by design.
+ */
+export function createHttpSession(base) {
+  const jar = new Map();
+  const absorb = (res) => {
+    for (const line of res.headers.getSetCookie?.() ?? []) {
+      const [pair] = line.split(";");
+      const eq = pair.indexOf("=");
+      if (eq > 0) jar.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+    }
+  };
+  const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
+
+  return {
+    /**
+     * JSON request; returns { res, json, text }. Body optional (GET).
+     * `timeoutMs` override exists for the one legitimately slow call: a draft
+     * against a stack wired with a real ANTHROPIC_API_KEY runs a live Haiku
+     * tool loop (INV-013). Deterministic-fake stacks answer in milliseconds.
+     */
+    async api(method, path, body, { timeoutMs = 15_000 } = {}) {
+      const res = await fetch(`${base}${path}`, {
+        method,
+        headers: {
+          "content-type": "application/json",
+          origin: base,
+          ...(jar.size ? { cookie: cookieHeader() } : {}),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      absorb(res);
+      const text = await res.text();
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        /* HTML or empty — caller inspects text */
+      }
+      return { res, json, text };
+    },
+  };
 }
