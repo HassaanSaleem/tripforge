@@ -2,10 +2,12 @@
 
 **Feature**: `002-canonical-itinerary-schema` | **Plan**: [plan.md](./plan.md)
 
-> Design artifact. The zod/TypeScript declarations below are the **proposed** v0
-> shape for `packages/itinerary-schema`. They are NOT yet implemented — the
-> landing is operator-gated (OPERATOR-DESK **D-006**). Field names/types are the
-> reviewable proposal; the operator confirms the open decisions in plan.md.
+> Design artifact, synced to operator decision **D-006** (resolved 2026-07-06)
+> and to the landed implementation (`packages/itinerary-schema`, PR #4). D-006
+> resolved the open decisions: (a) `SCHEMA_VERSION = "0.1.0"`; (b) THREE item
+> kinds only — `stay | activity | transfer` — with `carRental` DEFERRED to a
+> later operator-gated version bump; (c) the closed media `source` enum below.
+> Any future shape change is operator-gated (ALWAYS-HALT).
 
 ## Entity graph (overview)
 
@@ -23,8 +25,8 @@ Itinerary
 │           └── Item  (discriminated union on `kind`)
 │               ├── stay      { …common, checkIn, checkOut, occupancy }
 │               ├── activity  { …common, startsAt?, durationMinutes? }
-│               ├── transfer  { …common, from, to, mode }
-│               └── carRental { …common, pickUp, dropOff }   [OPEN: D-006.b]
+│               └── transfer  { …common, from, to, mode }
+│               (carRental DEFERRED by D-006.b — later operator-gated bump)
 │               (…common) = { id, kind, title, supplyRef?, media[], pricing? }
 ├── media: MediaRef[]                (itinerary-level gallery; optional)
 ├── pricing: PricingBlock            (budget breakdown; persists w/ itinerary, INV-015)
@@ -82,7 +84,7 @@ const ItemBase = {
   id: z.string().min(1),
   title: z.string().min(1),
   supplyRef: z.object({
-    port: z.enum(["hotel", "activity", "transfer", "car"]),
+    port: z.enum(["hotel", "activity", "transfer"]),   // D-006.b: no "car" port at v0
     externalId: z.string().min(1),          // opaque to everyone outside the adapter
   }).strict().optional(),
   media: z.array(MediaRefSchema).default([]),
@@ -92,11 +94,11 @@ const ItemBase = {
 export const StayItemSchema     = z.object({ kind: z.literal("stay"),     ...ItemBase, checkIn: z.string(), checkOut: z.string(), occupancy: z.object({ adults: z.number().int().min(1), children: z.number().int().min(0).default(0) }).strict() }).strict();
 export const ActivityItemSchema = z.object({ kind: z.literal("activity"), ...ItemBase, startsAt: z.string().optional(), durationMinutes: z.number().int().positive().optional() }).strict();
 export const TransferItemSchema = z.object({ kind: z.literal("transfer"), ...ItemBase, from: z.string().min(1), to: z.string().min(1), mode: z.enum(["private","shared","rail","other"]) }).strict();
-// OPEN (D-006.b): carRental kind
-export const CarRentalItemSchema= z.object({ kind: z.literal("carRental"),...ItemBase, pickUp: z.string().min(1), dropOff: z.string().min(1) }).strict();
+// carRental kind: DEFERRED by D-006.b — v0 ships three kinds only. Adding it
+// later is a schema version bump with a migrator (operator-gated, ALWAYS-HALT).
 
 export const ItemSchema = z.discriminatedUnion("kind", [
-  StayItemSchema, ActivityItemSchema, TransferItemSchema, /* CarRentalItemSchema (D-006.b) */
+  StayItemSchema, ActivityItemSchema, TransferItemSchema,
 ]);
 ```
 
@@ -168,19 +170,22 @@ export const ProvenanceSchema = z.object({
 seed-0006 at listing time:
 
 ```ts
-export const ListedItinerarySchema = ItinerarySchema.extend({
+// Extends the pre-refinement base object (`itineraryObject`), not ItinerarySchema:
+// superRefine returns a ZodEffects, which has no `.extend`. The single-currency
+// refinement is re-applied after the extend.
+export const ListedItinerarySchema = itineraryObject.extend({
   provenance: ProvenanceSchema.required({
     originalAuthorAgencyId: true, licenseTerms: true, revenueShareBps: true,
   }),
-});
+}).superRefine(assertSingleCurrency);
 export type ListedItinerary = z.infer<typeof ListedItinerarySchema>;
 ```
 
 ## Itinerary root
 
 ```ts
-export const SCHEMA_VERSION = "0.1.0" as const;   // OPEN: D-006.a — operator confirms
-export const ItinerarySchema = z.object({
+export const SCHEMA_VERSION = "0.1.0" as const;   // D-006.a: confirmed by operator
+const itineraryObject = z.object({                 // plain ZodObject: extendable base
   schemaVersion: z.literal(SCHEMA_VERSION).default(SCHEMA_VERSION),
   id: z.string().min(1),
   agencyId: z.string().min(1),
@@ -190,7 +195,8 @@ export const ItinerarySchema = z.object({
   media: z.array(MediaRefSchema).default([]),
   pricing: PricingBlockSchema,
   provenance: ProvenanceSchema.default({ rebrandLineage: [] }),
-}).strict().superRefine(assertSingleCurrency);   // FR-008
+}).strict();
+export const ItinerarySchema = itineraryObject.superRefine(assertSingleCurrency);   // FR-008
 export type Itinerary = z.infer<typeof ItinerarySchema>;
 ```
 
