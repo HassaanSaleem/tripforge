@@ -804,6 +804,7 @@ check_uat_verdicts() {
 record_iteration_metrics() {
   local iter_num="$1"
   local regress_log="$2"
+  local regress_passed_arg="${3:-}"
   local metrics_file
 
   if [ "$HAS_CONFIG" = true ]; then
@@ -838,6 +839,24 @@ record_iteration_metrics() {
   local pass_rate="0.0"
   if [ "$test_total" -gt 0 ]; then
     pass_rate=$(awk "BEGIN { printf \"%.4f\", $test_passed / $test_total }")
+  fi
+
+  # Trustworthiness guard (2026-07-09, operator-authorized): pass_rate is parsed
+  # from a prose agent log and is FRAGILE — it grep-matches "[0-9]+ passed" and
+  # takes the LAST occurrence, which can be a tiny final sub-run (e.g. "1 passed"
+  # out of 44 -> 0.0227) rather than the authoritative suite total (e.g. 193/193).
+  # When the authoritative regress gate PASSED but the parsed rate contradicts it
+  # (below floor), the parse is unreliable: record the iteration as UNMEASURED
+  # (test_total=0) so the pass-rate-floor and drift stop-conditions (which both
+  # exempt total=0) cannot false-fire on a mis-parse. A genuine regression sets
+  # regress_passed=false and keeps its parsed metric, so it is still caught.
+  if [ "$regress_passed_arg" = "true" ] && [ "$test_total" -gt 0 ]; then
+    local _below_floor
+    _below_floor=$(awk -v r="$pass_rate" -v f="${PASS_RATE_FLOOR:-0.95}" 'BEGIN { print ((r+0) < (f+0)) ? "yes" : "no" }')
+    if [ "$_below_floor" = "yes" ]; then
+      echo "  [metrics] WARNING: parsed pass_rate=$pass_rate contradicts a PASSED regress gate — unreliable log parse; recording iteration as unmeasured (test_total=0) so stop-conditions don't false-fire."
+      test_total=0; test_passed=0; test_failed=0; test_skipped=0; pass_rate="0.0"
+    fi
   fi
 
   local ts
@@ -2565,7 +2584,7 @@ run_iteration() {
 
   # ── Record iteration metrics; enforce stop conditions ──
   if ! should_skip "regress" && [ "$EXECUTE_FAILED" != true ]; then
-    record_iteration_metrics "$ITER_NUM" "$regress_log"
+    record_iteration_metrics "$ITER_NUM" "$regress_log" "$regress_passed"
     # Stop condition: pass-rate floor (verification.stop_conditions.pass_rate_floor)
     # trips the HALT sentinel when real tests fall below the floor.
     check_pass_rate_floor || true
