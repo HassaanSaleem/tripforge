@@ -126,11 +126,19 @@ there is no feature spec and have codex review against the invariants +
 constitution only.
 
 Then run codex with the RESOLVED `$SPEC_DIR` interpolated by the shell, so codex
-receives CONCRETE file paths (not a placeholder):
-```bash
-codex review --base {{BASE_BRANCH}} "Three-way ALIGNMENT review: verify that code, spec, and architecture agree for this feature PR.
+receives CONCRETE file paths (not a placeholder).
 
-Artifacts to read from this branch before judging the diff:
+**Invocation (codex-cli ≥ 0.142):** `codex review --base <branch>` and a custom
+PROMPT are MUTUALLY EXCLUSIVE on modern codex-cli — `codex review --base main
+"<prompt>"` errors out (`the argument '--base' cannot be used with '[PROMPT]'`).
+So drive the alignment review through `codex exec` (full-prompt mode) and have it
+diff against the base itself. Run from inside the PR worktree ({{WORKTREE}}) so
+the diff resolves against the PR branch. The verdict lands in the
+`--output-last-message` file (also echoed to stdout).
+```bash
+codex exec --output-last-message /tmp/codex-4a-{{PR_NUMBER}}.txt "You are the external cross-model reviewer (Stage 4a) for PR #{{PR_NUMBER}}. Review ONLY the changes this branch introduces over {{BASE_BRANCH}}: first run  git diff --stat {{BASE_BRANCH}}...HEAD  then read the changed files that matter.
+
+Three-way ALIGNMENT review — verify code, spec, and architecture agree. Read before judging the diff:
 1. The feature spec: ${SPEC_DIR}/spec.md (requirements + acceptance criteria)
 2. The feature plan: ${SPEC_DIR}/plan.md (module boundaries, data model, contracts)
 3. The system architecture: docs/architecture/system-architecture.md (numbered invariants INV-NNN)
@@ -146,6 +154,7 @@ Classify EVERY finding into exactly one state:
 Then review correctness, security, and style as usual.
 End your output with a line containing exactly APPROVE or REQUEST_CHANGES, then the findings list with each finding's state label, file, and evidence."
 ```
+Read the verdict from `/tmp/codex-4a-{{PR_NUMBER}}.txt` (the last APPROVE/REQUEST_CHANGES line).
 Timeout: 300s (or `reviewers.codex.timeout` in kitchenloop.yaml).
 
 **Codex is a DIRECTIVE-named merge gate.** If codex times out or is unavailable,
@@ -256,10 +265,13 @@ If threads still unresolved after 4 rounds: continue (non-blocking).
 
 ## Stage 8: Final Check
 
-Run one final Codex review (hard gate for critical issues):
+Run one final Codex review (hard gate for critical issues). Same codex-cli ≥ 0.142
+constraint as Stage 4a — use `codex exec` (a custom prompt cannot be combined with
+`codex review --base`), run from inside the PR worktree ({{WORKTREE}}):
 ```bash
-codex review --base {{BASE_BRANCH}} "Final merge-safety review: is this PR safe to merge? Check only for critical issues (data loss, money-path bugs, schema breakage, security). End your output with a line containing exactly APPROVE or REJECT, with reason."
+codex exec --output-last-message /tmp/codex-8-{{PR_NUMBER}}.txt "Final merge-safety review of PR #{{PR_NUMBER}}. Review ONLY the changes this branch introduces over {{BASE_BRANCH}}: first run  git diff {{BASE_BRANCH}}...HEAD . Is this PR safe to merge? Check ONLY for critical issues: data loss, money-path bugs (double-charge/double-record, non-conserving failure paths), schema breakage, security, and in-process cross-request state on the serverless surface (INV-028). End your output with a line containing exactly APPROVE or REJECT, with reason."
 ```
+Read the verdict from `/tmp/codex-8-{{PR_NUMBER}}.txt` (the last APPROVE/REJECT line).
 Timeout: 300s. Codex is a DIRECTIVE-named merge gate: if it is unavailable here,
 you MUST NOT treat the PR as approved. Add an OPERATOR-DESK.md row recording the
 codex outage for PR #{{PR_NUMBER}}, output
