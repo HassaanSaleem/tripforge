@@ -288,5 +288,17 @@
     "state": "backlog",
     "created": "2026-07-08T13:46:03Z",
     "pr_url": ""
+  },
+  {
+    "id": "spec-gap-0003",
+    "title": "spec-gap: plan.md/spec.md (002) still frame D-006 as open decisions (carRental in item.ts line, \"open decision\" language)",
+    "body": "SPEC-SILENT (doc-sync) - surfaced by the pr-manager Stage 3 pr-auditor review of PR #14 (spec-gap-0001 data-model.md sync). Non-blocking; the landed code and the amended data-model.md are authoritative and correct.\n\nPROBLEM: after PR #14 syncs data-model.md to resolved operator decision D-006, the sibling design artifacts in specs/002-canonical-itinerary-schema/ still carry pre-decision language: plan.md:127-138 frames D-006.a/b/c as \"Open Decisions for the operator\" (and recommends INCLUDING carRental, the opposite of the resolution); plan.md:161 shows `item.ts ... (stay/activity/transfer[/carRental])`; spec.md:139-143,209 still calls carRental an \"open decision\". Historical open-decision text can be misread as current, so review gates could check code against a stale plan.\n\nFILE POINTERS: specs/002-canonical-itinerary-schema/plan.md:127-138,161; specs/002-canonical-itinerary-schema/spec.md:139-143,209; OPERATOR-DESK.md D-006 (resolved 2026-07-06); packages/itinerary-schema/src/item.ts:27,73-77.\n\nACCEPTANCE CRITERIA:\n  1. plan.md and spec.md annotate the D-006 open-decision sections as RESOLVED by D-006 (2026-07-06) with the resolved values (SCHEMA_VERSION 0.1.0; three item kinds stay|activity|transfer; supplyRef.port = [hotel, activity, transfer]; carRental DEFERRED to an operator-gated bump), preserving the historical proposal text as history rather than deleting it.\n  2. plan.md:161 module line no longer suggests carRental is part of item.ts.\n  3. Change goes through the SDD/spec-amendment flow, not a silent code-defines-spec edit.\n\nSource: pr-manager PR #14 Stage 3 pr-auditor minor SPEC-SILENT finding. Related: spec-gap-0001, seed-0002.",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "blockedBy": [],
+    "notes": "Filed by pr-manager pipeline for PR #14 per the Stage 4a routing rule (SPEC-SILENT -> spec-amendment ticket, non-blocking)."
   }
 ]

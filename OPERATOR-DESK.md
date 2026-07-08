@@ -16,6 +16,7 @@ Rules for the loop:
 |----|-----|----------|----------------|-------|--------|
 | CI-IMG-BUILD | `add ci image build` | Should CI build the compose image so hermetic-build breaks gate merges? | Yes — add a docker-build job to `.github/workflows/ci.yml` | 2026-07-07 | Nothing today (gap: BUG-1-class breaks stay invisible to `ci_pass`) |
 | ENV-PNPM-DENY | `pnpm perms fixed` | Why did the loop harness deny ALL `pnpm` commands in the iter-2 ideate session despite the `.claude/settings.json` allowlist? | Verify/repair the harness permission wiring so allowlisted `pnpm install`/`pnpm test`/`pnpm run lint` run inside loop sessions | 2026-07-07 | In-session L1/L2 + lint verification during ideate/execute (regress runs in its own runtime and is unaffected) |
+| UAT-PR14 | `waive uat pr14` | Waive the UAT-card gate for PR #14 (spec-gap-0001: docs-only sync of data-model.md to resolved D-006)? | Yes — waive: markdown-only spec amendment, no product behavior, no browser journey applies; every other merge gate is green | 2026-07-09 | Merging PR #14 (spec-gap-0001 stays open) |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -46,6 +47,21 @@ Playwright e2e suite via a git-ignored `node_modules` shim over the npx-cached
 chromium-headless-shell. Workarounds are evidence-grade but slow and versioned
 off-lockfile — the harness wiring still needs the operator fix. The shim was left
 in place in the iter-2 worktree (`rm` denied); safe to delete or overwrite.
+
+**UAT-PR14** — The pr-manager prep pipeline for PR #14 (`docs(spec-002): sync
+data-model.md to resolved D-006`, ticket spec-gap-0001) passed every gate except
+the UAT card, which fails closed: no `UAT Gate Results` comment exists on the PR
+(docs-only change — no browser journey was run) and no per-PR waiver row was on
+the desk. Green witnesses: pr-auditor APPROVE (doc verified line-for-line against
+D-006 and packages/itinerary-schema/src/); codex Stage-4a APPROVE after one fixed
+VIOLATION (the ListedItinerarySchema snippet contradicted itinerary.ts — corrected
+in fed673b, pushed to the PR branch, codex re-review clean); codex final
+merge-safety APPROVE; CI lint-and-test green on head fed673b1ba; zero file
+deletions; no `uat-failed` label. Precedent: UAT-PR4/UAT-PR5 waivers for non-UI
+PRs. Recommendation: waive (same class as UAT-PR4 — nothing for a browser journey
+to exercise). Blocked until answered: merging PR #14; spec-gap-0001 remains open.
+A follow-up ticket spec-gap-0003 was filed for the stale pre-D-006 open-decision
+language remaining in sibling spec.md/plan.md (non-blocking, pr-auditor finding).
 
 <!-- Resolved 2026-07-05 (operator ratified both at iteration-1 kickoff):
      D-002 `scope pushes` — DIRECTIVE item 2 push rule scoped to halt only on
