@@ -134,7 +134,10 @@ PROMPT are MUTUALLY EXCLUSIVE on modern codex-cli — `codex review --base main
 So drive the alignment review through `codex exec` (full-prompt mode) and have it
 diff against the base itself. Run from inside the PR worktree ({{WORKTREE}}) so
 the diff resolves against the PR branch. The verdict lands in the
-`--output-last-message` file (also echoed to stdout).
+`--output-last-message` file (also echoed to stdout). Redirect stdin from
+`/dev/null` (as shown) — `codex exec` otherwise blocks on a stdin read in the
+loop's non-interactive shell and the gate hangs indefinitely (observed
+2026-07-08: a review hung 39 min at "Reading additional input from stdin...").
 ```bash
 codex exec --output-last-message /tmp/codex-4a-{{PR_NUMBER}}.txt "You are the external cross-model reviewer (Stage 4a) for PR #{{PR_NUMBER}}. Review ONLY the changes this branch introduces over {{BASE_BRANCH}}: first run  git diff --stat {{BASE_BRANCH}}...HEAD  then read the changed files that matter.
 
@@ -152,7 +155,7 @@ Classify EVERY finding into exactly one state:
 - SPEC-SILENT  — significant implemented behavior the spec does not address (NOT blocking: report it so a spec-amendment ticket is filed; the spec evolves through SDD, code does not silently define it)
 
 Then review correctness, security, and style as usual.
-End your output with a line containing exactly APPROVE or REQUEST_CHANGES, then the findings list with each finding's state label, file, and evidence."
+End your output with a line containing exactly APPROVE or REQUEST_CHANGES, then the findings list with each finding's state label, file, and evidence." < /dev/null
 ```
 Read the verdict from `/tmp/codex-4a-{{PR_NUMBER}}.txt` (the last APPROVE/REQUEST_CHANGES line).
 Timeout: 300s (or `reviewers.codex.timeout` in kitchenloop.yaml).
@@ -267,9 +270,11 @@ If threads still unresolved after 4 rounds: continue (non-blocking).
 
 Run one final Codex review (hard gate for critical issues). Same codex-cli ≥ 0.142
 constraint as Stage 4a — use `codex exec` (a custom prompt cannot be combined with
-`codex review --base`), run from inside the PR worktree ({{WORKTREE}}):
+`codex review --base`), run from inside the PR worktree ({{WORKTREE}}), with
+stdin closed (`< /dev/null`, as in Stage 4a — otherwise codex exec hangs on a
+stdin read in the non-interactive shell):
 ```bash
-codex exec --output-last-message /tmp/codex-8-{{PR_NUMBER}}.txt "Final merge-safety review of PR #{{PR_NUMBER}}. Review ONLY the changes this branch introduces over {{BASE_BRANCH}}: first run  git diff {{BASE_BRANCH}}...HEAD . Is this PR safe to merge? Check ONLY for critical issues: data loss, money-path bugs (double-charge/double-record, non-conserving failure paths), schema breakage, security, and in-process cross-request state on the serverless surface (INV-028). End your output with a line containing exactly APPROVE or REJECT, with reason."
+codex exec --output-last-message /tmp/codex-8-{{PR_NUMBER}}.txt "Final merge-safety review of PR #{{PR_NUMBER}}. Review ONLY the changes this branch introduces over {{BASE_BRANCH}}: first run  git diff {{BASE_BRANCH}}...HEAD . Is this PR safe to merge? Check ONLY for critical issues: data loss, money-path bugs (double-charge/double-record, non-conserving failure paths), schema breakage, security, and in-process cross-request state on the serverless surface (INV-028). End your output with a line containing exactly APPROVE or REJECT, with reason." < /dev/null
 ```
 Read the verdict from `/tmp/codex-8-{{PR_NUMBER}}.txt` (the last APPROVE/REJECT line).
 Timeout: 300s. Codex is a DIRECTIVE-named merge gate: if it is unavailable here,

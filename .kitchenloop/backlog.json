@@ -59,10 +59,10 @@
     "body": "CRITICAL money-path defect from the PR #13 review (INV-028). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; the code is NOT on main). Check out that branch, apply the fix, re-verify, and update PR #13 -- do NOT branch from main. Best fixed together with the sibling seed-0005 review tickets in ONE rework pass + one re-review.\n\nPROBLEM: bookItinerary (packages/api/src/services/booking.ts:300) calls port.book(quoteRow.supplierQuoteId) and depends on the sandbox engine's in-process `quotes` Map (packages/supply-adapter/src/sandbox/engine.ts:76), which is populated only during the earlier QUOTE request and never re-established on book (verifiedSupplyCatalog runs only in the quote flow; register() repopulates offers, not quotes). Under INV-028 (apps/web is stateless Vercel serverless) quote and book are SEPARATE invocations -> the map is empty at book -> every component returns unknown_quote -> every booking returns failed. The compose/L3 green evidence cannot detect this: the compose stack is a single long-lived process and the L3 happy path shares one container instance. Same in-process cross-request state class that was reverted in PR #10, now on the money path.\n\nFIX (ARCHITECTURAL -> route through Spec Kit; update specs/005-budget-quote-book plan): make the supplier-hold handshake serverless-correct -- persist/reconstruct it outside process memory (e.g. the sandbox engine rehydrates its quotes from the persisted booking_quote rows on book), OR re-establish the hold on the book invocation with price+expiry reconciliation. Add an L3 test that books a hold from a FRESH container instance WITHOUT re-quoting and asserts success -- the exact Vercel quote->book sequence the current suite omits (COVERAGE gap the reviewers flagged).",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-08T00:00:00Z",
-    "pr_url": "",
-    "notes": "Filed from PR #13 review (pr-auditor caught it; codex missed it; operator verified against engine.ts + booking.ts). Depends on: seed-0005 branch."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/13",
+    "notes": "Filed from PR #13 review (pr-auditor caught it; codex missed it; operator verified against engine.ts + booking.ts). Depends on: seed-0005 branch.\nKitchen Loop iteration 3 execute: fixed in one rework pass with seed-0005b/c on PR #13 branch (commits fe10035 + 409b4a1). INV-028 hold re-establishment (research D11) + fresh-container L3 test; live restart-repro witnessed BOOK_CONFIRMED 3/3 after docker compose restart web. Gates: vitest 193/193 in-image (9 L3 vs real Postgres), eslint/typecheck/depcruise clean, smoke 13/13, e2e 5/5, log scan clean. UAT PASS (7/7 steps, pinned worktree 409b4a1, integrity clean)."
   },
   {
     "id": "seed-0005b",
@@ -70,10 +70,10 @@
     "body": "BLOCKING money-path bug from the PR #13 review (INV-011 / FR-009). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; the code is NOT on main). Check out that branch, apply the fix, re-verify, and update PR #13 -- do NOT branch from main. Best fixed together with the sibling seed-0005 review tickets in ONE rework pass + one re-review.\n\nPROBLEM: duplicate quoteRowIds in one book request double-record money. bookInputSchema (booking.ts:42) does not dedupe quoteRowIds; bookItinerary iterates the raw input array (booking.ts:280); the consumed-guard reads a pre-transaction snapshot (booking.ts:286); the consume UPDATE has no `WHERE consumed_at IS NULL` predicate (booking.ts:366-369); and there is no unique constraint on booking_component.quoteRowId. A request [id, id] yields 2x booking_component + 2x markup_ledger + 2x PMF booking_confirmed (GBV inflation), violating FR-009 (a quote is consumed by at most one booking) and INV-011 conservation. The same root also permits concurrent double-consume.\n\nFIX (bug-sized -- direct fix + repro test): dedupe quoteRowIds on input; make consume atomic (UPDATE booking_quote SET consumed_at=now() WHERE id=? AND consumed_at IS NULL, and only record the component if it affected a row); add a migration for a UNIQUE constraint on booking_component.quoteRowId; add an L2/L3 repro test that books the same hold twice (duplicate input AND a second request) and asserts exactly one set of rows + conserved money.",
     "type": "bug",
     "priority": "critical",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-08T00:00:00Z",
-    "pr_url": "",
-    "notes": "Filed from PR #13 review (codex caught it as blocking via the duplicate-input vector; pr-auditor flagged the same root as a concurrency race). Depends on: seed-0005 branch."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/13",
+    "notes": "Filed from PR #13 review (codex caught it as blocking via the duplicate-input vector; pr-auditor flagged the same root as a concurrency race). Depends on: seed-0005 branch.\nKitchen Loop iteration 3 execute: fixed on PR #13 (fe10035) \u2014 input dedupe, atomic consume-first tx (WHERE consumed_at IS NULL), UNIQUE on booking_component.quote_row_id (verified live in Postgres); L3 repro tests: duplicate ids once + concurrent race one-winner. UAT card step 6 witnesses refuse-rebook live. Shares the seed-0005a rework pass."
   },
   {
     "id": "seed-0005c",
@@ -81,10 +81,21 @@
     "body": "MAJOR boundary violation from the PR #13 review (INV-010). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; the code is NOT on main). Check out that branch, apply the fix, re-verify, and update PR #13 -- do NOT branch from main. Best fixed together with the sibling seed-0005 review tickets in ONE rework pass + one re-review.\n\nPROBLEM: the ledger markup amount is computed inline in the API service -- booking.ts:363 `markupMinor: quoteRow.sellMinor - quoteRow.convertedNetMinor`. INV-010 requires markup/take-rate/revenue-share math to live ONLY in packages/domain as pure functions.\n\nFIX (bug-sized): add a pure domain function (e.g. markupOf(sell: Money, net: Money): Money that enforces same-currency + integer minor units) in packages/domain and use it in booking.ts; add an L1 test for it.",
     "type": "improvement",
     "priority": "high",
+    "state": "in_review",
+    "created": "2026-07-08T00:00:00Z",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/13",
+    "notes": "Filed from PR #13 review (codex caught it; pr-auditor rated INV-010 clean -- operator confirmed the inline subtraction is money math outside domain). Depends on: seed-0005 branch.\nKitchen Loop iteration 3 execute: fixed on PR #13 (fe10035) \u2014 pure domain markupOf(sell, net) in packages/domain/src/money.ts (5 L1 tests) replaces the inline ledger subtraction in booking.ts. Shares the seed-0005a rework pass."
+  },
+  {
+    "id": "seed-0005d",
+    "title": "seed-0005 fix: money-path conservation under concurrency \u2014 compensate lost-race supplier booking (FR-009/FR-011)",
+    "body": "BLOCKING money-path finding from the PR #13 FINAL tribunal (Codex Stage 4a, cross-model). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; code is NOT on main). Check out that branch, apply the fix, re-verify, update PR #13 -- do NOT branch from main. Best fixed in one pass with the existing PR #13 rework.\n\nPROBLEM: in bookItinerary (packages/api/src/services/booking.ts) the supplier port.book() is called (~L318/L359) BEFORE the atomic DB consume (~L394, UPDATE ... WHERE consumed_at IS NULL). Under two concurrent fresh-process invocations booking the SAME hold, BOTH re-establish + book at the supplier (each re-quotes to a DISTINCT fresh quoteId, so sandbox book-idempotency keyed on quoteId does NOT dedupe them), then only one wins the consume; the loser writes no DB rows and is retyped already_consumed (~L470). Result: a REAL supplier booking with NO booking_component/markup_ledger/PMF record -- an unrecorded external booking. Violates FR-009 ('consumed by at most one booking'), FR-011/INV-011 money-path conservation. Inert under the sandbox today (in-memory, expires) but a real integrity gap the instant a live adapter lands. Disclosed as research.md D11, but the 'defer to real adapter' framing is UNNECESSARY: the supply port ALREADY exposes cancel() (sandbox implements it), so compensation is buildable now.\n\nFIX (money-path, SDD -- L3 conservation test MANDATORY): make the money path conserve under concurrency. Preferred: RESERVE-THEN-BOOK -- atomically flip consumed_at to claim the hold BEFORE calling port.book so only the winner books; release the reservation on book failure. Alternative: keep book-first but COMPENSATE -- for every component retyped already_consumed after the tx, call port.cancel(supplierBookingId) so no unrecorded external booking survives. Add an L3 test: two concurrent fresh-process books of one hold => exactly one confirmed booking, one booking_component/ledger/PMF set, and the supplier ends with exactly one live booking (loser cancelled) -- full state conservation on the failure branch. Update research.md D11 to reflect the wired compensation.",
+    "type": "bug",
+    "priority": "critical",
     "state": "todo",
     "created": "2026-07-08T00:00:00Z",
-    "pr_url": "",
-    "notes": "Filed from PR #13 review (codex caught it; pr-auditor rated INV-010 clean -- operator confirmed the inline subtraction is money math outside domain). Depends on: seed-0005 branch."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/13",
+    "notes": "Filed from PR #13 final tribunal: Codex REQUEST_CHANGES (blocking, FR-009/FR-011 conservation); pr-auditor rated it non-blocking (disclosed D11 deferral). Operator adjudication 2026-07-08: BLOCKING on the money path -- the compensation primitive (port.cancel) already exists, so it is fixable now, not real-adapter-blocked; the repo mandates state-conservation on money-path FAILURE branches. Depends on: seed-0005 branch (kitchen/fix-seed-0005-budget-quote-book). Sits above seed-0006 (marketplace) which depends on a conserving booking money path."
   },
   {
     "id": "seed-0006",
@@ -197,5 +208,85 @@
     "pr_url": "https://github.com/disrupt-gt/tripforge/pull/8",
     "blockedBy": [],
     "notes": "Kitchen Loop iteration 2 execute (re-run): PR #8. app/favicon.ico (app-router metadata file) \u2014 neutral original programmatic glyph (no platform lettering, INV-020-safe chrome; no scraped imagery). Verified live: /favicon.ico 200 image/x-icon; console 0 errors on /, /workspace, /view (was 1 favicon 404 per load); e2e 5/5; vitest 51/51 + lint clean in-image; log scan clean. UAT PASS (5/5 steps, pinned worktree d829d49, integrity clean)."
+  },
+  {
+    "id": "spec-gap-0002",
+    "title": "spec-gap: item-level booking exclusivity \u2014 two live holds on the same itinerary item can double-book it",
+    "body": "SPEC-SILENT finding from PR #13 review (pr-auditor Stage 3, 2026-07-08). The spec/contract for 005-budget-quote-book are silent on ITEM-level booking exclusivity: contracts/planner-and-booking.md \u00a74 lists no item-uniqueness validation and spec.md's edge case covers only 'booking the same quote twice'.\n\nOBSERVED BEHAVIOR (packages/api/src/services/booking.ts): quoteItinerary mints fresh holds for every bookable item on every call (only already_booked items are skipped, ~booking.ts:165-167), and bookItinerary validates tenant/unconsumed/unexpired but never checks whether the ITEM already has a booking_component (~booking.ts:297-378). Two quote calls before booking \u2192 two live holds per item; booking both records two components + two ledger rows for the same itinerary item. The UNIQUE backstop is per quote row only (schema.ts booking_component.quote_row_id), and the quote-time alreadyBooked read (~booking.ts:148-155) is not serialized against a concurrent book commit.\n\nWHY SPEC-SILENT (not a code fix ticket): the code implements the spec as written; the spec does not define item exclusivity. Per the double-loop split, the SPEC evolves through SDD \u2014 amend spec.md/contracts \u00a74 to define item-level exclusivity semantics, then implement the guard.\n\nCANDIDATE GUARD (for the amendment to evaluate): partial unique index on booking_component (itinerary_id, item_id), or a book-time item-already-booked check inside the consume transaction.\n\nACCEPTANCE CRITERIA:\n  1. spec.md + contracts/planner-and-booking.md \u00a74 amended (via speckit flow, operator review per DIRECTIVE #3) to define item-level booking exclusivity.\n  2. Guard implemented per the amended spec with an L3 test: two live holds on the same item, book both \u2192 exactly one booking_component + one ledger row; loser gets a typed failure; state conserved.\n\nSource: PR #13 Stage 3 review (pr-auditor), finding MAJOR/SPEC-SILENT.",
+    "type": "improvement",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-08T00:00:00Z",
+    "blockedBy": []
+  },
+  {
+    "id": "seed-0014",
+    "title": "Stream the AI itinerary draft response (INV-028 streaming deferral from seed-0005 / T031)",
+    "body": "Deferred requirement follow-up from seed-0005 (PR #13). INV-028 says any request handler that calls the LLM tool loop MUST stream; workspace.itinerary.draft (packages/api/src/routers/itinerary.ts) is a non-streaming mutation that runs the bounded tool loop when ANTHROPIC_API_KEY is set (packages/llm/src/anthropic.ts toolRunner).\n\nThe deferral is RECORDED in spec 005: spec.md 'Streaming deferral (INV-028)' (~line 397) and plan.md Complexity Tracking row 1 \u2014 with the deterministic fake (local stack) and a bounded tool loop on the economy model the draft completes well within serverless timeouts, so streaming was deferred rather than built speculatively. tasks.md T031 promised this backlog ticket + a PR-body note; this ticket is that witness (filed 2026-07-08 during PR #13 merge prep, with the matching PR-body note).\n\nSCOPE: stream the draft response (or equivalent long-request handling per INV-028) for the live-LLM path. Revisit when the live-Haiku draft latency approaches serverless limits or when the drafting UI (seed-0008+) needs progressive rendering.\n\nACCEPTANCE CRITERIA:\n  1. The live-LLM draft path streams (or the INV-028 requirement is satisfied per its current wording in docs/architecture/system-architecture.md).\n  2. Keyless FakeLLM path behavior unchanged; existing draft-flow tests stay green.\n\nDepends on: seed-0005 (merged).",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-08T00:00:00Z",
+    "blockedBy": []
+  },
+  {
+    "id": "17835183621278801481",
+    "title": "quality-sweep: remove/inline 20 unused exports+types (knip baseline)",
+    "body": "[QS3-1, quality-sweep-iter-3.md finding 1] knip (in-image, witness .kitchenloop/logs/sweep-iter-3-knip.log) flags 10 unused exports + 10 unused exported types: packages/llm/src/tools/*.ts input/serialize pairs (8, used internally only \u2014 un-export), packages/api/src/services/booking.ts:44-87 six outcome/input types, planner.ts DraftOutcome + plannerToolDeps, itinerary-schema migrate.ts SCHEMA_VERSION, supply-adapter contract-suite.ts FakeClock + SupplyPortContractHarness, sandbox/engine.ts SandboxEngineOptions. Policy: typescript-clean-architecture Deletion discipline + premature-export rule (inline or delete; removal PR cites this finding). No behavior change; keep tests green. The 2 'unused files' knip lists are NOT dead code \u2014 see the QS3-6 knip-config ticket.",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-08T13:46:02Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17835183621278830132",
+    "title": "quality-sweep: generalize sandbox adapter quote/book/cancel delegation (4x clone)",
+    "body": "[QS3-2, quality-sweep-iter-3.md finding 2] jscpd (witness .kitchenloop/logs/sweep-iter-3-jscpd.log): packages/supply-adapter/src/sandbox/{hotel,transfer,activity,car-rental}.ts repeat the identical quote/book/cancel -> this.engine.* delegation (11 lines/92 tokens, 3 clone pairs vs transfer.ts). Per extraction thresholds (2+ callsites share a shape -> hoist the named concept): introduce one generic sandbox port adapter over SandboxEngine inside packages/supply-adapter/src/sandbox/, keeping per-port types via generics. Constitution V unaffected (all inside the adapter boundary). Pre-Write decision: generalize.",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-08T13:46:02Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17835183631278810084",
+    "title": "quality-sweep: generalize LLM tool offer-serialization boilerplate (4x clone)",
+    "body": "[QS3-3, quality-sweep-iter-3.md finding 3] jscpd: packages/llm/src/tools/{search-hotel-rates,search-activities,quote-transfer,quote-car-rental}.ts share the offer-serialization boilerplate (7 lines/74 tokens, 3 clone pairs vs search-hotel-rates.ts). Hoist one named serializer into the tools module (packages/llm/src/tools/). Overlaps QS3-1 (the copies are also unused exports) \u2014 land together or sequence QS3-1 first. Pre-Write decision: generalize.",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-08T13:46:03Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17835183631278805966",
+    "title": "quality-sweep: name the repeated FK/money column groups in db schema.ts",
+    "body": "[QS3-4, quality-sweep-iter-3.md finding 4] jscpd: packages/db/src/schema.ts repeats two column groups between booking tables (3 internal clone pairs, 86-126 tokens): the agencyId/itineraryId FK trio and the net/rate/sell money column group. Per extraction thresholds (value object: 2+ co-varying primitives travel together): name them as Drizzle column-builder helpers local to schema.ts. DB-internal refactor only \u2014 NOT a canonical itinerary schema change (no version bump, no operator gate); generated SQL must stay identical (verify with drizzle-kit diff or L3 smoke).",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-08T13:46:03Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17835183631278801849",
+    "title": "quality-sweep: split booking.ts (531 > 400 lines) \u2014 after PR #13 + seed-0005c",
+    "body": "[QS3-5, quality-sweep-iter-3.md finding 5] packages/api/src/services/booking.ts is 531 lines (> 400 file threshold; next largest file is 275). Proposed split along layer boundaries: quote flow / book flow / hold persistence. HARD SEQUENCING: only after PR #13 (seed-0005) merges and seed-0005c (markup math -> packages/domain, INV-010) lands \u2014 both reshape this file. Optional in-scope: add eslint max-lines-per-function (warn) so the function-length outlier scan is tooled for the next sweep (normal-pipeline lint addition, not a gate change).",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-08T13:46:03Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17835183631278830499",
+    "title": "quality-sweep: knip config hygiene \u2014 declare CLI entries + apply 7 config hints",
+    "body": "[QS3-6, quality-sweep-iter-3.md finding 6] knip flags 2 'unused files' that are really undeclared CLI entry points: tests/live/collect-evidence.mjs (spec 004 FR-012 evidence helper, invoked via node) and scenarios/incubating/agent-onboarding-live/scenario.mjs (iter-2 ideate scenario). Add both as knip entry patterns in knip.json so future sweeps' unused-files list means dead-and-deletable; also apply knip's 7 config hints (redundant per-package src/index.ts entry patterns). Config-only; knip.json is not a sealed gate file.",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-08T13:46:03Z",
+    "pr_url": ""
   }
 ]
