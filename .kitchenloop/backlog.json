@@ -26,9 +26,9 @@
     "body": "Feature-sized \u2014 route through Spec Kit.\n\nCreate the supplier-agnostic port family for the P0 bookable component map: hotels (bedbank net rates), activities/tickets, transfers, car rental \u2014 each with search, quote-with-markup, book, cancel \u2014 plus deterministic sandbox mock implementations for tests. Design the port contracts for the PRD 9.2/9.4 engineering realities: quote-then-book with price hold/expiry + re-quote, multi-currency, partial-failure handling in multi-supplier carts, and a merchant-of-record field per component. No supplier API shapes may leak outside an adapter. Caching split per INV-025/026: static supplier content (descriptions, amenities, media refs) is materialized into Postgres derived tables with semantic keys; live rates/quotes are NEVER cached beyond their hold/expiry. Real aggregator integrations (RateHawk/Viator/Mozio/CarTrawler class) come later behind the same ports.\n\nAcceptance: booking flows compile against the port interfaces only; L2 contract tests run against the sandbox mocks; swapping implementations requires zero changes outside the adapter package.\n\nDepends on: seed-0001.",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-03T00:00:00Z",
-    "pr_url": "",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/10",
     "notes": "Kitchen Loop backlog grooming (iteration 2): confirmed in todo. Score: 8/9 (U:3 A:2 I:3) \u2014 unblocks seed-0005; dependency seed-0001 merged (PR #1). Note: this ticket's earlier promotion write left backlog.json with unescaped newlines (invalid JSON); grooming repaired the file mechanically, no content changed."
   },
   {
@@ -47,8 +47,8 @@
     "title": "Budget allocator + quote-then-book flow (PRD 9.1/9.2/9.4) via SDD",
     "body": "Feature-sized \u2014 route through Spec Kit. The core AI differentiator per Constitution III.\n\nBudget allocator: split a total budget (hard cap or target) across categories (flights/transport 35-45%, accommodation 30-40%, activities 10-15%, local transport/transfers 5-10%, buffer 5-10% \u2014 tunable by trip type), pull live options per category via the supply ports, assemble to fit, re-balance when a category runs over. In P0 the flights/transport category is allocated as a reserve/manual estimate only \u2014 there is no live flight lookup (no flights supply port; deep-link flights are P2 per INV-022), so treat it as the budget anchor, not a profit line. Output: itinerary (canonical schema) with visible per-category and per-day budget breakdown.\n\nQuote-then-book: price holds with expiry, re-quote on expiry, transparent currency conversion, multi-supplier cart with partial-failure handling (one component fails, others hold).\n\nAI wiring (INV-013): planner drafting through LLMPort via the official Anthropic SDK, ALL calls on claude-haiku-4-5 (no Opus \u2014 operator decision). Claude tools defined in code under packages/llm/src/tools/ as typed zod definitions (betaZodTool), one file per tool, wrapping the supply ports: search_hotel_rates, search_activities, quote_transfer, quote_car_rental. The SDK tool runner drives the lookup loop; structured outputs (messages.parse + zod against the canonical itinerary schema) guarantee schema-conformant plans. Do NOT send the effort parameter (unsupported on Haiku). Deterministic LLMPort fakes in tests.\n\nAcceptance: allocator is a pure domain function (exhaustively tested, integer minor units); plan->book conversion events emitted (PMF metric); L3 test walks describe-trip -> allocated plan -> quote -> book against sandbox mocks with state-delta assertions.\n\nDepends on: seed-0001, seed-0002, seed-0003, seed-0004.",
     "type": "feature",
-    "priority": "high",
-    "state": "backlog",
+    "priority": "critical",
+    "state": "todo",
     "created": "2026-07-03T00:00:00Z",
     "pr_url": ""
   },
