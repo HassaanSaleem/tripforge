@@ -48,9 +48,43 @@
     "body": "Feature-sized \u2014 route through Spec Kit. The core AI differentiator per Constitution III.\n\nBudget allocator: split a total budget (hard cap or target) across categories (flights/transport 35-45%, accommodation 30-40%, activities 10-15%, local transport/transfers 5-10%, buffer 5-10% \u2014 tunable by trip type), pull live options per category via the supply ports, assemble to fit, re-balance when a category runs over. In P0 the flights/transport category is allocated as a reserve/manual estimate only \u2014 there is no live flight lookup (no flights supply port; deep-link flights are P2 per INV-022), so treat it as the budget anchor, not a profit line. Output: itinerary (canonical schema) with visible per-category and per-day budget breakdown.\n\nQuote-then-book: price holds with expiry, re-quote on expiry, transparent currency conversion, multi-supplier cart with partial-failure handling (one component fails, others hold).\n\nAI wiring (INV-013): planner drafting through LLMPort via the official Anthropic SDK, ALL calls on claude-haiku-4-5 (no Opus \u2014 operator decision). Claude tools defined in code under packages/llm/src/tools/ as typed zod definitions (betaZodTool), one file per tool, wrapping the supply ports: search_hotel_rates, search_activities, quote_transfer, quote_car_rental. The SDK tool runner drives the lookup loop; structured outputs (messages.parse + zod against the canonical itinerary schema) guarantee schema-conformant plans. Do NOT send the effort parameter (unsupported on Haiku). Deterministic LLMPort fakes in tests.\n\nAcceptance: allocator is a pure domain function (exhaustively tested, integer minor units); plan->book conversion events emitted (PMF metric); L3 test walks describe-trip -> allocated plan -> quote -> book against sandbox mocks with state-delta assertions.\n\nDepends on: seed-0001, seed-0002, seed-0003, seed-0004.",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-03T00:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/13",
+    "notes": "Built + pushed by Kitchen Loop execute (b8aebf5; 185 tests green incl 6 L3 money-path vs real Postgres, live-verified). Execute then crashed on a Claude API 500 BEFORE opening the PR; operator's agent opened PR #13 (DRAFT). Two-model review (pr-auditor + codex) + operator verification found 3 money-path issues -> REQUEST_CHANGES (full write-up in the PR #13 comment). BLOCKED pending seed-0005a (INV-028 critical, SDD rework), seed-0005b (duplicate-quoteRowId double-record, blocking), seed-0005c (INV-010 markup math -> domain). NOT merged."
+  },
+  {
+    "id": "seed-0005a",
+    "title": "seed-0005 fix: INV-028 -- booking must not rely on in-process supplier-quote state (serverless-correct hold)",
+    "body": "CRITICAL money-path defect from the PR #13 review (INV-028). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; the code is NOT on main). Check out that branch, apply the fix, re-verify, and update PR #13 -- do NOT branch from main. Best fixed together with the sibling seed-0005 review tickets in ONE rework pass + one re-review.\n\nPROBLEM: bookItinerary (packages/api/src/services/booking.ts:300) calls port.book(quoteRow.supplierQuoteId) and depends on the sandbox engine's in-process `quotes` Map (packages/supply-adapter/src/sandbox/engine.ts:76), which is populated only during the earlier QUOTE request and never re-established on book (verifiedSupplyCatalog runs only in the quote flow; register() repopulates offers, not quotes). Under INV-028 (apps/web is stateless Vercel serverless) quote and book are SEPARATE invocations -> the map is empty at book -> every component returns unknown_quote -> every booking returns failed. The compose/L3 green evidence cannot detect this: the compose stack is a single long-lived process and the L3 happy path shares one container instance. Same in-process cross-request state class that was reverted in PR #10, now on the money path.\n\nFIX (ARCHITECTURAL -> route through Spec Kit; update specs/005-budget-quote-book plan): make the supplier-hold handshake serverless-correct -- persist/reconstruct it outside process memory (e.g. the sandbox engine rehydrates its quotes from the persisted booking_quote rows on book), OR re-establish the hold on the book invocation with price+expiry reconciliation. Add an L3 test that books a hold from a FRESH container instance WITHOUT re-quoting and asserts success -- the exact Vercel quote->book sequence the current suite omits (COVERAGE gap the reviewers flagged).",
+    "type": "feature",
+    "priority": "critical",
+    "state": "todo",
+    "created": "2026-07-08T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed from PR #13 review (pr-auditor caught it; codex missed it; operator verified against engine.ts + booking.ts). Depends on: seed-0005 branch."
+  },
+  {
+    "id": "seed-0005b",
+    "title": "seed-0005 fix: duplicate quoteRowIds double-record money (atomic consume + unique constraint)",
+    "body": "BLOCKING money-path bug from the PR #13 review (INV-011 / FR-009). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; the code is NOT on main). Check out that branch, apply the fix, re-verify, and update PR #13 -- do NOT branch from main. Best fixed together with the sibling seed-0005 review tickets in ONE rework pass + one re-review.\n\nPROBLEM: duplicate quoteRowIds in one book request double-record money. bookInputSchema (booking.ts:42) does not dedupe quoteRowIds; bookItinerary iterates the raw input array (booking.ts:280); the consumed-guard reads a pre-transaction snapshot (booking.ts:286); the consume UPDATE has no `WHERE consumed_at IS NULL` predicate (booking.ts:366-369); and there is no unique constraint on booking_component.quoteRowId. A request [id, id] yields 2x booking_component + 2x markup_ledger + 2x PMF booking_confirmed (GBV inflation), violating FR-009 (a quote is consumed by at most one booking) and INV-011 conservation. The same root also permits concurrent double-consume.\n\nFIX (bug-sized -- direct fix + repro test): dedupe quoteRowIds on input; make consume atomic (UPDATE booking_quote SET consumed_at=now() WHERE id=? AND consumed_at IS NULL, and only record the component if it affected a row); add a migration for a UNIQUE constraint on booking_component.quoteRowId; add an L2/L3 repro test that books the same hold twice (duplicate input AND a second request) and asserts exactly one set of rows + conserved money.",
+    "type": "bug",
+    "priority": "critical",
+    "state": "todo",
+    "created": "2026-07-08T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed from PR #13 review (codex caught it as blocking via the duplicate-input vector; pr-auditor flagged the same root as a concurrency race). Depends on: seed-0005 branch."
+  },
+  {
+    "id": "seed-0005c",
+    "title": "seed-0005 fix: move ledger markup math (sell - net) into packages/domain (INV-010)",
+    "body": "MAJOR boundary violation from the PR #13 review (INV-010). Fixes the seed-0005 build on branch kitchen/fix-seed-0005-budget-quote-book (PR #13, DRAFT -- NOT merged; the code is NOT on main). Check out that branch, apply the fix, re-verify, and update PR #13 -- do NOT branch from main. Best fixed together with the sibling seed-0005 review tickets in ONE rework pass + one re-review.\n\nPROBLEM: the ledger markup amount is computed inline in the API service -- booking.ts:363 `markupMinor: quoteRow.sellMinor - quoteRow.convertedNetMinor`. INV-010 requires markup/take-rate/revenue-share math to live ONLY in packages/domain as pure functions.\n\nFIX (bug-sized): add a pure domain function (e.g. markupOf(sell: Money, net: Money): Money that enforces same-currency + integer minor units) in packages/domain and use it in booking.ts; add an L1 test for it.",
+    "type": "improvement",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-08T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed from PR #13 review (codex caught it; pr-auditor rated INV-010 clean -- operator confirmed the inline subtraction is money math outside domain). Depends on: seed-0005 branch."
   },
   {
     "id": "seed-0006",
