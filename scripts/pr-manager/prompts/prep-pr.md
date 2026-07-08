@@ -86,7 +86,8 @@ read-only review covering:
 - Performance issues
 - Test coverage gaps
 - **Spec/architecture alignment** (see Stage 4a taxonomy): the reviewer MUST read
-  the feature's `specs/<NNN-feature>/spec.md` and `plan.md` from this branch and
+  this PR's feature `spec.md` and `plan.md` from this branch — resolve the real
+  directory with `git -C {{WORKTREE}} diff --name-only {{BASE_BRANCH}}...HEAD | grep -oE '^specs/[0-9A-Za-z._-]+' | sort -u | head -1` (do not assume a placeholder path) — and
   check the implementation against them, not just review the code in isolation.
 - **Required PR-body sections present** (INV-027, honesty gate). The PR body must
   contain:
@@ -111,13 +112,27 @@ Collect independent reviews from all available external reviewers. Each reviewer
 outputs `APPROVE` or `REQUEST_CHANGES` with specific feedback.
 
 ### 4a. Codex Review (primary external reviewer — spec/architecture/code alignment)
-Run from inside the PR worktree so the diff is against the PR branch:
+Run from inside the PR worktree so the diff is against the PR branch.
+
+**First resolve THIS PR's real feature spec directory — never pass codex the
+literal `specs/<NNN-feature>` placeholder, or it reviews blind to the spec (the
+weakest link in the alignment gate):**
+```bash
+SPEC_DIR=$(git -C {{WORKTREE}} diff --name-only {{BASE_BRANCH}}...HEAD \
+  | grep -oE '^specs/[0-9A-Za-z._-]+' | sort -u | head -1)
+```
+If `SPEC_DIR` is empty (a bug-fix PR that touches no `specs/` path), state that
+there is no feature spec and have codex review against the invariants +
+constitution only.
+
+Then run codex with the RESOLVED `$SPEC_DIR` interpolated by the shell, so codex
+receives CONCRETE file paths (not a placeholder):
 ```bash
 codex review --base {{BASE_BRANCH}} "Three-way ALIGNMENT review: verify that code, spec, and architecture agree for this feature PR.
 
 Artifacts to read from this branch before judging the diff:
-1. The feature spec: specs/<NNN-feature>/spec.md (requirements + acceptance criteria)
-2. The feature plan: specs/<NNN-feature>/plan.md (module boundaries, data model, contracts)
+1. The feature spec: ${SPEC_DIR}/spec.md (requirements + acceptance criteria)
+2. The feature plan: ${SPEC_DIR}/plan.md (module boundaries, data model, contracts)
 3. The system architecture: docs/architecture/system-architecture.md (numbered invariants INV-NNN)
 4. The constitution gates: .specify/memory/constitution.md and .kitchenloop/quality-bar.md ('The Bar')
 
@@ -145,6 +160,15 @@ mean the *code* is wrong → fix autonomously in this pipeline. SPEC-SILENT mean
 *spec* is wrong or incomplete → file a spec-amendment ticket (`improvement` type,
 titled `spec-gap: ...`) and do NOT block the merge on it. Code fixes are autonomous;
 spec changes go back through the SDD flow.
+
+**Deferral cross-check (before blocking on CODE-MISSING).** codex reviews only the
+diff + branch files — it does NOT see the PR description, so it cannot know a
+requirement was deliberately deferred. Before treating any codex `CODE-MISSING` as
+blocking, confirm the requirement was not recorded as out-of-scope/deferred in
+`$SPEC_DIR/plan.md` OR the PR body (`gh pr view {{PR_NUMBER}} --json body -q .body`).
+If a deferral is recorded there, it is NOT CODE-MISSING — reclassify it as
+SPEC-SILENT (non-blocking) so codex's blindness to the PR description cannot
+false-block a PR on already-agreed scope.
 
 ### 4b. Gemini Review (only if `reviewers.gemini.enabled: true` in kitchenloop.yaml)
 ```bash
