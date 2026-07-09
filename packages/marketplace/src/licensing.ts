@@ -84,6 +84,14 @@ export async function licenseListing(
         .limit(1);
       if (existing[0]) return { status: "already_licensed", licenseId: existing[0].id } as const;
 
+      // Both sides vetted at v0 (spec 006 FR-002, edge case "Both sides
+      // vetted"): the SELLER's vetting is re-checked here, inside the
+      // transaction, so an active listing stops being licensable the moment
+      // the seller's vetting is revoked — not just at listing time.
+      if (!(await isVetted(tx, listing.sellerAgencyId))) {
+        return { status: "not_vetted" } as const;
+      }
+
       const sources = await tx.select().from(itineraryTable).where(eq(itineraryTable.id, listing.itineraryId)).limit(1);
       const source = sources[0];
       if (!source) {

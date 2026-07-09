@@ -69,8 +69,9 @@ Outcomes:
 
 - `{ status: "licensed", licenseId, copyItineraryId, priceMinor,
     platformTakeMinor, sellerCreditMinor, currency }`
-- `{ status: "not_vetted" }` — caller's agency not vetted (FR-002; both sides
-  vetted at v0).
+- `{ status: "not_vetted" }` — caller's agency not vetted, or the listing's
+  SELLER agency no longer vetted at license time (FR-002; both sides vetted at
+  v0 — the seller side is re-checked inside the license transaction; seed-0006a).
 - `{ status: "own_listing" }` — caller is the seller (FR-012).
 - `{ status: "not_active" }` — listing deactivated (FR-007 edge; also the
   losing side of a deactivation race).

@@ -390,6 +390,46 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
   );
 
   it(
+    "US2 both-sides vetting: a de-vetted SELLER's active listing refuses licensing — zero delta (FR-002)",
+    async () => {
+      const seller = await makeAgency("Atlas DMC");
+      const reseller = await makeAgency("Nomad Collective");
+      await vet(seller.agencyId);
+      await vet(reseller.agencyId);
+      const itineraryId = await draftItinerary(seller);
+      const listed = await callerFor(seller).workspace.marketplace.createListing({ itineraryId, ...LISTING_INPUT });
+      expect(listed.status).toBe("listed");
+      if (listed.status !== "listed") return;
+
+      // The operator revokes the SELLER's vetting AFTER the listing went active.
+      await handle.db.delete(agencyVetting).where(eq(agencyVetting.agencyId, seller.agencyId));
+
+      const before = await tradeCounts({ seller: seller.agencyId, reseller: reseller.agencyId });
+      const refused = await callerFor(reseller).workspace.marketplace.licenseListing({
+        listingId: listed.listingId,
+      });
+      expect(refused.status).toBe("not_vetted");
+
+      // ZERO survivors: no license, ledger row, copy, or reseller PMF event —
+      // and no take-rate accrual for the de-vetted seller either.
+      expect(await tradeCounts({ seller: seller.agencyId, reseller: reseller.agencyId })).toEqual(before);
+      const sellerTake = await handle.db
+        .select({ n: count() })
+        .from(pmfEvent)
+        .where(and(eq(pmfEvent.agencyId, seller.agencyId), eq(pmfEvent.type, "take_rate_accrued")));
+      expect(Number(sellerTake[0]?.n)).toBe(0);
+
+      // Falsifiability: restore the seller's vetting — the same license completes.
+      await vet(seller.agencyId);
+      const retry = await callerFor(reseller).workspace.marketplace.licenseListing({
+        listingId: listed.listingId,
+      });
+      expect(retry.status).toBe("licensed");
+    },
+    LONG,
+  );
+
+  it(
     "US3: only licensees rate; re-rating replaces; aggregates land in browse (FR-013)",
     async () => {
       const seller = await makeAgency("Atlas DMC");

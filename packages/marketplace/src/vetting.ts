@@ -4,7 +4,11 @@
 // only reads. Both sides of a marketplace transaction must pass at v0.
 import { agencyVetting, eq, type Db } from "@tripforge/db";
 
-export async function isVetted(db: Db, agencyId: string): Promise<boolean> {
+/** The caller's read capability — a Db or a Drizzle transaction handle, so the
+ * check can run INSIDE a money-path transaction (the PmfEventExecutor pattern). */
+type VettingReader = Pick<Db, "select">;
+
+export async function isVetted(db: VettingReader, agencyId: string): Promise<boolean> {
   const rows = await db
     .select({ agencyId: agencyVetting.agencyId })
     .from(agencyVetting)
