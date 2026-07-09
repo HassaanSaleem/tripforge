@@ -337,7 +337,7 @@
   {
     "id": "seed-0009b",
     "title": "Booking flow UI: quote -> review -> book, wired to booking tRPC (money path visible)",
-    "body": "DEMO SURFACE. From a rendered itinerary, add UI to QUOTE the bookable items (booking.quote), show sell prices + expiry, then BOOK (booking.book) and show confirmation. Surface the quote-then-book money path in the browser. Live Test: plan -> quote -> book end-to-end in a real browser with confirmed booking.",
+    "body": "DEMO SURFACE. From a rendered itinerary, add UI to QUOTE the bookable items (booking.quote), show sell prices + expiry, then BOOK (booking.book) and show confirmation. Surface the quote-then-book money path in the browser. Live Test: plan -> quote -> book end-to-end in a real browser with confirmed booking. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "type": "feature",
     "priority": "high",
     "state": "todo",
@@ -345,13 +345,14 @@
     "pr_url": "",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
-      "seed-0009a"
+      "seed-0009a",
+      "seed-0009s"
     ]
   },
   {
     "id": "seed-0009c",
     "title": "Client-view UI: render a shared itinerary with agency white-label branding",
-    "body": "DEMO SURFACE. Build the (client-view)/view page into a real read-only itinerary view (INV-020: agency brand only, no platform branding), rendering a booked/quoted itinerary for a shared link. Live Test: open a shared itinerary view in a browser.",
+    "body": "DEMO SURFACE. Build the (client-view)/view page into a real read-only itinerary view (INV-020: agency brand only, no platform branding), rendering a booked/quoted itinerary for a shared link. Live Test: open a shared itinerary view in a browser. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "type": "feature",
     "priority": "medium",
     "state": "todo",
@@ -359,13 +360,14 @@
     "pr_url": "",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
-      "seed-0009a"
+      "seed-0009a",
+      "seed-0009s"
     ]
   },
   {
     "id": "seed-0009d",
     "title": "Marketplace UI: browse listings, list an itinerary, license a listing, wired to marketplace tRPC",
-    "body": "DEMO SURFACE. Build a marketplace page: browse public listings, list a finished itinerary with terms, and license another agency's listing (receiving a white-label copy). Wire to the marketplace tRPC. Live Test: list + license flow in a real browser.",
+    "body": "DEMO SURFACE. Build a marketplace page: browse public listings, list a finished itinerary with terms, and license another agency's listing (receiving a white-label copy). Wire to the marketplace tRPC. Live Test: list + license flow in a real browser. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "type": "feature",
     "priority": "medium",
     "state": "todo",
@@ -373,7 +375,8 @@
     "pr_url": "",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
-      "seed-0008"
+      "seed-0008",
+      "seed-0009s"
     ]
   },
   {
@@ -384,10 +387,11 @@
     "created": "2026-07-09T00:00:00Z",
     "pr_url": "",
     "blockedBy": [
-      "seed-0008"
+      "seed-0008",
+      "seed-0009s"
     ],
     "title": "Workspace UI: AI itinerary planner \u2014 prompt to a rendered draft itinerary, wired to planner tRPC",
-    "body": "DEMO SURFACE (core). Build apps/web/app/(workspace)/workspace into a real planner: an input for trip description + budget, call the planner/itinerary tRPC, and RENDER the returned canonical itinerary (days/items) in the browser. Replace the sign-in stub with the actual planner experience for authenticated agents. Live Test: a real browser journey plans a trip and sees the itinerary rendered.",
+    "body": "DEMO SURFACE (core). Build apps/web/app/(workspace)/workspace into a real planner: an input for trip description + budget, call the planner/itinerary tRPC, and RENDER the returned canonical itinerary (days/items) in the browser. Replace the sign-in stub with the actual planner experience for authenticated agents. Live Test: a real browser journey plans a trip and sees the itinerary rendered. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "notes": "Operator demo-path ticket. Core UI surface: sign-in (seed-0008) -> THIS -> booking UI (seed-0009b) -> view/marketplace.\nKitchen Loop iteration 3 execute (2026-07-09): picked as top ticket (high feature, blocker seed-0008 merged PR #21); case (a) solo feature cycle via SDD. | Re-run 2026-07-09: prior execute built it fully (planner.tsx + 20 unit tests + e2e + SDD 008) but stalled on slow Docker verify-build before Live-Test/PR; work preserved on branch rescue/seed-0009a-planner-ui. Rebuild with cached Docker layers. | PAUSED on API CREDITS (2026-07-09): both build attempts completed the planner UI (277/277 unit tests, form renders in workspace) but the execute agent hit \"Credit balance is too low\" (loop uses ANTHROPIC_API_KEY) mid Live-Test-fix. Two real issues the execute DIAGNOSED and was fixing: (1) planner submits a trip but the itinerary DRAFT SERVICE drops items downstream (the fake proposes items for any destination, so the drop is in the verification/assembly stage \u2014 empty itinerary rendered); (2) e2e sign-up returns 403 (Better Auth origin check) \u2014 smoke uses an HTTP session that avoids it; the browser QA journey needs the same. Work preserved on branch rescue/seed-0009a-planner-ui. On resume (credits added): re-run; the loop continues fixing (1)+(2) then Live-Tests + opens the PR."
   },
   {
@@ -399,5 +403,19 @@
     "state": "backlog",
     "created": "2026-07-09T08:26:35Z",
     "pr_url": ""
+  },
+  {
+    "id": "seed-0009s",
+    "type": "feature",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "blockedBy": [
+      "seed-0008"
+    ],
+    "title": "Product design system + polished UI shell (replace bare default-HTML pages across the app)",
+    "body": "DEMO QUALITY. Today's surfaces (landing, /sign-in, /sign-up, /workspace) render as UNSTYLED default HTML \u2014 white pages, no design. Establish a cohesive PRODUCT visual identity and apply it app-wide so the MVP looks like a real product for the demo: (1) a design token layer (typography scale + inlined/real webfonts, color palette, spacing, radii, shadows) and a shared UI kit (Button, Input/Field, Card, Nav/Header, PageShell, Toast/Alert, empty/loading states); (2) a branded app shell \u2014 top nav with the TripForge brand, the signed-in agent's name\u00b7agency\u00b7role, and sign-out; (3) restyle landing + auth forms + workspace to use it. Every SUBSEQUENT surface (planner/booking/view/marketplace) MUST build on this kit \u2014 no more bare pages. Live Test: the polished shell renders in a real browser across the flow. Keep all existing behavior/tests green (this is presentation, not logic).",
+    "notes": "Filed 2026-07-09 from operator feedback: 'build the entire MVP then demo with polished UI not just blank white pages.' This is the FACE of the demo. The functional surfaces (seed-0009a planner, 0009b booking, 0009c view, 0009d marketplace) must consume this design system."
   }
 ]
