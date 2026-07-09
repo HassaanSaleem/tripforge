@@ -17,6 +17,8 @@ Rules for the loop:
 | CI-IMG-BUILD | `add ci image build` | Should CI build the compose image so hermetic-build breaks gate merges? | Yes — add a docker-build job to `.github/workflows/ci.yml` | 2026-07-07 | Nothing today (gap: BUG-1-class breaks stay invisible to `ci_pass`) |
 | ENV-PNPM-DENY | `pnpm perms fixed` | Why did the loop harness deny ALL `pnpm` commands in the iter-2 ideate session despite the `.claude/settings.json` allowlist? | Verify/repair the harness permission wiring so allowlisted `pnpm install`/`pnpm test`/`pnpm run lint` run inside loop sessions | 2026-07-07 | In-session L1/L2 + lint verification during ideate/execute (regress runs in its own runtime and is unaffected) |
 | UAT-PR14 | `waive uat pr14` | Waive the UAT-card gate for PR #14 (spec-gap-0001: docs-only sync of data-model.md to resolved D-006)? | Yes — waive: markdown-only spec amendment, no product behavior, no browser journey applies; every other merge gate is green | 2026-07-09 | Merging PR #14 (spec-gap-0001 stays open) |
+| ✅ PRM-SEAL-17 (resolved) | *(done)* | PR #17 changes a sealed loop gate (`.kitchenloop/uat-cards/seed-0006.md`); the loop may not merge it. | RESOLVED 2026-07-09 — operator reviewed by hand: legitimate NEW UAT card (not an edit of an evaluated card); money path codex-gated (INV-010/011/012, conservation, concurrency, RBAC, INV-028 all PASS); merged #17. Non-money follow-ups filed: seed-0006a (seller-vetting, high), seed-0006b (PMF payload, low). | 2026-07-09 | done |
+| ✅ UAT-PR18 (resolved) | *(done)* | Waive the UAT-card gate for PR #18 (QS3-1: remove/inline 20 knip-flagged unused exports — export-surface-only, no behavior change)? | RESOLVED 2026-07-09 — waived (export-surface-only, no runtime path, no browser journey applies); merged #18. | 2026-07-09 | done |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -126,3 +128,22 @@ language remaining in sibling spec.md/plan.md (non-blocking, pr-auditor finding)
        execute-phase INV-027 live gate (same --wait path).
      REG-L3-MSG `soften l3 msg` — smoke.mjs prints `FAIL: app not reachable at <url>`
        instead of a raw fetch stack dump on connection failure (commit 5d2246a). -->
+
+**PRM-SEAL-17 context:** The mechanical sealed-path guard matched `.kitchenloop/uat-cards/seed-0006.md` in PR #17's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside.
+
+**UAT-PR18** — The pr-manager pipeline for PR #18 (`refactor(quality): remove/inline
+20 knip-flagged unused exports`, quality-sweep ticket QS3-1, backlog id
+17835183621278801481) passed every gate except the UAT card, which fails closed:
+no `UAT Gate Results` comment exists on the PR (non-UI export-surface refactor —
+no browser journey was run) and no per-PR waiver row was on the desk. Green
+witnesses: pr-auditor APPROVE after two fixed criticals (four stray Playwright
+session artifacts — `.playwright-mcp/*.yml` + `step-14/15.png` — stripped from the
+branch in 15d0498; missing Spec Alignment PR-body section added); codex Stage-4a
+alignment APPROVE (no findings); codex final merge-safety APPROVE; CI
+lint-and-test green on head 15d0498; branch up to date with main; zero file
+deletions; no `uat-failed` label. Precedent: UAT-PR4/UAT-PR5/UAT-PR14 waivers for
+non-UI PRs. Recommendation: waive (same class — nothing for a browser journey to
+exercise). Blocked until answered: merging PR #18 (QS3-1 stays open). Advisory
+(non-blocking, pr-auditor): the cited `quality-sweep-iter-3` report is not
+committed in-tree (docs/internal/reports/ has only iterations 1-2) — a follow-up
+process-ticket candidate, not a change to this PR.
