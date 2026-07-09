@@ -35,6 +35,19 @@ const validTakeRateAccrued: PmfEvent = {
   currency: "EUR",
 };
 
+const validListingCreated: PmfEvent = {
+  type: "listing_created",
+  agencyId: "agency-1",
+  itineraryId: "itin-1",
+  actorUserId: "user-1",
+};
+
+const validListingRated: PmfEvent = {
+  type: "listing_rated",
+  agencyId: "agency-2",
+  itineraryId: "itin-1",
+};
+
 /** Stub executor capturing insert(table).values(row) calls. */
 function stubExecutor() {
   const calls: { table: unknown; row: unknown }[] = [];
@@ -49,10 +62,26 @@ function stubExecutor() {
 }
 
 describe("validatePmfEvent", () => {
-  it("accepts all three valid event types", () => {
+  it("accepts all five valid event types", () => {
     expect(validatePmfEvent(validTripCreated)).toBeNull();
     expect(validatePmfEvent(validBookingConfirmed)).toBeNull();
     expect(validatePmfEvent(validTakeRateAccrued)).toBeNull();
+    expect(validatePmfEvent(validListingCreated)).toBeNull();
+    expect(validatePmfEvent(validListingRated)).toBeNull();
+  });
+
+  // Marketplace types (spec 006 research D4) inherit the full matrix: they are
+  // itinerary-referenced and carry NO money and NO source.
+  it.each([
+    ["missing_itinerary", { ...validListingCreated, itineraryId: undefined }],
+    ["missing_itinerary", { ...validListingRated, itineraryId: "" }],
+    ["unexpected_money_fields", { ...validListingCreated, amountMinor: 100, currency: "USD" }],
+    ["unexpected_money_fields", { ...validListingRated, currency: "USD" }],
+    ["unexpected_source", { ...validListingCreated, source: "licensed" }],
+  ])("rejects marketplace events with reason %s", (reason, event) => {
+    const err = validatePmfEvent(event);
+    expect(err).toBeInstanceOf(PmfEventValidationError);
+    expect(err?.reason).toBe(reason);
   });
 
   // Every PmfEventValidationReason is reachable:

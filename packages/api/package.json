@@ -17,6 +17,7 @@
     "@tripforge/domain": "workspace:*",
     "@tripforge/itinerary-schema": "workspace:*",
     "@tripforge/llm": "workspace:*",
+    "@tripforge/marketplace": "workspace:*",
     "@tripforge/shared": "workspace:*",
     "@tripforge/supply-adapter": "workspace:*",
     "@trpc/server": "^11.0.0",

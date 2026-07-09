@@ -6,6 +6,7 @@
 // as `agencyId` (INV-004). Tenant-owned product tables (itineraries, listings,
 // ledgers) are added by later seeds and MUST carry `agencyId` referencing
 // `organization.id`.
+import { sql } from "drizzle-orm";
 import { pgTable, text, timestamp, boolean, uuid, bigint, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
@@ -266,6 +267,133 @@ export const markupLedger = pgTable("markup_ledger", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ─── Trade (spec 006: marketplace v0 — list / license / rate) ────────────────
+//
+// Money columns are integer minor units + explicit currency (INV-009); split
+// math is computed only by packages/domain (INV-010) and recorded here inside
+// the license transaction (INV-012). Tenancy (INV-004): listings/ledger/ratings
+// are owned by one agency; marketplace_license is deliberately TWO-SIDED
+// (seller + reseller read their own trades); browse is the one documented
+// cross-tenant read (spec 006 research D7 — active listings, public fields).
+
+// The who-may-list gate (spec 006 FR-001, D-0006.a): an agency is vetted for
+// marketplace supply/demand iff its row exists. Written ONLY by the platform
+// operator action (packages/db/scripts/vet-agency.mjs) — no product code path
+// inserts here; signing up never implies vetting (Constitution VI).
+export const agencyVetting = pgTable("agency_vetting", {
+  agencyId: text("agency_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  vettedAt: timestamp("vetted_at").notNull().defaultNow(),
+  vettedBy: text("vetted_by").notNull(),
+});
+
+export const marketplaceListing = pgTable(
+  "marketplace_listing",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sellerAgencyId: text("seller_agency_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    itineraryId: uuid("itinerary_id")
+      .notNull()
+      .references(() => itinerary.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    currency: text("currency").notNull(),
+    licenseTerms: text("license_terms").notNull(),
+    revenueShareBps: bigint("revenue_share_bps", { mode: "number" }).notNull(),
+    status: text("status").notNull(), // active | inactive
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    deactivatedAt: timestamp("deactivated_at"),
+  },
+  (table) => ({
+    // At most one ACTIVE listing per itinerary (spec 006 D9): partial unique
+    // index decides creation races even for callers that bypass the service.
+    activeItineraryIdx: uniqueIndex("marketplace_listing_active_itinerary_idx")
+      .on(table.itineraryId)
+      .where(sql`status = 'active'`),
+    sellerIdx: index("marketplace_listing_seller_idx").on(table.sellerAgencyId),
+  }),
+);
+
+// The completed trade. UNIQUE (listing_id, reseller_agency_id) is the
+// duplicate-license gate (FR-012) — concurrent duplicates race on the insert
+// and exactly one wins; the loser's transaction rolls back whole (INV-011).
+export const marketplaceLicense = pgTable(
+  "marketplace_license",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => marketplaceListing.id),
+    sellerAgencyId: text("seller_agency_id")
+      .notNull()
+      .references(() => organization.id),
+    resellerAgencyId: text("reseller_agency_id")
+      .notNull()
+      .references(() => organization.id),
+    copyItineraryId: uuid("copy_itinerary_id")
+      .notNull()
+      .references(() => itinerary.id),
+    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    currency: text("currency").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    listingResellerIdx: uniqueIndex("marketplace_license_listing_reseller_idx").on(
+      table.listingId,
+      table.resellerAgencyId,
+    ),
+    resellerIdx: index("marketplace_license_reseller_idx").on(table.resellerAgencyId),
+  }),
+);
+
+// The revenue-share split per license — exactly one row, written in the SAME
+// transaction as the license (INV-012). Row-local conservation identity:
+// price = platform_take + seller_credit EXACTLY (markup_ledger precedent).
+// Immutable — never updated or deleted by application code.
+export const revenueShareLedger = pgTable("revenue_share_ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  licenseId: uuid("license_id")
+    .notNull()
+    .unique()
+    .references(() => marketplaceLicense.id, { onDelete: "cascade" }),
+  sellerAgencyId: text("seller_agency_id")
+    .notNull()
+    .references(() => organization.id),
+  resellerAgencyId: text("reseller_agency_id")
+    .notNull()
+    .references(() => organization.id),
+  priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+  platformTakeMinor: bigint("platform_take_minor", { mode: "number" }).notNull(),
+  sellerCreditMinor: bigint("seller_credit_minor", { mode: "number" }).notNull(),
+  currency: text("currency").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Licensee-only ratings (FR-013): one per (listing, rater agency) — re-rating
+// upserts on this key so the count never inflates.
+export const listingRating = pgTable(
+  "listing_rating",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    listingId: uuid("listing_id")
+      .notNull()
+      .references(() => marketplaceListing.id, { onDelete: "cascade" }),
+    raterAgencyId: text("rater_agency_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    stars: bigint("stars", { mode: "number" }).notNull(), // 1..5, app-validated
+    comment: text("comment"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    listingRaterIdx: uniqueIndex("listing_rating_listing_rater_idx").on(table.listingId, table.raterAgencyId),
+  }),
+);
+
 export const schema = {
   user,
   session,
@@ -280,6 +408,11 @@ export const schema = {
   booking,
   bookingComponent,
   markupLedger,
+  agencyVetting,
+  marketplaceListing,
+  marketplaceLicense,
+  revenueShareLedger,
+  listingRating,
 };
 
 export type Schema = typeof schema;

@@ -15,6 +15,7 @@ COPY packages/db/package.json packages/db/package.json
 COPY packages/domain/package.json packages/domain/package.json
 COPY packages/itinerary-schema/package.json packages/itinerary-schema/package.json
 COPY packages/llm/package.json packages/llm/package.json
+COPY packages/marketplace/package.json packages/marketplace/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/supply-adapter/package.json packages/supply-adapter/package.json
 RUN pnpm install --frozen-lockfile

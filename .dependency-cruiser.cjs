@@ -60,6 +60,7 @@ module.exports = {
           // Framework entry points — entered by Next.js / tooling, not imported.
           "^apps/web/app/", // Next.js App Router pages/layouts/routes
           "\\.config\\.(js|cjs|mjs|ts)$", // next/vitest/playwright/drizzle configs
+          "^packages/db/scripts/", // operator/CLI actions — entered via node (compose migrate, vet-agency)
         ],
       },
       to: {},

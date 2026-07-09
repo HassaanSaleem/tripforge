@@ -7,6 +7,7 @@ import {
   splitByWeightsMinorUnits,
   applyMarkupBps,
   markupOf,
+  splitTakeRate,
   convertMoney,
   MoneyError,
 } from "../money.js";
@@ -211,5 +212,53 @@ describe("convertMoney — explicit integer-ratio conversion (INV-009)", () => {
     expect(() => convertMoney(money(100, "EUR"), { ...eurToUsd, denominator: -5 })).toThrow(MoneyError);
     expect(() => convertMoney(money(100, "EUR"), { ...eurToUsd, numerator: 1.5 })).toThrow(MoneyError);
     expect(() => convertMoney(money(-100, "EUR"), eurToUsd)).toThrow(MoneyError);
+  });
+});
+
+describe("splitTakeRate — marketplace license-fee split (spec 006 D5, SC-002)", () => {
+  it("splits a divisible price exactly", () => {
+    const { platformTake, sellerCredit } = splitTakeRate(money(10_000, "USD"), 1_000);
+    expect(platformTake).toEqual({ amountMinor: 1_000, currency: "USD" });
+    expect(sellerCredit).toEqual({ amountMinor: 9_000, currency: "USD" });
+  });
+  it("floors the PLATFORM take — sub-minor-unit remainder goes to the seller", () => {
+    // 999 × 10% = 99.9 → take 99, seller 900 (never take 100)
+    const { platformTake, sellerCredit } = splitTakeRate(money(999, "USD"), 1_000);
+    expect(platformTake.amountMinor).toBe(99);
+    expect(sellerCredit.amountMinor).toBe(900);
+  });
+  it("conserves price = take + credit across many (price, bps) combinations", () => {
+    for (const price of [0, 1, 7, 99, 100, 999, 12_345, 1_000_000, 987_654_321]) {
+      for (const bps of [0, 1, 250, 999, 1_000, 3_333, 9_999, 10_000]) {
+        const { platformTake, sellerCredit } = splitTakeRate(money(price, "EUR"), bps);
+        expect(platformTake.amountMinor + sellerCredit.amountMinor).toBe(price);
+        expect(Number.isInteger(platformTake.amountMinor)).toBe(true);
+        expect(platformTake.amountMinor).toBeGreaterThanOrEqual(0);
+        expect(platformTake.currency).toBe("EUR");
+        expect(sellerCredit.currency).toBe("EUR");
+      }
+    }
+  });
+  it("handles the bps extremes: 0 bps → all seller; 10000 bps → all platform", () => {
+    expect(splitTakeRate(money(555, "USD"), 0)).toEqual({
+      platformTake: { amountMinor: 0, currency: "USD" },
+      sellerCredit: { amountMinor: 555, currency: "USD" },
+    });
+    expect(splitTakeRate(money(555, "USD"), 10_000)).toEqual({
+      platformTake: { amountMinor: 555, currency: "USD" },
+      sellerCredit: { amountMinor: 0, currency: "USD" },
+    });
+  });
+  it("a zero price splits to zero/zero (free listings still record a split)", () => {
+    expect(splitTakeRate(money(0, "USD"), 1_000)).toEqual({
+      platformTake: { amountMinor: 0, currency: "USD" },
+      sellerCredit: { amountMinor: 0, currency: "USD" },
+    });
+  });
+  it("rejects out-of-range or non-integer bps and negative prices", () => {
+    expect(() => splitTakeRate(money(100, "USD"), -1)).toThrow(MoneyError);
+    expect(() => splitTakeRate(money(100, "USD"), 10_001)).toThrow(MoneyError);
+    expect(() => splitTakeRate(money(100, "USD"), 12.5)).toThrow(MoneyError);
+    expect(() => splitTakeRate({ amountMinor: -100, currency: "USD" }, 1_000)).toThrow(MoneyError);
   });
 });

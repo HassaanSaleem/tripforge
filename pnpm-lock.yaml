@@ -99,6 +99,9 @@ importers:
       '@tripforge/llm':
         specifier: workspace:*
         version: link:../llm
+      '@tripforge/marketplace':
+        specifier: workspace:*
+        version: link:../marketplace
       '@tripforge/shared':
         specifier: workspace:*
         version: link:../shared
@@ -176,6 +179,31 @@ importers:
       '@tripforge/supply-adapter':
         specifier: workspace:*
         version: link:../supply-adapter
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.5
+        version: 2.1.9(@types/node@20.19.43)
+
+  packages/marketplace:
+    dependencies:
+      '@tripforge/db':
+        specifier: workspace:*
+        version: link:../db
+      '@tripforge/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@tripforge/itinerary-schema':
+        specifier: workspace:*
+        version: link:../itinerary-schema
+      '@tripforge/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

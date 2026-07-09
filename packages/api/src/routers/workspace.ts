@@ -3,6 +3,7 @@
 import { router, agentProcedure } from "../trpc.js";
 import { itineraryRouter } from "./itinerary.js";
 import { bookingRouter } from "./booking.js";
+import { marketplaceRouter } from "./marketplace.js";
 
 export const workspaceRouter = router({
   /**
@@ -23,4 +24,7 @@ export const workspaceRouter = router({
 
   /** Book: quote-then-book money path (spec 005 US2/US3). */
   booking: bookingRouter,
+
+  /** Trade: list / license-white-label / rate (spec 006). */
+  marketplace: marketplaceRouter,
 });

@@ -171,3 +171,25 @@ export function splitEvenMinorUnits(total: Money, parts: number): Money[] {
   }
   return result;
 }
+
+/**
+ * The marketplace license-fee split (Constitution VI / INV-012 plumbing):
+ * platform take = floor(price × takeRateBps / 10000), seller credit = the
+ * remainder. Floor on the PLATFORM's side resolves sub-minor-unit remainders
+ * in the seller's favor — the platform never rounds its own revenue up
+ * (spec 006 research D5). Conservation holds by construction:
+ * `platformTake + sellerCredit === price`, asserted in tests (SC-002).
+ */
+export function splitTakeRate(price: Money, takeRateBps: number): { platformTake: Money; sellerCredit: Money } {
+  if (!Number.isInteger(takeRateBps) || takeRateBps < 0 || takeRateBps > 10_000) {
+    throw new MoneyError(`take rate bps must be an integer in 0..10000, got ${takeRateBps}`);
+  }
+  if (price.amountMinor < 0) {
+    throw new MoneyError(`license price must be non-negative, got ${price.amountMinor}`);
+  }
+  const takeMinor = Math.floor((price.amountMinor * takeRateBps) / 10_000);
+  return {
+    platformTake: { amountMinor: takeMinor, currency: price.currency },
+    sellerCredit: { amountMinor: price.amountMinor - takeMinor, currency: price.currency },
+  };
+}

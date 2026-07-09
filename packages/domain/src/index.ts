@@ -8,6 +8,7 @@ export {
   splitByWeightsMinorUnits,
   applyMarkupBps,
   markupOf,
+  splitTakeRate,
   convertMoney,
   MoneyError,
 } from "./money.js";

@@ -44,6 +44,23 @@ export type PmfEvent =
       currency: string;
       itineraryId?: string;
       actorUserId?: string;
+    }
+  // Marketplace liquidity observability (spec 006 research D4) — no-money
+  // types; the license transaction's money is measured by take_rate_accrued
+  // and the resold ratio by trip_created(source=licensed).
+  | {
+      type: "listing_created";
+      agencyId: string;
+      /** The LISTED (source) itinerary. */
+      itineraryId: string;
+      actorUserId?: string;
+    }
+  | {
+      type: "listing_rated";
+      agencyId: string;
+      /** The rated listing's source itinerary. */
+      itineraryId: string;
+      actorUserId?: string;
     };
 
 export type PmfEventValidationReason =
@@ -70,7 +87,13 @@ export class PmfEventValidationError extends Error {
   }
 }
 
-const PMF_EVENT_TYPES = ["trip_created", "booking_confirmed", "take_rate_accrued"] as const;
+const PMF_EVENT_TYPES = [
+  "trip_created",
+  "booking_confirmed",
+  "take_rate_accrued",
+  "listing_created",
+  "listing_rated",
+] as const;
 const MONETARY_TYPES: ReadonlySet<string> = new Set(["booking_confirmed", "take_rate_accrued"]);
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
@@ -91,7 +114,13 @@ export function validatePmfEvent(event: unknown): PmfEventValidationError | null
   if (!isNonEmptyString(e.agencyId)) {
     return new PmfEventValidationError("missing_agency", "agencyId is required (INV-004)");
   }
-  if ((type === "trip_created" || type === "booking_confirmed") && !isNonEmptyString(e.itineraryId)) {
+  if (
+    (type === "trip_created" ||
+      type === "booking_confirmed" ||
+      type === "listing_created" ||
+      type === "listing_rated") &&
+    !isNonEmptyString(e.itineraryId)
+  ) {
     return new PmfEventValidationError("missing_itinerary", `${type} requires itineraryId`);
   }
   if (MONETARY_TYPES.has(type)) {
