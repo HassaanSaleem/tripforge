@@ -138,7 +138,7 @@
     "title": "Sign-in / session-establishment UI for agent authentication",
     "body": "Feature-sized \u2014 route through Spec Kit.\n\nSource: docs/internal/reports/iteration-2-report.md [FEAT-2] + Friction Points.\n\nPROBLEM: Better Auth is wired via apps/web/app/api/auth/[...all]/route.ts, but there is no /sign-in page or any session-establishment surface, so no agent can authenticate through the browser. This blocks EVERY live authenticated agent journey and any live e2e that needs a real session (the trust-boundary specs can only assert the public/anonymous/negative side live until this lands). In-phase P0: the agent-side MVP requires agents to sign in.\n\nROOT CAUSE: only the Better Auth catch-all API handler is mounted; no UI route drives sign-in / session establishment.\n\nFILE POINTERS: apps/web/app/api/auth/[...all]/route.ts (existing handler); missing apps/web/app/sign-in (or route-group equivalent per INV-024); packages/api/src/trpc.ts (agentProcedure gate); INV-023/024.\n\nACCEPTANCE CRITERIA:\n  1. A /sign-in (+ session-establishment) surface lets an agent authenticate via Better Auth in the browser.\n  2. After sign-in, an agent-gated procedure/screen is reachable; an anonymous/traveler visitor still receives UNAUTHORIZED/FORBIDDEN (INV-023) and sees the membership prompt (INV-024).\n  3. A live Playwright journey signs in and reaches a workspace screen, run against the built compose image (INV-027), evidence archived.\n\nSEQUENCING: this is the enabler for live authenticated journeys and for the authenticated half of the trust-boundary e2e; it should land with the first authenticated agent surface (itinerary builder). No hard backlog blocker (auth backend is already wired by seed-0001).\n\nDepends on: seed-0001 (skeleton, merged).",
     "type": "feature",
-    "priority": "medium",
+    "priority": "high",
     "state": "todo",
     "created": "2026-07-06T00:00:00Z",
     "pr_url": "",
@@ -152,12 +152,12 @@
     "title": "Agency-admin surface consuming agencyAdminProcedure (member management + billing)",
     "body": "Feature-sized \u2014 route through Spec Kit. Low priority / forward-looking placeholder so the owner/admin tier is not orphaned.\n\nSource: docs/internal/reports/iteration-2-report.md [FEAT-1].\n\nPROBLEM: agencyAdminProcedure (owner/admin tier) exists in the tRPC middleware (packages/api/src/trpc.ts:49, exported packages/api/src/index.ts:20) but NO router consumes it. Member management and billing have no seed yet; markup-policy admin lands with seed-0005 (budget allocator + quote-then-book, markup control). The ladder contract is pinned by tests (agency-admin-rbac.test.ts, landed by seed-0007), so the eventual surface inherits a tested gate. Not a P0 gap today (per the report) \u2014 tracked so the tier gets a real consumer. In-phase, P0-adjacent, agent-side.\n\nFILE POINTERS: packages/api/src/trpc.ts:49 (agencyAdminProcedure); packages/api/src/index.ts:20; packages/api/src/__tests__/agency-admin-rbac.test.ts (pinned contract).\n\nACCEPTANCE CRITERIA:\n  1. At least one router/procedure consumes agencyAdminProcedure for a real admin op (member management or billing), covered by an L2 caller test that reuses the pinned ladder (owner/admin allowed; member/traveler FORBIDDEN; anon UNAUTHORIZED; INV-004 tenant scoping).\n  2. Markup-policy admin is explicitly tracked to seed-0005 rather than duplicated here.\n\nDepends on: seed-0007 (pins the agencyAdminProcedure contract). Related: seed-0005 (markup policy).",
     "type": "feature",
-    "priority": "low",
-    "state": "backlog",
+    "priority": "high",
+    "state": "todo",
     "created": "2026-07-06T00:00:00Z",
     "pr_url": "",
     "blockedBy": [
-      "seed-0007"
+      "seed-0008"
     ]
   },
   {
@@ -333,5 +333,47 @@
     "created": "2026-07-09T00:00:00Z",
     "pr_url": "",
     "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main."
+  },
+  {
+    "id": "seed-0009b",
+    "title": "Booking flow UI: quote -> review -> book, wired to booking tRPC (money path visible)",
+    "body": "DEMO SURFACE. From a rendered itinerary, add UI to QUOTE the bookable items (booking.quote), show sell prices + expiry, then BOOK (booking.book) and show confirmation. Surface the quote-then-book money path in the browser. Live Test: plan -> quote -> book end-to-end in a real browser with confirmed booking.",
+    "type": "feature",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
+    "blockedBy": [
+      "seed-0009"
+    ]
+  },
+  {
+    "id": "seed-0009c",
+    "title": "Client-view UI: render a shared itinerary with agency white-label branding",
+    "body": "DEMO SURFACE. Build the (client-view)/view page into a real read-only itinerary view (INV-020: agency brand only, no platform branding), rendering a booked/quoted itinerary for a shared link. Live Test: open a shared itinerary view in a browser.",
+    "type": "feature",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
+    "blockedBy": [
+      "seed-0009"
+    ]
+  },
+  {
+    "id": "seed-0009d",
+    "title": "Marketplace UI: browse listings, list an itinerary, license a listing, wired to marketplace tRPC",
+    "body": "DEMO SURFACE. Build a marketplace page: browse public listings, list a finished itinerary with terms, and license another agency's listing (receiving a white-label copy). Wire to the marketplace tRPC. Live Test: list + license flow in a real browser.",
+    "type": "feature",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
+    "blockedBy": [
+      "seed-0008"
+    ]
   }
 ]
