@@ -114,7 +114,7 @@
     "body": "Feature-sized \u2014 route through Spec Kit. The P0 Trade layer \u2014 Constitution I (\"the trade layer is the moat\") and Principle VI (revenue-share / client-ownership enforcement). This is the P0 marketplace pillar the other seeds do not build toward.\n\nBuild the minimal two-sided marketplace so the bootstrap sequence deterministically reaches the constitution P0 liquidity milestone (\"basic marketplace where vetted agents list and other agents license/white-label trips; ratings + revenue-share plumbing\", milestone: live liquidity in 1-2 destination niches):\n- List a finished canonical itinerary (seed-0002 schema) as a marketplace listing with license terms\n- License / white-label flow: a reseller agent licenses a listing and receives a rebranded copy whose provenance (original author, license terms, revenue-share obligations, rebrand lineage) travels with the itinerary (INV-002)\n- Ratings on agents / listings\n- Revenue-share plumbing recorded in the transaction path, in the same DB transaction as the license (INV-012); money math is pure integer-minor-unit in packages/domain\n\nLives in packages/marketplace (uses domain, itinerary-schema, ports; no supplier API shapes leak). Marketplace seller/reseller are relationships on a listing, not auth roles.\n\nAcceptance: L3 test walks list -> license/white-label -> rate against sandbox state, with revenue-share ledger state-delta and money-path conservation assertions on the failure branch (no orphan ledger rows).\n\nDepends on: seed-0001, seed-0002.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-03T00:00:00Z",
     "pr_url": "",
     "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 2). Score: 7/9 (U:2 A:2 I:3) \u2014 P0 trade-layer pillar (Constitution I/VI liquidity milestone); dependencies seed-0001 (PR #1) and seed-0002 (PR #4) both merged. Note: takes the todo queue to 4 features (cap 3); accepted because the backlog holds no bug/exploration tickets and the queue was below the 5-ticket floor.\nKitchen Loop triage (iteration 2 re-run, 2026-07-07): report finding IMP-1 \u2014 the live onboarding journey proved that anyone who signs up can create an agency and instantly become an agent-owner (Better Auth organization-plugin defaults; no email verification \u2014 sign-up returns a live session immediately, mailpit never involved). Acceptable as the only P0 onboarding path today, but agenthood = marketplace supply once this seed lands (Constitution VI: 'vetted agents list'). The seed-0006 spec MUST make the who-may-list decision explicit (vetting/eligibility gate on listing creation) rather than inherit the accidental default; surface it in the speckit spec for operator review. Source: docs/internal/reports/iteration-2-report.md."
@@ -311,5 +311,27 @@
     "pr_url": "",
     "blockedBy": [],
     "notes": "Filed by pr-manager pipeline for PR #14 per the Stage 4a routing rule (SPEC-SILENT -> spec-amendment ticket, non-blocking)."
+  },
+  {
+    "id": "seed-0006a",
+    "title": "seed-0006 fix: re-check SELLER vetting at license time (both-sides-vetted, spec 006)",
+    "body": "TRUST gap from PR #17 codex gate (Medium). licenseListing (packages/marketplace/src/licensing.ts) checks the RESELLER's current vetting (isVetted(db, actor.agencyId)) but NOT the seller's (listing.sellerAgencyId). Spec 006 requires BOTH sides vetted at v0; the vetting helper's own comment says both must pass. So an active listing stays licensable after the seller's vetting is removed/invalidated. FIX: inside the license transaction, also isVetted(db, listing.sellerAgencyId) and refuse (unvetted) if not. Add an L3 test: licensing a de-vetted seller's active listing is refused with zero delta (no license/ledger/copy/PMF rows).",
+    "type": "bug",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main."
+  },
+  {
+    "id": "seed-0006b",
+    "title": "seed-0006 fix: PMF listing-licensed event carries full split (FR-014)",
+    "body": "LOW drift from PR #17 codex gate. FR-014 asks the listing-licensed PMF instrumentation to carry license price + platform take + seller credit. Current code emits take_rate_accrued with only platform take + trip_created(source=licensed). Money state IS conserved (revenue_share_ledger has the full split) \u2014 this only aligns the PMF event payload to the spec wording. FIX: include price + platformTake + sellerCredit in the licensed PMF event.",
+    "type": "improvement",
+    "priority": "low",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main."
   }
 ]
