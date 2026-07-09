@@ -408,7 +408,7 @@
     "id": "seed-0009s",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-09T00:00:00Z",
     "pr_url": "",
     "blockedBy": [
@@ -416,6 +416,6 @@
     ],
     "title": "Premium travel-app UI: fancy design system + showpiece surfaces (theme bootstrapped in globals.css)",
     "body": "DEMO-QUALITY / SELL SURFACE. A coastal-travel theme foundation is bootstrapped in apps/web/app/globals.css (tokens, serif+sans type, base element styling, .tf-* kit) and imported in layout.tsx \u2014 so bare pages already inherit a designed look. Build the app UP from BASIC to FANCY/premium (the operator: \"UI will sell\"): a striking landing HERO (destination gradient, big serif headline, a floating itinerary card, tasteful motion), a premium app shell (branded header with agent name\u00b7agency\u00b7role, sign-out), rich itinerary cards (day-by-day with images/prices), a polished planner (prompt \u2192 animated draft \u2192 beautiful itinerary), booking flow, and marketplace cards. Reference-quality \u2014 think Airbnb/Hopper polish. Add real imagery/illustration (self-hosted or next/font + inline SVG; no broken external deps). Motion: hero reveal, card hover, draft streaming. Keep behavior/tests green. This is the FACE of the demo \u2014 spend design effort here.",
-    "notes": "Filed 2026-07-09 from operator feedback: 'build the entire MVP then demo with polished UI not just blank white pages.' This is the FACE of the demo. The functional surfaces (seed-0009a planner, 0009b booking, 0009c view, 0009d marketplace) must consume this design system."
+    "notes": "Filed 2026-07-09 from operator feedback: 'build the entire MVP then demo with polished UI not just blank white pages.' This is the FACE of the demo. The functional surfaces (seed-0009a planner, 0009b booking, 0009c view, 0009d marketplace) must consume this design system. | DONE by operator 2026-07-09: coastal travel THEME bootstrapped (apps/web/app/globals.css, commit b1f816a) + premium LANDING page live on main, browser-verified. The theme + landing are the PREMIUM BAR \u2014 build all surfaces on the globals.css theme/.tf-* kit to this look (see prototype artifact df28e75a). No bare pages."
   }
 ]
