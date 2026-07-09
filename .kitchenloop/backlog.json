@@ -340,10 +340,12 @@
     "body": "DEMO SURFACE. From a rendered itinerary, add UI to QUOTE the bookable items (booking.quote), show sell prices + expiry, then BOOK (booking.book) and show confirmation. Surface the quote-then-book money path in the browser. Live Test: plan -> quote -> book end-to-end in a real browser with confirmed booking. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-09T00:00:00Z",
-    "pr_url": "",
-    "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
+    "merged": "2026-07-09T18:30:00Z",
+    "merge_commit": "849ca85b4",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/25",
+    "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.\nDONE via PR #25 (849ca85b4): quote->review->book money path visible in browser on the premium .tf-booking-* kit; FR-007 zero client money math (formatters only, exact server minor units); Live Test PASS, zero-context UAT 8/8, L3 smoke 33/33 (money conservation + race).",
     "blockedBy": [
       "seed-0009a",
       "seed-0009s"
