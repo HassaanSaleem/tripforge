@@ -105,7 +105,7 @@
     "priority": "low",
     "state": "done",
     "created": "2026-07-09T00:00:00Z",
-    "pr_url": "",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/19",
     "notes": "Filed from PR #13 final tribunal (Codex REQUEST_CHANGES, High VIOLATION FR-009). Codex CONFIRMED the seed-0005d concurrency fix (reserve-then-book) is resolved and all prior fixes (INV-028/dedupe/unique/markupOf) hold; this is the sole remaining blocker. Depends on: seed-0005 branch. Sits above seed-0006. | DOWNGRADED to low (operator rule 2026-07-09): real but low-impact edge (no money loss, price re-matched + supplier-honored, sandbox-only at P0, microsecond race). Not merge-blocking. PR #13 merged with seed-0005; fix this via a normal iteration branch off main."
   },
   {
@@ -139,13 +139,13 @@
     "body": "Feature-sized \u2014 route through Spec Kit.\n\nSource: docs/internal/reports/iteration-2-report.md [FEAT-2] + Friction Points.\n\nPROBLEM: Better Auth is wired via apps/web/app/api/auth/[...all]/route.ts, but there is no /sign-in page or any session-establishment surface, so no agent can authenticate through the browser. This blocks EVERY live authenticated agent journey and any live e2e that needs a real session (the trust-boundary specs can only assert the public/anonymous/negative side live until this lands). In-phase P0: the agent-side MVP requires agents to sign in.\n\nROOT CAUSE: only the Better Auth catch-all API handler is mounted; no UI route drives sign-in / session establishment.\n\nFILE POINTERS: apps/web/app/api/auth/[...all]/route.ts (existing handler); missing apps/web/app/sign-in (or route-group equivalent per INV-024); packages/api/src/trpc.ts (agentProcedure gate); INV-023/024.\n\nACCEPTANCE CRITERIA:\n  1. A /sign-in (+ session-establishment) surface lets an agent authenticate via Better Auth in the browser.\n  2. After sign-in, an agent-gated procedure/screen is reachable; an anonymous/traveler visitor still receives UNAUTHORIZED/FORBIDDEN (INV-023) and sees the membership prompt (INV-024).\n  3. A live Playwright journey signs in and reaches a workspace screen, run against the built compose image (INV-027), evidence archived.\n\nSEQUENCING: this is the enabler for live authenticated journeys and for the authenticated half of the trust-boundary e2e; it should land with the first authenticated agent surface (itinerary builder). No hard backlog blocker (auth backend is already wired by seed-0001).\n\nDepends on: seed-0001 (skeleton, merged).",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-06T00:00:00Z",
-    "pr_url": "",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/21",
     "blockedBy": [
       "seed-0001"
     ],
-    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 2). Score: 8/9 (U:2 A:3 I:3) \u2014 sign-in surface unblocks every live authenticated agent journey and the authenticated half of the trust-boundary e2e; auth backend already wired (dependency seed-0001 merged, PR #1).\nKitchen Loop triage (iteration 2 re-run, 2026-07-07): report finding IMP-2 \u2014 the live workspace greets an agent with raw IDs ('Signed in as agent uMOWV\u2026 \u00b7 agency WGwvq\u2026 \u00b7 role owner'). Fold into this seed: the workspace/session surface should show human names (user name, agency name) instead of raw IDs. Witnessed live in .kitchenloop/evidence/iter-2/ideate-agent-onboarding/03-workspace-agent.png. Source: docs/internal/reports/iteration-2-report.md."
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 2). Score: 8/9 (U:2 A:3 I:3) \u2014 sign-in surface unblocks every live authenticated agent journey and the authenticated half of the trust-boundary e2e; auth backend already wired (dependency seed-0001 merged, PR #1).\nKitchen Loop triage (iteration 2 re-run, 2026-07-07): report finding IMP-2 \u2014 the live workspace greets an agent with raw IDs ('Signed in as agent uMOWV\u2026 \u00b7 agency WGwvq\u2026 \u00b7 role owner'). Fold into this seed: the workspace/session surface should show human names (user name, agency name) instead of raw IDs. Witnessed live in .kitchenloop/evidence/iter-2/ideate-agent-onboarding/03-workspace-agent.png. Source: docs/internal/reports/iteration-2-report.md.\nKitchen Loop iteration 3 execute (2026-07-09): implemented via SDD (specs/007-agent-sign-in, Constitution Check PASS). PR #21 (b2627ef): /sign-in + /sign-up (self-serve account+agency, owner) + sign-out in the (workspace) group; Better Auth session-create hook auto-activates the primary agency (D1, INV-028-correct); workspace greeting shows human names (IMP-2 resolved). Gates: eslint/typecheck/depcruise clean, vitest 254/254 vs compose Postgres (4 new L3 membership tests), smoke green, e2e 9/9 (4 new sign-in journey specs), MCP QA journey 7 steps, log scan 1 documented-benign L3-race line. UAT PASS 7/7 (run 2, pinned worktree b2627ef, integrity clean; run 1 invalidated \u2014 shared-MCP-browser session contamination, disclosed on the PR)."
   },
   {
     "id": "seed-0009",
@@ -211,11 +211,11 @@
     "body": "Improvement \u2014 small.\n\nSource: docs/internal/reports/iteration-2-report.md [IMP-3] + Friction Points.\n\nPROBLEM: GET /favicon.ico returns 404 on every page load \u2014 the ONLY browser console error across the entire iteration-2 live QA journey. It pollutes every future Playwright/console/log-scan pass with a known-benign error, eroding the 'console is clean' signal the Live Test & Fix gate relies on.\n\nROOT CAUSE HYPOTHESIS: apps/web ships no favicon asset \u2014 there is no apps/web/public/ directory and no app/icon.(ico|png|svg) metadata file, so Next.js serves 404 for the browser's implicit /favicon.ico request.\n\nFILE POINTERS: apps/web/app/ (add app/icon.svg or app/favicon.ico per the Next.js app-router metadata-file convention); apps/web/public/ (does not exist; alternative placement).\n\nNOTE (INV-020 interaction): the favicon is platform chrome. A platform-branded favicon inherited by /view would be a milder cousin of seed-0011's title leak \u2014 prefer a neutral glyph, or scope it per route group alongside the seed-0011 metadata fix. Do NOT use scraped/AI-fabricated imagery (PRD non-goal); a simple original glyph is fine.\n\nREPRODUCTION: boot the stack, open any page with the devtools console open -> GET /favicon.ico 404.\n\nACCEPTANCE CRITERIA:\n  1. GET /favicon.ico (or the app-router icon route) returns 200 on every surface.\n  2. Browser console shows zero errors on landing, /workspace, and /view.\n  3. Live-verified against the built compose image (INV-027).\n\nPRIORITY SCORE: Severity 1 (cosmetic/console noise) + Frequency 3 (every page load) + Fix effort 3 (<1h) = 7/9 -> high by the triage formula (a quick win; must not displace seed-0010/seed-0011 in execute order).\n\nDepends on: seed-0001 (merged). Related: seed-0011 (route-group metadata scoping).",
     "type": "improvement",
     "priority": "high",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-07T00:00:00Z",
     "pr_url": "https://github.com/disrupt-gt/tripforge/pull/8",
     "blockedBy": [],
-    "notes": "Kitchen Loop iteration 2 execute (re-run): PR #8. app/favicon.ico (app-router metadata file) \u2014 neutral original programmatic glyph (no platform lettering, INV-020-safe chrome; no scraped imagery). Verified live: /favicon.ico 200 image/x-icon; console 0 errors on /, /workspace, /view (was 1 favicon 404 per load); e2e 5/5; vitest 51/51 + lint clean in-image; log scan clean. UAT PASS (5/5 steps, pinned worktree d829d49, integrity clean)."
+    "notes": "Kitchen Loop iteration 2 execute (re-run): PR #8. app/favicon.ico (app-router metadata file) \u2014 neutral original programmatic glyph (no platform lettering, INV-020-safe chrome; no scraped imagery). Verified live: /favicon.ico 200 image/x-icon; console 0 errors on /, /workspace, /view (was 1 favicon 404 per load); e2e 5/5; vitest 51/51 + lint clean in-image; log scan clean. UAT PASS (5/5 steps, pinned worktree d829d49, integrity clean). | Marked done by Kitchen Loop backlog grooming (iteration 3): PR #8 merged; in_review state was stale."
   },
   {
     "id": "spec-gap-0002",
@@ -243,9 +243,10 @@
     "body": "[QS3-1, quality-sweep-iter-3.md finding 1] knip (in-image, witness .kitchenloop/logs/sweep-iter-3-knip.log) flags 10 unused exports + 10 unused exported types: packages/llm/src/tools/*.ts input/serialize pairs (8, used internally only \u2014 un-export), packages/api/src/services/booking.ts:44-87 six outcome/input types, planner.ts DraftOutcome + plannerToolDeps, itinerary-schema migrate.ts SCHEMA_VERSION, supply-adapter contract-suite.ts FakeClock + SupplyPortContractHarness, sandbox/engine.ts SandboxEngineOptions. Policy: typescript-clean-architecture Deletion discipline + premature-export rule (inline or delete; removal PR cites this finding). No behavior change; keep tests green. The 2 'unused files' knip lists are NOT dead code \u2014 see the QS3-6 knip-config ticket.",
     "type": "improvement",
     "priority": "medium",
-    "state": "backlog",
+    "state": "done",
     "created": "2026-07-08T13:46:02Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/18",
+    "notes": "Marked done by Kitchen Loop backlog grooming (iteration 3): fix merged as PR #18 (kitchen/fix-qs3-1-unused-exports); backlog state was stale."
   },
   {
     "id": "17835183621278830132",
@@ -284,10 +285,10 @@
     "body": "[QS3-5, quality-sweep-iter-3.md finding 5] packages/api/src/services/booking.ts is 531 lines (> 400 file threshold; next largest file is 275). Proposed split along layer boundaries: quote flow / book flow / hold persistence. HARD SEQUENCING: only after PR #13 (seed-0005) merges and seed-0005c (markup math -> packages/domain, INV-010) lands \u2014 both reshape this file. Optional in-scope: add eslint max-lines-per-function (warn) so the function-length outlier scan is tooled for the next sweep (normal-pipeline lint addition, not a gate change).",
     "type": "improvement",
     "priority": "low",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-08T13:46:03Z",
     "pr_url": "",
-    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): UNBLOCKED \u2014 both sequencing dependencies merged (PR #13 seed-0005, seed-0005c markup math now in packages/domain). booking.ts grew 531 -> 711 lines meanwhile (seed-0005b/d/e + spec-gap-0002 claim-gate work). Recommend grooming bump low -> medium. Witness: wc -l in regress-iter-3 transcript."
+    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): UNBLOCKED \u2014 both sequencing dependencies merged (PR #13 seed-0005, seed-0005c markup math now in packages/domain). booking.ts grew 531 -> 711 lines meanwhile (seed-0005b/d/e + spec-gap-0002 claim-gate work). Recommend grooming bump low -> medium. Witness: wc -l in regress-iter-3 transcript. | Promoted to todo by Kitchen Loop backlog grooming (iteration 3). Score: 9/15 (U:2 A:4 I:3) \u2014 both sequencing deps merged (PR #13 seed-0005, seed-0005c); booking.ts now 711 lines on the money path. Regress recommended a low->medium priority bump; grooming leaves priority edits to triage/operator (state-only rule)."
   },
   {
     "id": "17835183631278830499",
@@ -319,7 +320,7 @@
     "priority": "high",
     "state": "done",
     "created": "2026-07-09T00:00:00Z",
-    "pr_url": "",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/20",
     "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main."
   },
   {
