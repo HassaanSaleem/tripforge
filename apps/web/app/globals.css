@@ -218,4 +218,36 @@ label > input, label > select, label > textarea {
 .tf-state--fits { background: var(--ok-tint); color: var(--ok); }
 .tf-state--overTarget { background: var(--warn-tint); color: var(--warn); }
 
+/* ---- booking flow (spec 009): markup control, quote review, confirmation ---- */
+.tf-booking { display: grid; gap: 14px; padding: 18px 20px; margin-top: 6px; }
+.tf-booking > p { margin: 0; }
+.tf-booking-controls { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.tf-booking-controls label { display: grid; gap: 6px; width: 140px; }
+.tf-booking-controls button { min-width: 190px; }
+
+.tf-quote-review { display: grid; gap: 14px; animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }
+.tf-quote-review > button { justify-self: start; min-width: 210px; }
+.tf-quote-table { width: 100%; border-collapse: collapse; font-size: 14.5px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+.tf-quote-table th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; text-align: left; }
+.tf-quote-table th, .tf-quote-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.tf-quote-table tbody tr:last-child td { border-bottom: none; }
+.tf-quote-table input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--sea); }
+.tf-hold { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.tf-row-failed td { background: var(--warn-tint); color: var(--warn); font-size: 13.5px; }
+.tf-row-failed .tf-item-kind { color: inherit; }
+
+.tf-confirmation { display: grid; gap: 10px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }
+.tf-confirmation h3 { margin: 0; }
+.tf-confirmation--ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: var(--ok-tint); }
+.tf-confirmation--ok h3 { color: var(--ok); }
+.tf-confirmation--partial { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.tf-confirmation--fail { border-color: color-mix(in srgb, var(--warn) 35%, var(--line)); background: var(--warn-tint); }
+.tf-confirmation--fail h3 { color: var(--warn); }
+.tf-components { list-style: none; margin: 0; padding: 0; }
+.tf-components li { padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+.tf-components li:last-child { border-bottom: none; }
+.tf-component--fail { color: var(--warn); }
+.tf-confirmation-note { color: var(--muted); font-size: 13.5px; margin: 0; }
+.tf-confirmation code, .tf-confirmation .tf-price { font-variant-numeric: tabular-nums; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

@@ -18,3 +18,13 @@ export const trpc = createTRPCClient<AppRouter>({
  */
 export type DraftInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["draft"];
 export type DraftOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["draft"];
+
+/**
+ * Booking input/outcome types via the same inference (spec 009 research D1):
+ * the server's quote/book outcome unions stay un-exported; inference keeps the
+ * browser exactly in sync with the deployed money-path contract.
+ */
+export type QuoteInput = inferRouterInputs<AppRouter>["workspace"]["booking"]["quote"];
+export type QuoteOutput = inferRouterOutputs<AppRouter>["workspace"]["booking"]["quote"];
+export type BookInput = inferRouterInputs<AppRouter>["workspace"]["booking"]["book"];
+export type BookOutput = inferRouterOutputs<AppRouter>["workspace"]["booking"]["book"];

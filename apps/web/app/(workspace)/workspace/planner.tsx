@@ -10,6 +10,7 @@
 
 import { useState, type FormEvent } from "react";
 import { trpc, type DraftOutput } from "../../../lib/trpc/client.js";
+import { BookingFlow } from "./booking-flow.js";
 import {
   draftErrorMessage,
   draftFailureMessage,
@@ -196,7 +197,14 @@ export function Planner() {
         </p>
       ) : null}
       {view.phase === "failed" ? <p role="alert">{view.message}</p> : null}
-      {view.phase === "drafted" ? <DraftResult outcome={view.outcome} /> : null}
+      {view.phase === "drafted" ? (
+        <>
+          <DraftResult outcome={view.outcome} />
+          {/* Booking controls exist only inside a verified agent's drafted plan
+              (spec 009 FR-009, research D2); keyed so a new draft resets the flow. */}
+          <BookingFlow key={view.outcome.itinerary.id} itinerary={view.outcome.itinerary} />
+        </>
+      ) : null}
     </section>
   );
 }

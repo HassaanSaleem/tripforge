@@ -4,7 +4,7 @@
 // the root Vitest node environment; the component may only display strings that
 // come from here (contract §2.3). The server stays authoritative — these checks
 // exist for immediate feedback, not enforcement (INV-023).
-import { TRPCClientError } from "@trpc/client";
+import { transportErrorMessage } from "./transport-error.js";
 import type { DraftInput, DraftOutput } from "./trpc/client.js";
 
 /** Raw controlled-input values (strings as the inputs hold them). */
@@ -129,17 +129,8 @@ export function draftFailureMessage(outcome: NonDraftedOutcome): string {
  * data-model mapping table). Never returns raw error text.
  */
 export function draftErrorMessage(error: unknown): string {
-  if (error instanceof TRPCClientError) {
-    const code: unknown = error.data?.code;
-    if (code === "UNAUTHORIZED") {
-      return "Your session has expired. Please sign in again.";
-    }
-    if (code === "FORBIDDEN") {
-      return "Drafting requires an agency membership. Sign in with your agency account.";
-    }
-    if (code === "BAD_REQUEST") {
-      return "The server rejected the trip details. Please check the form values and try again.";
-    }
-  }
-  return "Could not reach the server. Check your connection and try again.";
+  return transportErrorMessage(error, {
+    forbidden: "Drafting requires an agency membership. Sign in with your agency account.",
+    badRequest: "The server rejected the trip details. Please check the form values and try again.",
+  });
 }
