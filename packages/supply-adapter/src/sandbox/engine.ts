@@ -33,15 +33,28 @@ interface SandboxEngineOptions {
   now: () => number;
 }
 
+/** Process-global engine-instance sequence, baked into quote ids. A real
+ * supplier never re-mints ANOTHER hold's quote id after losing its quote
+ * store, so ids must be unique across engine instances too (seed-0015
+ * witness: a per-instance counter let a re-established quote id collide with
+ * a sibling hold's persisted id, and the book-idempotency replay then backed
+ * two booking components with ONE live supplier booking). Counter-derived —
+ * same construction + call sequence per run still yields the same ids. */
+let engineInstanceSeq = 0;
+
 export class SandboxSupplyEngine<TOffer extends OfferBase> {
   private readonly offers = new Map<string, TOffer>();
   private readonly quotes = new Map<string, QuoteBase>();
   private readonly bookings = new Map<string, { quoteId: string; cancelled: boolean }>();
   /** First book outcome per quote, replayed verbatim on re-book (idempotency). */
   private readonly bookOutcomeByQuote = new Map<string, BookingOutcome>();
+  private readonly instance: number;
   private quoteSeq = 0;
 
-  constructor(private readonly opts: SandboxEngineOptions) {}
+  constructor(private readonly opts: SandboxEngineOptions) {
+    engineInstanceSeq += 1;
+    this.instance = engineInstanceSeq;
+  }
 
   /** Register offers the supplier "has" (search results and seeded fixtures). */
   register(offers: TOffer[]): TOffer[] {
@@ -58,7 +71,7 @@ export class SandboxSupplyEngine<TOffer extends OfferBase> {
     }
     this.quoteSeq += 1;
     const quote: QuoteBase = {
-      quoteId: `q-${this.opts.component}-${offerId}-${this.quoteSeq}`,
+      quoteId: `q-${this.opts.component}-i${this.instance}-${offerId}-${this.quoteSeq}`,
       offerId,
       netRate: offer.netRate,
       expiresAt: new Date(this.opts.now() + this.opts.holdMs).toISOString(),

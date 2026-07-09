@@ -276,10 +276,43 @@ async function main() {
   check(`build→book: quote delta is booking_quote +${heldQuotes.length}`, quoteDelta.ok, quoteDelta.detail);
 
   // 8d. Book: ONE transaction — booking, components, ledger, PMF events.
+  // Booked as a concurrent RACE (seed-0015): two simultaneous book requests
+  // for the same holds with OPPOSED request orders — the interleaving that
+  // deadlocked (40P01) the claim gate against the recording transaction
+  // before the claim-order discipline. Exactly one confirms; the loser must
+  // answer TYPED (already_consumed per component, HTTP 200) — never a 500.
   const quoteRowIds = heldQuotes.map((h) => h.quote.quoteRowId);
-  const book = await agent.api("POST", "/api/trpc/workspace.booking.book", { itineraryId, quoteRowIds });
-  const booked = book.json?.result?.data;
-  check("build→book: booking confirms every component", booked?.status === "confirmed", book.text.slice(0, 300));
+  const ascendingIds = [...quoteRowIds].sort();
+  const descendingIds = [...ascendingIds].reverse();
+  const [raceA, raceB] = await Promise.all([
+    agent.api("POST", "/api/trpc/workspace.booking.book", { itineraryId, quoteRowIds: ascendingIds }),
+    agent.api("POST", "/api/trpc/workspace.booking.book", { itineraryId, quoteRowIds: descendingIds }),
+  ]);
+  check(
+    "build→book: both concurrent book requests answer typed (200 — no deadlock 500)",
+    raceA.res.status === 200 && raceB.res.status === 200,
+    `got ${raceA.res.status}/${raceB.res.status}`,
+  );
+  const raceOutcomes = [raceA.json?.result?.data, raceB.json?.result?.data];
+  const booked = raceOutcomes.find((o) => o?.status === "confirmed");
+  const raceLoser = raceOutcomes.find((o) => o?.status === "failed");
+  check(
+    "build→book: exactly one concurrent booking wins",
+    Boolean(booked) && Boolean(raceLoser),
+    `statuses: ${JSON.stringify(raceOutcomes.map((o) => o?.status))}`,
+  );
+  check(
+    "build→book: booking confirms every component",
+    (booked?.components ?? []).length === heldQuotes.length &&
+      (booked?.components ?? []).every((c) => c.outcome === "confirmed"),
+    raceA.text.slice(0, 300),
+  );
+  check(
+    "build→book: the losing racer fails typed — already_consumed on every component",
+    (raceLoser?.components ?? []).length === heldQuotes.length &&
+      (raceLoser?.components ?? []).every((c) => c.outcome === "failed" && c.reason === "already_consumed"),
+    JSON.stringify(raceLoser?.components ?? []).slice(0, 300),
+  );
   const afterBook = await snapshotTables();
   const bookDelta = assertDelta(afterQuote, afterBook, {
     booking: 1,

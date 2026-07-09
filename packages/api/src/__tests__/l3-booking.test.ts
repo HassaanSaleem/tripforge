@@ -813,19 +813,19 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     LONG,
   );
 
-  /** Proxy a real Db so a hook runs the moment the FIRST transaction begins —
-   * the seed-0005e TOCTOU seam: state changes between the Phase-1 validation
-   * read and the claim transaction (same executor-boundary philosophy as
-   * withTxFailureOn). */
-  function withTxHook(db: Db, hook: () => Promise<void>): Db {
-    let fired = false;
+  /** Proxy a real Db so a hook runs the moment the Nth transaction begins —
+   * the seed-0005e TOCTOU seam (state changes between the Phase-1 validation
+   * read and the claim transaction, call 1) and the seed-0015 recording seam
+   * (call 2). Same executor-boundary philosophy as withTxFailureOn. */
+  function withTxHook(db: Db, hook: () => Promise<void>, onCall = 1): Db {
+    let calls = 0;
     return new Proxy(db, {
       get(target, prop) {
         const value = Reflect.get(target, prop) as unknown;
         if (prop === "transaction") {
           return async (...args: unknown[]): Promise<unknown> => {
-            if (!fired) {
-              fired = true;
+            calls += 1;
+            if (calls === onCall) {
               await hook();
             }
             return (value as (...inner: unknown[]) => unknown).apply(target, args);
@@ -948,5 +948,129 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       expect(counts.ledger).toBe(0);
     },
     LONG,
+  );
+
+  it(
+    "the recording tx cannot deadlock a concurrent claim-order locker — 40P01 geometry repro (seed-0015)",
+    async () => {
+      const session = await makeAgency();
+      const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
+      const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+      const quoted = await quoteCaller.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const inClaimOrder = quoted.items.flatMap((i) => (i.outcome === "held" ? [i.quote.quoteRowId] : [])).sort();
+      expect(inClaimOrder.length).toBeGreaterThanOrEqual(3);
+      const hMin = inClaimOrder[0] as string;
+      const hMax = inClaimOrder[inClaimOrder.length - 1] as string;
+      // Book in REVERSE claim order so an undisciplined recording tx would
+      // acquire its booking_quote locks (FK KEY SHARE per component insert,
+      // supplier_quote_id updates) descending — opposite a concurrent claimant.
+      const descending = [...inClaimOrder].reverse();
+
+      // The moment the recording tx begins (claim committed, suppliers booked),
+      // a rival transaction locks h_min and — after giving the recording tx
+      // time to walk its descending writes into that lock — asks for h_max,
+      // ascending, exactly like a concurrent claim gate's id-ordered walk.
+      // Undisciplined recording: rival holds h_min wanting h_max, recording
+      // holds h_max (KEY SHARE) wanting h_min → deadlock (40P01) kills one and
+      // the book surfaces an untyped 500. Disciplined recording locks h_min
+      // FIRST while holding nothing, so the rival's ascending walk always
+      // completes and both transactions finish typed.
+      let startRival!: () => void;
+      const rivalStarted = new Promise<void>((resolve) => (startRival = resolve));
+      let rivalHoldsHmin!: () => void;
+      const hMinLocked = new Promise<void>((resolve) => (rivalHoldsHmin = resolve));
+      const rival = (async () => {
+        await rivalStarted;
+        await handle.db.transaction(async (tx) => {
+          await tx.select({ id: bookingQuoteTable.id }).from(bookingQuoteTable).where(eq(bookingQuoteTable.id, hMin)).for("update");
+          rivalHoldsHmin();
+          await new Promise((r) => setTimeout(r, 1_500));
+          await tx.select({ id: bookingQuoteTable.id }).from(bookingQuoteTable).where(eq(bookingQuoteTable.id, hMax)).for("update");
+        });
+      })();
+
+      const gatedDb = withTxHook(
+        handle.db,
+        async () => {
+          startRival();
+          await hMinLocked;
+        },
+        2, // gate the recording tx; the claim tx (call 1) must run free
+      );
+      // Empty supplier memory forces the INV-028 re-establishment path, so the
+      // recording tx also carries supplier_quote_id updates — both witnessed
+      // lock accumulators are in play.
+      const supplier = makeSupplierSet();
+      const bookCaller = appRouter.createCaller({ session, container: { ...supplier.container, db: gatedDb } });
+      const booked = await bookCaller.workspace.booking.book({ itineraryId, quoteRowIds: descending });
+      await rival; // a 40P01 on the rival's ascending walk would reject here
+      expect(booked.status).toBe("confirmed");
+      expect(booked.components.every((c) => c.outcome === "confirmed")).toBe(true);
+      // The full money set recorded exactly once — deadlock avoidance changed
+      // lock ORDER only, never what gets written.
+      const counts = await countsFor(session.agencyId);
+      expect(counts).toEqual({
+        itineraries: 1,
+        quotes: inClaimOrder.length,
+        bookings: 1,
+        components: inClaimOrder.length,
+        ledger: inClaimOrder.length,
+        pmfEvents: 1 + inClaimOrder.length,
+      });
+    },
+    LONG,
+  );
+
+  it(
+    "repeated concurrent overlapping multi-component books stay typed and conserved — no 40P01 (seed-0015 stress)",
+    async () => {
+      const ROUNDS = 5;
+      for (let round = 0; round < ROUNDS; round += 1) {
+        const session = await makeAgency();
+        const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
+        const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+        expect(drafted.status).toBe("drafted");
+        if (drafted.status !== "drafted") return;
+        const itineraryId = drafted.itinerary.id;
+        const quoted = await quoteCaller.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+        expect(quoted.status).toBe("quoted");
+        if (quoted.status !== "quoted") return;
+        const ids = quoted.items.flatMap((i) => (i.outcome === "held" ? [i.quote.quoteRowId] : []));
+        expect(ids.length).toBeGreaterThanOrEqual(3);
+        // Opposed request orders + empty supplier memory on both racers: the
+        // loser's claim gate walks ascending while the winner's recording tx
+        // (component-insert FK locks + re-establishment updates) walks its own
+        // request order — the exact geometry that deadlocked before the
+        // claim-order discipline. A 40P01 surfaces as an untyped 500 and
+        // rejects the Promise.all.
+        const ascending = [...ids].sort();
+        const descending = [...ascending].reverse();
+        const supplierA = makeSupplierSet();
+        const supplierB = makeSupplierSet();
+        const callerA = appRouter.createCaller({ session, container: supplierA.container });
+        const callerB = appRouter.createCaller({ session, container: supplierB.container });
+        const [a, b] = await Promise.all([
+          callerA.workspace.booking.book({ itineraryId, quoteRowIds: ascending }),
+          callerB.workspace.booking.book({ itineraryId, quoteRowIds: descending }),
+        ]);
+        expect([a.status, b.status].sort()).toEqual(["confirmed", "failed"]);
+        const loser = a.status === "failed" ? a : b;
+        expect(loser.components.every((c) => c.outcome === "failed" && c.reason === "already_consumed")).toBe(true);
+        // Conservation on BOTH branches, every round: the winner's set is
+        // recorded exactly once; the loser reached no supplier and wrote nothing.
+        const counts = await countsFor(session.agencyId);
+        expect(counts.bookings).toBe(1);
+        expect(counts.components).toBe(ids.length);
+        expect(counts.ledger).toBe(ids.length);
+        expect(counts.pmfEvents).toBe(1 + ids.length);
+        expect(supplierA.liveSupplierBookings() + supplierB.liveSupplierBookings()).toBe(ids.length);
+      }
+    },
+    LONG * 2,
   );
 });

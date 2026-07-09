@@ -23,6 +23,16 @@
 // made, each one is compensated with port.cancel and the claims are released
 // — no supplier booking survives unrecorded (FR-011/INV-011 conservation).
 // A booking where every component fails writes NOTHING.
+//
+// CLAIM-ORDER DISCIPLINE (seed-0015): the claim gate takes its booking_quote
+// row locks with FOR UPDATE … ORDER BY id, so every OTHER multi-row lock
+// acquisition on booking_quote — the recording transaction (FK KEY SHARE from
+// each booking_component insert, plus the re-established supplier_quote_id
+// updates, both in request order) and the claim release — must first lock its
+// full row set with the same id-ordered statement
+// (lockQuoteRowsInClaimOrder). Writers acquiring booking_quote row locks in
+// conflicting orders deadlock (40P01), surfacing an untyped 500 where the
+// loser owed a typed outcome.
 import { applyMarkupBps, convertMoney, markupOf, money, type Money } from "@tripforge/domain";
 import { parseItinerary, type Itinerary } from "@tripforge/itinerary-schema";
 import {
@@ -541,6 +551,15 @@ export async function bookItinerary(
   let txResult: { bookingId: string; status: "confirmed" | "partially_confirmed" };
   try {
     txResult = await db.transaction(async (tx) => {
+      // Claim-order discipline (seed-0015): every booking_quote row this tx
+      // will touch — FK KEY SHARE from each component insert, plus the
+      // re-established supplier_quote_id updates — is locked up front in
+      // claim order, so the per-component writes below (request order) can
+      // never interleave into a lock cycle with a concurrent claim gate.
+      await lockQuoteRowsInClaimOrder(
+        tx,
+        confirmed.map((c) => c.quoteRow.id),
+      );
       const status = confirmed.length === quoteRowIds.length ? ("confirmed" as const) : ("partially_confirmed" as const);
       const [bookingRow] = await tx
         .insert(bookingTable)
@@ -648,12 +667,36 @@ export async function bookItinerary(
   return { status: txResult.status, bookingId: txResult.bookingId, components };
 }
 
+/** Take FOR UPDATE locks on the given booking_quote rows in CLAIM ORDER —
+ * ascending id, the exact order the claim gate locks in — so the caller's
+ * subsequent writes to those rows can never form a lock cycle with a
+ * concurrent claimant (seed-0015). Structural executor: a transaction or a
+ * Db, same as PmfEventExecutor. */
+async function lockQuoteRowsInClaimOrder(
+  tx: Pick<NonNullable<Container["db"]>, "select">,
+  quoteRowIds: string[],
+): Promise<void> {
+  if (quoteRowIds.length === 0) return;
+  await tx
+    .select({ id: bookingQuoteTable.id })
+    .from(bookingQuoteTable)
+    .where(inArray(bookingQuoteTable.id, quoteRowIds))
+    .orderBy(bookingQuoteTable.id)
+    .for("update");
+}
+
 /** Release claimed-but-unbooked holds: `consumed_at` back to NULL, returning
  * them to bookable. Only ever called on rows this request claimed, so no
- * concurrent booking can hold them (research D12). */
+ * concurrent booking can hold them (research D12) — but a concurrent claim
+ * gate's sibling lock set spans consumed rows too, so the release must not
+ * let a bare multi-row UPDATE take row locks in arbitrary plan order: it
+ * locks the row set in claim order first (seed-0015). */
 async function releaseClaims(db: NonNullable<Container["db"]>, quoteRowIds: string[]): Promise<void> {
   if (quoteRowIds.length === 0) return;
-  await db.update(bookingQuoteTable).set({ consumedAt: null }).where(inArray(bookingQuoteTable.id, quoteRowIds));
+  await db.transaction(async (tx) => {
+    await lockQuoteRowsInClaimOrder(tx, quoteRowIds);
+    await tx.update(bookingQuoteTable).set({ consumedAt: null }).where(inArray(bookingQuoteTable.id, quoteRowIds));
+  });
 }
 
 export async function itineraryOverview(
