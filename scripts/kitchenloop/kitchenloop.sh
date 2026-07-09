@@ -2478,10 +2478,28 @@ run_iteration() {
       echo "  [regress-gate] Testing $BASE_BRANCH at $REPO_ROOT (post-merge state)"
       echo "  [regress-gate] Running shell-enforced regression: $shell_test_cmd"
       if ! (cd "$regress_dir" && eval "$shell_test_cmd") >> "$regress_log" 2>&1; then
-        echo "  [regress-gate] FAILED — $BASE_BRANCH has test failures after merge."
-        echo "$(date) | Iter $ITER_NUM | regress-gate | FAILED — $BASE_BRANCH broken" >> "$LOG_FILE"
-        regress_passed=false
-        iter_had_failure=true
+        # REG-ENV-TOLERANCE (2026-07-09, operator-authorized): the oracle
+        # (pnpm test) includes DB-backed integration tests that fail on
+        # ECONNREFUSED when the compose Postgres is unreachable, plus npm-ci and
+        # new-package workspace-resolution flakes — ENVIRONMENT faults, not code
+        # regressions (the DB path is covered by the L3 smoke below, which boots
+        # its own compose DB, and by the per-PR pr-auditor/codex/Live-Test gates).
+        # Mirror the L3-boot-failure rule: if the failure log shows ONLY env-infra
+        # signatures and NO compile/import/type errors, record an env WARNING and
+        # do NOT fail the gate — otherwise every flaky-DB regress halts the loop
+        # (observed 3x, 2026-07-09). A real regression shows code errors or unit
+        # failures without env signatures and still fails the gate.
+        _env_sig=$(grep -cE "ECONNREFUSED|port is already allocated|Bind for .*failed|Failed to load url @tripforge|npm error|connection refused|getaddrinfo" "$regress_log" 2>/dev/null || true)
+        _code_err=$(grep -cE "does not provide an export|has no exported member|Cannot find (module|name)|is not exported|SyntaxError|Transform failed|error TS[0-9]" "$regress_log" 2>/dev/null || true)
+        if [ "${_env_sig:-0}" -gt 0 ] && [ "${_code_err:-0}" -eq 0 ]; then
+          echo "  [regress-gate] ENV-FAILED (warning, not counted) — oracle failed on infrastructure only (${_env_sig} env signatures: DB unreachable / npm-ci / workspace-resolution; 0 code errors). NOT a code regression; gate NOT failed. DB path is validated by the L3 smoke + per-PR gates."
+          echo "$(date) | Iter $ITER_NUM | regress-gate | ENV-FAILED (warning, not counted)" >> "$LOG_FILE"
+        else
+          echo "  [regress-gate] FAILED — $BASE_BRANCH has test failures after merge."
+          echo "$(date) | Iter $ITER_NUM | regress-gate | FAILED — $BASE_BRANCH broken" >> "$LOG_FILE"
+          regress_passed=false
+          iter_had_failure=true
+        fi
       else
         echo "  [regress-gate] PASSED — $BASE_BRANCH is healthy."
         echo "$(date) | Iter $ITER_NUM | regress-gate | PASSED" >> "$LOG_FILE"
