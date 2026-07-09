@@ -86,6 +86,12 @@ The reservation row per confirmed component (FR-010).
 | `merchant_of_record` | text NOT NULL | |
 | `created_at` | timestamp NOT NULL default now | |
 
+Unique index: `(itinerary_id, item_id)` — item-level exclusivity backstop
+(FR-016, amended 2026-07-09 spec-gap-0002): at most one booking component may
+ever be recorded per itinerary item, even if a future caller bypasses the
+claim-time guard (migration note: applied by the compose migrate stage's
+`drizzle-kit push`, this repo's schema-migration mechanism).
+
 ### `markup_ledger`
 
 The agency margin record (FR-010; the row later revenue-share/take-rate
@@ -119,6 +125,9 @@ book:    active quote rows ──port.book per component──▶ one tx:
                    re-establish: re-register supply, port.quote(offer_id),
                    book ONLY on exact net price/currency/MoR match (D11);
                    mismatch──▶ quote_expired outcome, zero rows
+                └─item already booked: consumed sibling hold or existing
+                   booking_component for the item (FR-016, spec-gap-0002)──▶
+                   item_already_booked outcome, zero rows
                 └─component failure (expired / rejected / unknown / consumed
                    / lost the consume race)──▶ typed outcome, zero rows
                 └─ALL components fail──▶ zero rows anywhere

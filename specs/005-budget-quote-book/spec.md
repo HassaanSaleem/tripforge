@@ -206,6 +206,12 @@ business action; the existing plan→book metric view counts them.
 - Booking the same quote twice: the second attempt does not double-book or
   double-record (the supplier layer replays the first outcome; the booking
   layer refuses to re-consume a consumed quote row).
+- Two live holds exist for the same itinerary item — re-quoting mints a fresh
+  hold without consuming the old one, so this arises whenever an agent quotes
+  twice before booking: booking both holds, in one request or across separate
+  requests (including concurrently), confirms the item AT MOST once; every
+  other attempt fails with a typed "item already booked" outcome and
+  contributes zero rows *(amended 2026-07-09, spec-gap-0002)*.
 - Quote requested for an itinerary belonging to another agency: denied by
   tenancy scoping — no cross-tenant reads or writes.
 - Booking with an empty quote list: rejected at the boundary, zero state delta.
@@ -298,6 +304,19 @@ business action; the existing plan→book metric view counts them.
 - **FR-015**: The canonical itinerary schema MUST NOT change: the feature
   consumes SCHEMA_VERSION 0.1.0 as-is (a version bump is operator-gated,
   ALWAYS-HALT).
+- **FR-016** *(amended 2026-07-09, spec-gap-0002 — item-level booking
+  exclusivity)*: An itinerary item MUST have at most one live booking,
+  regardless of how many live holds exist for it (FR-009 is hold-level;
+  re-quoting legitimately leaves multiple live holds per item). Booking a
+  hold for an item that already has a recorded booking component — or whose
+  booking is in flight through a sibling hold — MUST fail with a typed
+  "item already booked" outcome and contribute zero rows, with sibling
+  components unaffected (FR-011 semantics). Within one request, holds
+  reducing to the same item are reduced to the first occurrence, mirroring
+  the FR-009 duplicate-id rule. Enforcement MUST be atomic with hold
+  consumption — the item race is decided at claim time, before any supplier
+  call, so a lost race never reaches the supplier — and backstopped by a
+  uniqueness constraint on the recorded component's (itinerary, item) pair.
 
 ### Key Entities
 
@@ -314,7 +333,7 @@ business action; the existing plan→book metric view counts them.
   merchant of record. Dead at expiry; consumed by at most one booking.
 - **Booking / reservation component**: the confirmed outcome — per component:
   supplier booking reference, quote consumed, money recorded (net, sell,
-  conversion detail).
+  conversion detail). At most one per itinerary item (FR-016).
 - **Markup ledger row**: the agency's margin record per confirmed component —
   net, sell, markup (= sell − net), currency; the row take-rate/revenue-share
   features build on later.
@@ -351,6 +370,11 @@ business action; the existing plan→book metric view counts them.
   their business action.
 - **SC-008**: The canonical itinerary schema version and shape are
   byte-for-byte unchanged by this feature.
+- **SC-009** *(amended 2026-07-09, spec-gap-0002)*: 100% of attempts to book
+  an itinerary item that is already booked — via a second live hold, in the
+  same request, a later request, or a concurrent one — fail with the typed
+  "item already booked" outcome and write nothing; the item ends with exactly
+  one booking component and one ledger row.
 
 ## Assumptions
 

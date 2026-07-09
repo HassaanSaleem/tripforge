@@ -15,6 +15,7 @@ import {
   and,
   count,
   eq,
+  inArray,
   booking as bookingTable,
   bookingComponent as bookingComponentTable,
   bookingQuote as bookingQuoteTable,
@@ -582,6 +583,165 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       expect(counts.components).toBe(held.length);
       expect(counts.ledger).toBe(held.length);
       expect(counts.pmfEvents).toBe(1 + held.length);
+    },
+    LONG,
+  );
+
+  /** Quote the itinerary twice before booking — re-quoting mints fresh holds
+   * without consuming the old ones, leaving TWO live holds per item (the
+   * FR-016 / spec-gap-0002 setup). Returns per-item hold-id pairs. */
+  async function draftWithTwoHoldsPerItem(caller: ReturnType<typeof appRouter.createCaller>) {
+    const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+    expect(drafted.status).toBe("drafted");
+    if (drafted.status !== "drafted") return undefined;
+    const itineraryId = drafted.itinerary.id;
+    const heldOf = async () => {
+      const quoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return new Map<string, string>();
+      return new Map(
+        quoted.items.flatMap((i) => (i.outcome === "held" ? [[i.itemId, i.quote.quoteRowId] as const] : [])),
+      );
+    };
+    const first = await heldOf();
+    const second = await heldOf();
+    expect(first.size).toBeGreaterThanOrEqual(3);
+    expect(second.size).toBe(first.size);
+    const items = [...first.keys()];
+    return {
+      itineraryId,
+      items,
+      firstIds: items.map((i) => first.get(i) as string),
+      secondIds: items.map((i) => second.get(i) as string),
+    };
+  }
+
+  it(
+    "a second live hold for an already-booked item fails item_already_booked with zero delta (FR-016/SC-009, spec-gap-0002)",
+    async () => {
+      const session = await makeAgency();
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+      const setup = await draftWithTwoHoldsPerItem(caller);
+      if (!setup) return;
+      const { itineraryId, firstIds, secondIds } = setup;
+
+      const booked = await caller.workspace.booking.book({ itineraryId, quoteRowIds: firstIds });
+      expect(booked.status).toBe("confirmed");
+
+      // The second holds are alive and unexpired — booking them must refuse
+      // every item typed, write nothing, and never reach the supplier.
+      const supplier = makeSupplierSet();
+      const loserCaller = appRouter.createCaller({ session, container: supplier.container });
+      const before = await countsFor(session.agencyId);
+      const again = await loserCaller.workspace.booking.book({ itineraryId, quoteRowIds: secondIds });
+      expect(again.status).toBe("failed");
+      expect(again.components).toHaveLength(secondIds.length);
+      expect(again.components.every((c) => c.outcome === "failed" && c.reason === "item_already_booked")).toBe(true);
+      expect(await countsFor(session.agencyId)).toEqual(before);
+      expect(supplier.liveSupplierBookings()).toBe(0);
+      // The refused holds were never claimed — consumed_at stays NULL.
+      const secondRows = await handle.db
+        .select({ consumedAt: bookingQuoteTable.consumedAt })
+        .from(bookingQuoteTable)
+        .where(inArray(bookingQuoteTable.id, secondIds));
+      expect(secondRows.every((r) => r.consumedAt === null)).toBe(true);
+
+      // DB backstop witness (FR-016): even a direct write of a second
+      // component for a booked item is refused by UNIQUE (itinerary_id, item_id).
+      const [component] = await handle.db
+        .select()
+        .from(bookingComponentTable)
+        .where(eq(bookingComponentTable.agencyId, session.agencyId))
+        .limit(1);
+      expect(component).toBeDefined();
+      if (!component) return;
+      const conflictingQuoteRowId = secondIds[setup.items.indexOf(component.itemId)];
+      expect(conflictingQuoteRowId).toBeDefined();
+      await expect(
+        handle.db.insert(bookingComponentTable).values({
+          bookingId: component.bookingId,
+          agencyId: session.agencyId,
+          itineraryId,
+          itemId: component.itemId,
+          port: component.port,
+          offerId: component.offerId,
+          quoteRowId: conflictingQuoteRowId as string,
+          supplierBookingId: "backstop-direct-write",
+          netMinor: component.netMinor,
+          netCurrency: component.netCurrency,
+          sellMinor: component.sellMinor,
+          currency: component.currency,
+          merchantOfRecord: component.merchantOfRecord,
+        }),
+      ).rejects.toThrow(/booking_component_itinerary_item_idx|duplicate key/);
+    },
+    LONG,
+  );
+
+  it(
+    "one request carrying two live holds for the same item books it exactly once (FR-016 within-request reduction)",
+    async () => {
+      const session = await makeAgency();
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+      const setup = await draftWithTwoHoldsPerItem(caller);
+      if (!setup) return;
+      const { itineraryId, firstIds, secondIds } = setup;
+
+      // Interleave the pairs: per item the FIRST occurrence proceeds and the
+      // later same-item hold fails typed (mirrors the FR-009 duplicate rule).
+      const interleaved = firstIds.flatMap((id, i) => [id, secondIds[i] as string]);
+      const booked = await caller.workspace.booking.book({ itineraryId, quoteRowIds: interleaved });
+      expect(booked.status).toBe("partially_confirmed");
+      const confirmed = booked.components.filter((c) => c.outcome === "confirmed");
+      const refused = booked.components.filter((c) => c.outcome === "failed");
+      expect(confirmed.map((c) => c.quoteRowId).sort()).toEqual([...firstIds].sort());
+      expect(refused.map((c) => c.quoteRowId).sort()).toEqual([...secondIds].sort());
+      expect(refused.every((c) => c.reason === "item_already_booked")).toBe(true);
+      // Every item recorded exactly once, money conserved.
+      const counts = await countsFor(session.agencyId);
+      expect(counts.bookings).toBe(1);
+      expect(counts.components).toBe(firstIds.length);
+      expect(counts.ledger).toBe(firstIds.length);
+      expect(counts.pmfEvents).toBe(1 + firstIds.length);
+    },
+    LONG,
+  );
+
+  it(
+    "two concurrent books holding DIFFERENT live holds for the same items confirm each item exactly once (FR-016 claim-time race)",
+    async () => {
+      const session = await makeAgency();
+      const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
+      const setup = await draftWithTwoHoldsPerItem(quoteCaller);
+      if (!setup) return;
+      const { itineraryId, firstIds, secondIds } = setup;
+
+      // Distinct hold sets defeat FR-009's per-hold consume — only the FR-016
+      // item gate can decide this race. Each racer is a fresh process with its
+      // own supplier memory (the seed-0005d conservation witness).
+      const supplierA = makeSupplierSet();
+      const supplierB = makeSupplierSet();
+      const callerA = appRouter.createCaller({ session, container: supplierA.container });
+      const callerB = appRouter.createCaller({ session, container: supplierB.container });
+      const [a, b] = await Promise.all([
+        callerA.workspace.booking.book({ itineraryId, quoteRowIds: firstIds }),
+        callerB.workspace.booking.book({ itineraryId, quoteRowIds: secondIds }),
+      ]);
+
+      // The claim transactions share the sibling-hold lock set, so they
+      // serialize: one cart wins every item; the loser fails typed WITHOUT
+      // reaching the supplier.
+      expect([a.status, b.status].sort()).toEqual(["confirmed", "failed"]);
+      const loser = a.status === "failed" ? a : b;
+      expect(loser.components.every((c) => c.outcome === "failed" && c.reason === "item_already_booked")).toBe(true);
+      const counts = await countsFor(session.agencyId);
+      expect(counts.bookings).toBe(1);
+      expect(counts.components).toBe(firstIds.length);
+      expect(counts.ledger).toBe(firstIds.length);
+      expect(counts.pmfEvents).toBe(1 + firstIds.length);
+      // Exactly one live supplier booking per item across both racers — the
+      // losing cart never produced an external booking (FR-011/INV-011).
+      expect(supplierA.liveSupplierBookings() + supplierB.liveSupplierBookings()).toBe(firstIds.length);
     },
     LONG,
   );

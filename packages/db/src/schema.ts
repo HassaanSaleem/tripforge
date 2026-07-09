@@ -6,7 +6,7 @@
 // as `agencyId` (INV-004). Tenant-owned product tables (itineraries, listings,
 // ledgers) are added by later seeds and MUST carry `agencyId` referencing
 // `organization.id`.
-import { pgTable, text, timestamp, boolean, uuid, bigint, index, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid, bigint, index, uniqueIndex, jsonb } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -206,37 +206,47 @@ export const booking = pgTable("booking", {
 
 // The reservation row per CONFIRMED component (FR-010) — written in the same
 // transaction as its booking, ledger row, and PMF event.
-export const bookingComponent = pgTable("booking_component", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  bookingId: uuid("booking_id")
-    .notNull()
-    .references(() => booking.id, { onDelete: "cascade" }),
-  agencyId: text("agency_id")
-    .notNull()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  itineraryId: uuid("itinerary_id")
-    .notNull()
-    .references(() => itinerary.id, { onDelete: "cascade" }),
-  itemId: text("item_id").notNull(),
-  port: text("port").notNull(),
-  offerId: text("offer_id").notNull(),
-  // UNIQUE backstop for FR-009 "consumed by at most one booking": the atomic
-  // consumed_at flip in the booking service is the guard; this constraint makes
-  // a double-record impossible even if a future caller bypasses it.
-  quoteRowId: uuid("quote_row_id")
-    .notNull()
-    .unique()
-    .references(() => bookingQuote.id),
-  supplierBookingId: text("supplier_booking_id").notNull(),
-  netMinor: bigint("net_minor", { mode: "number" }).notNull(),
-  netCurrency: text("net_currency").notNull(),
-  rateNumerator: bigint("rate_numerator", { mode: "number" }),
-  rateDenominator: bigint("rate_denominator", { mode: "number" }),
-  sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
-  currency: text("currency").notNull(),
-  merchantOfRecord: text("merchant_of_record").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const bookingComponent = pgTable(
+  "booking_component",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bookingId: uuid("booking_id")
+      .notNull()
+      .references(() => booking.id, { onDelete: "cascade" }),
+    agencyId: text("agency_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    itineraryId: uuid("itinerary_id")
+      .notNull()
+      .references(() => itinerary.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull(),
+    port: text("port").notNull(),
+    offerId: text("offer_id").notNull(),
+    // UNIQUE backstop for FR-009 "consumed by at most one booking": the atomic
+    // consumed_at flip in the booking service is the guard; this constraint makes
+    // a double-record impossible even if a future caller bypasses it.
+    quoteRowId: uuid("quote_row_id")
+      .notNull()
+      .unique()
+      .references(() => bookingQuote.id),
+    supplierBookingId: text("supplier_booking_id").notNull(),
+    netMinor: bigint("net_minor", { mode: "number" }).notNull(),
+    netCurrency: text("net_currency").notNull(),
+    rateNumerator: bigint("rate_numerator", { mode: "number" }),
+    rateDenominator: bigint("rate_denominator", { mode: "number" }),
+    sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
+    currency: text("currency").notNull(),
+    merchantOfRecord: text("merchant_of_record").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    // UNIQUE backstop for FR-016 item-level exclusivity (spec-gap-0002): at
+    // most one recorded booking per itinerary item under any interleaving —
+    // the claim-time item guard in the booking service is the gate; this
+    // index makes a second record impossible even if a caller bypasses it.
+    itineraryItemIdx: uniqueIndex("booking_component_itinerary_item_idx").on(table.itineraryId, table.itemId),
+  }),
+);
 
 // The agency margin record per confirmed component: markup = sell − net
 // EXACTLY (Money-Safe ledger identity; the row revenue-share/take-rate

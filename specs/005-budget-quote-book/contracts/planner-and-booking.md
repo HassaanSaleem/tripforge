@@ -84,7 +84,10 @@ siblings. Expired earlier rows are ignored (re-quote replaces them).
 
 Input: `{ itineraryId: uuid, quoteRowIds: uuid[] (min 1) }` — duplicate ids
 are deduplicated (first-occurrence order): one hold, one outcome, one set of
-rows, no matter how many times its id appears (FR-009).
+rows, no matter how many times its id appears (FR-009). Distinct holds that
+target the same itinerary item are reduced to the first occurrence too: the
+first proceeds, every later same-item hold fails `item_already_booked`
+(FR-016, amended 2026-07-09 spec-gap-0002).
 
 Output:
 
@@ -96,19 +99,25 @@ Output:
     | { quoteRowId, itemId, outcome: "confirmed", supplierBookingId,
         netMinor, netCurrency, sellMinor, currency, merchantOfRecord }
     | { quoteRowId, itemId, outcome: "failed",
-        reason: "quote_expired" | "supplier_rejected" | "unknown_quote" | "already_consumed" }
+        reason: "quote_expired" | "supplier_rejected" | "unknown_quote"
+              | "already_consumed" | "item_already_booked" }
   >
 }
 ```
 
-Semantics (reserve-then-book, research D12): validate rows (tenant,
-itinerary match, unconsumed, `now < expires_at` server-side) → RESERVE: one
-short transaction claims every still-unconsumed hold (locking read in id
-order, then the atomic `consumed_at` flip) BEFORE any supplier call — the
-losing side of a concurrent race never reaches the supplier and reports
-`already_consumed` (FR-009) → `port.book(supplierQuoteId)` per CLAIMED
-component (the port re-enforces expiry); a supplier failure RELEASES the
-claim, returning the hold to bookable with zero net state → ONE recording
+Semantics (reserve-then-book, research D12; item exclusivity amended
+2026-07-09 spec-gap-0002): validate rows (tenant, itinerary match,
+unconsumed, `now < expires_at` server-side) → RESERVE: one short
+transaction decides BOTH races BEFORE any supplier call — it locks every
+live hold of the candidate items (locking read in id order, deadlock-free),
+rejects any candidate whose own row is meanwhile consumed
+(`already_consumed`) or whose ITEM is already booked — a consumed sibling
+hold (booking in flight or recorded) or an existing `booking_component`
+row for the item (`item_already_booked`, FR-016) — then atomically flips
+`consumed_at` for the winners. The losing side of either race never
+reaches the supplier → `port.book(supplierQuoteId)` per CLAIMED component
+(the port re-enforces expiry); a supplier failure RELEASES the claim,
+returning the hold to bookable with zero net state → ONE recording
 transaction writes booking + booking_component + markup_ledger +
 `booking_confirmed` PMF event for the booked components (persisting any
 re-established supplier quote id). If the recording transaction fails,
@@ -116,8 +125,9 @@ every supplier booking just made is compensated with `port.cancel` and the
 claims are released — no supplier booking survives unrecorded (INV-011).
 Failed components contribute zero rows; all-fail writes nothing (FR-011).
 The markup ledger amount is pure domain math (`markupOf(sell, net)`,
-INV-010); UNIQUE on `booking_component.quote_row_id` stays as the
-write-time backstop.
+INV-010); UNIQUE on `booking_component.quote_row_id` (at-most-once
+consumption, FR-009) and UNIQUE on `booking_component (itinerary_id,
+item_id)` (item exclusivity, FR-016) stay as the write-time backstops.
 
 Serverless hold re-establishment (INV-028, research D11): when the supplier
 returns `unknown_quote` for a live persisted hold (quote and book ran in

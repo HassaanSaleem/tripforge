@@ -8,7 +8,12 @@
 // re-enforces expiry independently), then RESERVE-THEN-BOOK (research D12):
 // one short transaction claims every still-unconsumed hold (id-ordered
 // locking read + atomic consumed_at flip) BEFORE any supplier call, so the
-// losing side of a concurrent race never reaches the supplier. Claimed holds
+// losing side of a concurrent race never reaches the supplier. The same
+// transaction enforces ITEM-level exclusivity (FR-016, spec-gap-0002): an
+// item with a consumed sibling hold or a recorded booking component is
+// already booked, and booking any other hold for it fails typed
+// item_already_booked — backstopped by UNIQUE (itinerary_id, item_id) on
+// booking_component. Claimed holds
 // book per component — re-establishing the supplier hold when the supplier no
 // longer recognizes it (INV-028: quote and book may run in different
 // processes; the persisted row is the truth and the re-quoted price must
@@ -24,7 +29,6 @@ import {
   and,
   eq,
   inArray,
-  isNull,
   booking as bookingTable,
   bookingComponent as bookingComponentTable,
   bookingQuote as bookingQuoteTable,
@@ -86,7 +90,7 @@ export type BookComponentOutcome =
       quoteRowId: string;
       itemId: string;
       outcome: "failed";
-      reason: "quote_expired" | "supplier_rejected" | "unknown_quote" | "already_consumed";
+      reason: "quote_expired" | "supplier_rejected" | "unknown_quote" | "already_consumed" | "item_already_booked";
     };
 
 export interface BookOutcome {
@@ -292,8 +296,11 @@ export async function bookItinerary(
   const now = Date.now();
 
   // Phase 1 — validate against the persisted rows (no writes, no supplier
-  // calls). Survivors become claim candidates.
+  // calls). Survivors become claim candidates. Distinct holds targeting the
+  // same item reduce to the first occurrence (FR-016 mirrors the FR-009
+  // duplicate-id rule): later same-item holds fail item_already_booked.
   const candidates: (typeof quoteRows)[number][] = [];
+  const itemsInRequest = new Set<string>();
   for (const quoteRowId of quoteRowIds) {
     const quoteRow = rowById.get(quoteRowId);
     if (!quoteRow) {
@@ -313,30 +320,67 @@ export async function bookItinerary(
       outcomeById.set(quoteRowId, { quoteRowId, itemId: quoteRow.itemId, outcome: "failed", reason: "unknown_quote" });
       continue;
     }
+    if (itemsInRequest.has(quoteRow.itemId)) {
+      outcomeById.set(quoteRowId, { quoteRowId, itemId: quoteRow.itemId, outcome: "failed", reason: "item_already_booked" });
+      continue;
+    }
+    itemsInRequest.add(quoteRow.itemId);
     candidates.push(quoteRow);
   }
 
-  // Phase 2 — RESERVE before book (FR-009, research D12): claim every
-  // candidate hold atomically BEFORE any supplier call, so the losing side of
-  // a concurrent booking never reaches the supplier — the race is decided
-  // here, in the database. The locking read in id order keeps concurrent
-  // claimants deadlock-free and one-winner-takes-all for identical carts;
-  // under READ COMMITTED a blocked claimant re-evaluates the predicate after
-  // the winner commits and claims nothing.
+  // Phase 2 — RESERVE before book (FR-009 + FR-016, research D12): one short
+  // transaction decides BOTH races BEFORE any supplier call, so the losing
+  // side of a concurrent booking never reaches the supplier. It locks every
+  // hold of the candidate ITEMS (not just the candidate rows) in id order —
+  // concurrent claimants that touch the same items serialize on the same
+  // lock set, deadlock-free — then rejects a candidate whose own row was
+  // meanwhile consumed (already_consumed) or whose item is already booked
+  // through a consumed sibling hold or a recorded component
+  // (item_already_booked), and atomically flips consumed_at for the winners.
+  // Under READ COMMITTED a blocked claimant re-evaluates after the winner
+  // commits and claims nothing.
   const claimedIds = new Set<string>();
+  const itemBlockedIds = new Set<string>();
   if (candidates.length > 0) {
-    const candidateIds = candidates.map((c) => c.id);
+    const candidateItemIds = [...new Set(candidates.map((c) => c.itemId))];
     await db.transaction(async (tx) => {
-      const claimable = await tx
-        .select({ id: bookingQuoteTable.id })
+      const siblings = await tx
+        .select({
+          id: bookingQuoteTable.id,
+          itemId: bookingQuoteTable.itemId,
+          consumedAt: bookingQuoteTable.consumedAt,
+        })
         .from(bookingQuoteTable)
-        .where(and(inArray(bookingQuoteTable.id, candidateIds), isNull(bookingQuoteTable.consumedAt)))
+        .where(and(eq(bookingQuoteTable.itineraryId, row.id), inArray(bookingQuoteTable.itemId, candidateItemIds)))
         .orderBy(bookingQuoteTable.id)
         .for("update");
-      if (claimable.length === 0) return;
-      const ids = claimable.map((r) => r.id);
-      await tx.update(bookingQuoteTable).set({ consumedAt: new Date() }).where(inArray(bookingQuoteTable.id, ids));
-      for (const id of ids) claimedIds.add(id);
+      const freshById = new Map(siblings.map((s) => [s.id, s.consumedAt]));
+      // An item with a consumed sibling hold has a booking in flight or
+      // recorded; existing components cover any state where the consumed
+      // hold row itself is gone (FR-016 — the component is the record).
+      const bookedItems = new Set(siblings.filter((s) => s.consumedAt !== null).map((s) => s.itemId));
+      const componentRows = await tx
+        .select({ itemId: bookingComponentTable.itemId })
+        .from(bookingComponentTable)
+        .where(
+          and(eq(bookingComponentTable.itineraryId, row.id), inArray(bookingComponentTable.itemId, candidateItemIds)),
+        );
+      for (const r of componentRows) bookedItems.add(r.itemId);
+
+      const winners: string[] = [];
+      for (const candidate of candidates) {
+        const fresh = freshById.get(candidate.id);
+        if (fresh === undefined || fresh !== null) continue; // row gone or consumed meanwhile → already_consumed
+        if (bookedItems.has(candidate.itemId)) {
+          itemBlockedIds.add(candidate.id);
+          continue;
+        }
+        bookedItems.add(candidate.itemId);
+        winners.push(candidate.id);
+      }
+      if (winners.length === 0) return;
+      await tx.update(bookingQuoteTable).set({ consumedAt: new Date() }).where(inArray(bookingQuoteTable.id, winners));
+      for (const id of winners) claimedIds.add(id);
     });
   }
   for (const quoteRow of candidates) {
@@ -345,7 +389,7 @@ export async function bookItinerary(
         quoteRowId: quoteRow.id,
         itemId: quoteRow.itemId,
         outcome: "failed",
-        reason: "already_consumed",
+        reason: itemBlockedIds.has(quoteRow.id) ? "item_already_booked" : "already_consumed",
       });
     }
   }
