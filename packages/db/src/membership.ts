@@ -1,9 +1,9 @@
 // Membership queries — encapsulate the Drizzle query so the app layer never builds
 // ORM predicates itself (keeps drizzle-orm inside packages/db). Used to resolve an
 // agent's agency role for the request session context (INV-023/004).
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "./client.js";
-import { member } from "./schema.js";
+import { member, organization } from "./schema.js";
 
 /** The agency (org) role for a user in an organization, or undefined if not a member. */
 export async function getMemberRole(
@@ -17,4 +17,36 @@ export async function getMemberRole(
     .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
     .limit(1);
   return rows[0]?.role;
+}
+
+/**
+ * The user's PRIMARY agency membership — oldest by creation (P0 single-agency
+ * assumption, spec 007 research D1). Session creation uses this to auto-activate
+ * the agency so agent-gated procedures pass without a manual selection step;
+ * undefined for users with no membership (traveler).
+ */
+export async function getPrimaryMembership(
+  db: Db,
+  userId: string,
+): Promise<{ organizationId: string; role: string } | undefined> {
+  const rows = await db
+    .select({ organizationId: member.organizationId, role: member.role })
+    .from(member)
+    .where(eq(member.userId, userId))
+    .orderBy(asc(member.createdAt), asc(member.id))
+    .limit(1);
+  return rows[0];
+}
+
+/** The agency (organization) display name, or undefined if the org does not exist. */
+export async function getOrganizationName(
+  db: Db,
+  organizationId: string,
+): Promise<string | undefined> {
+  const rows = await db
+    .select({ name: organization.name })
+    .from(organization)
+    .where(eq(organization.id, organizationId))
+    .limit(1);
+  return rows[0]?.name;
 }

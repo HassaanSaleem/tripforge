@@ -6,7 +6,12 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
-import { schema, getMemberRole } from "@tripforge/db";
+import {
+  schema,
+  getMemberRole,
+  getOrganizationName,
+  getPrimaryMembership,
+} from "@tripforge/db";
 import { optionalEnv } from "@tripforge/shared";
 import type { SessionContext, AgencyRole } from "@tripforge/api";
 import { getDb } from "./db.js";
@@ -19,6 +24,24 @@ export const auth = betterAuth({
   secret: optionalEnv("BETTER_AUTH_SECRET", "dev-only-insecure-secret-change-me"),
   emailAndPassword: { enabled: true },
   plugins: [organization()],
+  databaseHooks: {
+    session: {
+      create: {
+        // Auto-activate the user's (single) agency when a session is created
+        // (spec 007 D1) so agent-gated procedures pass without a manual
+        // "select agency" step. Serverless-correct (INV-028): the result
+        // persists on the session ROW; nothing lives in process memory. Users
+        // without a membership keep a traveler session (no active org).
+        before: async (session) => {
+          const membership = await getPrimaryMembership(db, session.userId);
+          if (!membership) return;
+          return {
+            data: { ...session, activeOrganizationId: membership.organizationId },
+          };
+        },
+      },
+    },
+  },
 });
 
 /**
@@ -41,4 +64,36 @@ export async function getSessionContext(headers: Headers): Promise<SessionContex
   if (!role) return { userId };
 
   return { userId, agencyId: activeOrganizationId, agencyRole: role };
+}
+
+/** Display identity for the workspace greeting (spec 007 FR-006 / IMP-2). */
+export interface WorkspaceIdentity {
+  userName: string;
+  agencyName: string;
+  role: AgencyRole;
+}
+
+/**
+ * Human-name identity for the workspace greeting — null unless the caller is a
+ * verified agent (same ladder as getSessionContext; INV-023 is still enforced
+ * per tRPC procedure — this helper is presentation, not authorization).
+ */
+export async function getWorkspaceIdentity(headers: Headers): Promise<WorkspaceIdentity | null> {
+  const result = await auth.api.getSession({ headers });
+  if (!result) return null;
+
+  const activeOrganizationId = result.session.activeOrganizationId ?? undefined;
+  if (!activeOrganizationId) return null;
+
+  const role = (await getMemberRole(db, activeOrganizationId, result.user.id)) as
+    | AgencyRole
+    | undefined;
+  if (!role) return null;
+
+  const agencyName = await getOrganizationName(db, activeOrganizationId);
+  return {
+    userName: result.user.name,
+    agencyName: agencyName ?? "Your agency",
+    role,
+  };
 }

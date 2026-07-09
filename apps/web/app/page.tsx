@@ -12,6 +12,10 @@ export default function HomePage() {
           <Link href="/workspace">Agency workspace</Link> — for agents (sign-in required)
         </li>
         <li>
+          <Link href="/sign-in">Sign in</Link> — or{" "}
+          <Link href="/sign-up">create an account and agency</Link>
+        </li>
+        <li>
           <Link href="/view">Client view</Link> — white-labeled traveler experience
         </li>
       </ul>
