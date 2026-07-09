@@ -26,7 +26,7 @@ export type { Schema } from "./schema.js";
 export { tenantScope, scopedWhere } from "./tenant.js";
 // Query operators consumers compose scoped conditions with (the ORM itself
 // stays this package's dependency — INV-017: no deep drizzle imports outside db).
-export { and, avg, count, eq, inArray, isNull, or } from "drizzle-orm";
+export { and, avg, count, eq, gt, inArray, isNull, or } from "drizzle-orm";
 export { getMemberRole } from "./membership.js";
 export {
   PMF_TRIP_SOURCES,

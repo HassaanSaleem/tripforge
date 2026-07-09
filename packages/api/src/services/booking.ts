@@ -28,7 +28,9 @@ import { parseItinerary, type Itinerary } from "@tripforge/itinerary-schema";
 import {
   and,
   eq,
+  gt,
   inArray,
+  isNull,
   booking as bookingTable,
   bookingComponent as bookingComponentTable,
   bookingQuote as bookingQuoteTable,
@@ -341,6 +343,7 @@ export async function bookItinerary(
   // commits and claims nothing.
   const claimedIds = new Set<string>();
   const itemBlockedIds = new Set<string>();
+  const expiredIds = new Set<string>();
   if (candidates.length > 0) {
     const candidateItemIds = [...new Set(candidates.map((c) => c.itemId))];
     await db.transaction(async (tx) => {
@@ -349,12 +352,14 @@ export async function bookItinerary(
           id: bookingQuoteTable.id,
           itemId: bookingQuoteTable.itemId,
           consumedAt: bookingQuoteTable.consumedAt,
+          expiresAt: bookingQuoteTable.expiresAt,
         })
         .from(bookingQuoteTable)
         .where(and(eq(bookingQuoteTable.itineraryId, row.id), inArray(bookingQuoteTable.itemId, candidateItemIds)))
         .orderBy(bookingQuoteTable.id)
         .for("update");
       const freshById = new Map(siblings.map((s) => [s.id, s.consumedAt]));
+      const expiryById = new Map(siblings.map((s) => [s.id, s.expiresAt]));
       // An item with a consumed sibling hold has a booking in flight or
       // recorded; existing components cover any state where the consumed
       // hold row itself is gone (FR-016 — the component is the record).
@@ -367,10 +372,19 @@ export async function bookItinerary(
         );
       for (const r of componentRows) bookedItems.add(r.itemId);
 
+      // FR-009 expiry is atomic WITH the claim (seed-0005e): the Phase-1
+      // check used an earlier clock — a hold that crossed expires_at while
+      // waiting on the lock set must never be claimed or booked.
+      const claimNow = new Date();
       const winners: string[] = [];
       for (const candidate of candidates) {
         const fresh = freshById.get(candidate.id);
         if (fresh === undefined || fresh !== null) continue; // row gone or consumed meanwhile → already_consumed
+        const expiresAt = expiryById.get(candidate.id);
+        if (expiresAt === undefined || claimNow.getTime() >= expiresAt.getTime()) {
+          expiredIds.add(candidate.id);
+          continue;
+        }
         if (bookedItems.has(candidate.itemId)) {
           itemBlockedIds.add(candidate.id);
           continue;
@@ -379,8 +393,24 @@ export async function bookItinerary(
         winners.push(candidate.id);
       }
       if (winners.length === 0) return;
-      await tx.update(bookingQuoteTable).set({ consumedAt: new Date() }).where(inArray(bookingQuoteTable.id, winners));
-      for (const id of winners) claimedIds.add(id);
+      // Belt-and-braces: the UPDATE itself re-asserts unconsumed AND
+      // unexpired, so an expired hold cannot be claimed even if the
+      // in-memory reasoning above ever drifts from the row state.
+      const returned = await tx
+        .update(bookingQuoteTable)
+        .set({ consumedAt: claimNow })
+        .where(
+          and(
+            inArray(bookingQuoteTable.id, winners),
+            isNull(bookingQuoteTable.consumedAt),
+            gt(bookingQuoteTable.expiresAt, claimNow),
+          ),
+        )
+        .returning({ id: bookingQuoteTable.id });
+      for (const r of returned) claimedIds.add(r.id);
+      for (const id of winners) {
+        if (!claimedIds.has(id)) expiredIds.add(id); // rows are locked, so a refused winner can only be expiry
+      }
     });
   }
   for (const quoteRow of candidates) {
@@ -389,7 +419,11 @@ export async function bookItinerary(
         quoteRowId: quoteRow.id,
         itemId: quoteRow.itemId,
         outcome: "failed",
-        reason: itemBlockedIds.has(quoteRow.id) ? "item_already_booked" : "already_consumed",
+        reason: expiredIds.has(quoteRow.id)
+          ? "quote_expired"
+          : itemBlockedIds.has(quoteRow.id)
+            ? "item_already_booked"
+            : "already_consumed",
       });
     }
   }
@@ -419,6 +453,21 @@ export async function bookItinerary(
       // hold is alive (unconsumed, unexpired — checked above). Re-establish it:
       // re-register supply state, take a fresh supplier quote for the same
       // offer, and book it ONLY if it still carries the exact held price.
+      // FR-009 (seed-0005e): the claim happened earlier on another clock —
+      // never re-quote/book a hold whose PERSISTED expiry has since passed.
+      // Re-read the row (not the Phase-1 snapshot): the persisted value is
+      // the truth an expired hold must be judged against.
+      const freshExpiryRows = await db
+        .select({ expiresAt: bookingQuoteTable.expiresAt })
+        .from(bookingQuoteTable)
+        .where(eq(bookingQuoteTable.id, quoteRowId))
+        .limit(1);
+      const freshExpiry = freshExpiryRows[0]?.expiresAt;
+      if (freshExpiry === undefined || Date.now() >= freshExpiry.getTime()) {
+        await releaseClaims(db, [quoteRowId]);
+        outcomeById.set(quoteRowId, { quoteRowId, itemId: quoteRow.itemId, outcome: "failed", reason: "quote_expired" });
+        continue;
+      }
       if (!catalogRegistered) {
         await verifiedSupplyCatalog(container, row.tripRequest);
         catalogRegistered = true;

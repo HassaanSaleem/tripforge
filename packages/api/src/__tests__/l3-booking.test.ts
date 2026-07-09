@@ -812,4 +812,141 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     },
     LONG,
   );
+
+  /** Proxy a real Db so a hook runs the moment the FIRST transaction begins —
+   * the seed-0005e TOCTOU seam: state changes between the Phase-1 validation
+   * read and the claim transaction (same executor-boundary philosophy as
+   * withTxFailureOn). */
+  function withTxHook(db: Db, hook: () => Promise<void>): Db {
+    let fired = false;
+    return new Proxy(db, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop) as unknown;
+        if (prop === "transaction") {
+          return async (...args: unknown[]): Promise<unknown> => {
+            if (!fired) {
+              fired = true;
+              await hook();
+            }
+            return (value as (...inner: unknown[]) => unknown).apply(target, args);
+          };
+        }
+        return typeof value === "function" ? (value as (...inner: unknown[]) => unknown).bind(target) : value;
+      },
+    });
+  }
+
+  it(
+    "a hold that expires between the Phase-1 check and the claim is refused quote_expired — never claimed, never booked, zero delta (FR-009, seed-0005e)",
+    async () => {
+      const session = await makeAgency();
+      const supplier = makeSupplierSet();
+      const setup = appRouter.createCaller({ session, container: supplier.container });
+      const drafted = await setup.workspace.itinerary.draft(DRAFT_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+      const quoted = await setup.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const quoteRowIds = quoted.items.flatMap((i) => (i.outcome === "held" ? [i.quote.quoteRowId] : []));
+      expect(quoteRowIds.length).toBeGreaterThanOrEqual(3);
+
+      // TOCTOU injection: the instant the claim transaction begins (after
+      // Phase 1 validated the holds as live), every hold crosses its expiry —
+      // the exact "expired while waiting on the claim lock" interleaving.
+      const expireThenClaim = withTxHook(handle.db, async () => {
+        await handle.db
+          .update(bookingQuoteTable)
+          .set({ expiresAt: new Date(Date.now() - 1_000) })
+          .where(inArray(bookingQuoteTable.id, quoteRowIds));
+      });
+      const bookCaller = appRouter.createCaller({
+        session,
+        container: { ...supplier.container, db: expireThenClaim },
+      });
+      const outcome = await bookCaller.workspace.booking.book({ itineraryId, quoteRowIds });
+      expect(outcome.status).toBe("failed");
+      expect(outcome.components).toHaveLength(quoteRowIds.length);
+      expect(outcome.components.every((c) => c.outcome === "failed" && c.reason === "quote_expired")).toBe(true);
+
+      // Never claimed, never booked, zero money rows — full conservation.
+      expect(supplier.liveSupplierBookings()).toBe(0);
+      const counts = await countsFor(session.agencyId);
+      expect(counts.bookings).toBe(0);
+      expect(counts.components).toBe(0);
+      expect(counts.ledger).toBe(0);
+      expect(counts.pmfEvents).toBe(1); // trip_created only
+      const holds = await handle.db
+        .select({ consumedAt: bookingQuoteTable.consumedAt })
+        .from(bookingQuoteTable)
+        .where(eq(bookingQuoteTable.agencyId, session.agencyId));
+      expect(holds.every((r) => r.consumedAt === null)).toBe(true);
+    },
+    LONG,
+  );
+
+  it(
+    "a claimed hold whose persisted expiry passes before re-establishment is refused quote_expired — claim released, no fresh supplier quote is booked (FR-009, seed-0005e)",
+    async () => {
+      const session = await makeAgency();
+      const setup = appRouter.createCaller({ session, container: makeContainer() });
+      const drafted = await setup.workspace.itinerary.draft(DRAFT_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+      const quoted = await setup.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+
+      const hotelRows = await handle.db
+        .select({ id: bookingQuoteTable.id })
+        .from(bookingQuoteTable)
+        .where(and(eq(bookingQuoteTable.agencyId, session.agencyId), eq(bookingQuoteTable.port, "hotel")));
+      expect(hotelRows).toHaveLength(1);
+      const hotelRowId = hotelRows[0]?.id ?? "";
+
+      // Fresh supplier processes (the INV-028 shape): none know the held
+      // supplier quote, so book() takes the re-establishment path — and the
+      // hold's persisted expiry passes at that exact moment (port-boundary
+      // hook, the withFailBookOffer seam). Without the seed-0005e re-check,
+      // this books a FRESH supplier quote against an expired hold.
+      const fresh = makeSupplierSet();
+      const expireOnBook = (inner: HotelPort): HotelPort => ({
+        search: (criteria) => inner.search(criteria),
+        quote: (offerId) => inner.quote(offerId),
+        book: async (quoteId) => {
+          await handle.db
+            .update(bookingQuoteTable)
+            .set({ expiresAt: new Date(Date.now() - 1_000) })
+            .where(eq(bookingQuoteTable.id, hotelRowId));
+          return inner.book(quoteId);
+        },
+        cancel: (bookingId) => inner.cancel(bookingId),
+      });
+      const bookCaller = appRouter.createCaller({
+        session,
+        container: { ...fresh.container, hotel: expireOnBook(fresh.container.hotel) },
+      });
+      const outcome = await bookCaller.workspace.booking.book({ itineraryId, quoteRowIds: [hotelRowId] });
+      expect(outcome.status).toBe("failed");
+      expect(outcome.components).toEqual([
+        expect.objectContaining({ quoteRowId: hotelRowId, outcome: "failed", reason: "quote_expired" }),
+      ]);
+
+      // The claim was RELEASED (hold back to unconsumed-but-expired), the
+      // supplier holds zero live bookings, and no money row exists.
+      expect(fresh.liveSupplierBookings()).toBe(0);
+      const [hold] = await handle.db
+        .select({ consumedAt: bookingQuoteTable.consumedAt })
+        .from(bookingQuoteTable)
+        .where(eq(bookingQuoteTable.id, hotelRowId));
+      expect(hold?.consumedAt).toBeNull();
+      const counts = await countsFor(session.agencyId);
+      expect(counts.bookings).toBe(0);
+      expect(counts.components).toBe(0);
+      expect(counts.ledger).toBe(0);
+    },
+    LONG,
+  );
 });
