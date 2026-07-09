@@ -357,9 +357,11 @@
     "body": "DEMO SURFACE. Build the (client-view)/view page into a real read-only itinerary view (INV-020: agency brand only, no platform branding), rendering a booked/quoted itinerary for a shared link. Live Test: open a shared itinerary view in a browser. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-09T00:00:00Z",
-    "pr_url": "",
+    "merged": "2026-07-10T00:00:00Z",
+    "merge_commit": "c9d174683",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/26",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
       "seed-0009a",
