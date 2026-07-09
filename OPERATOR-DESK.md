@@ -19,6 +19,7 @@ Rules for the loop:
 | UAT-PR14 | `waive uat pr14` | Waive the UAT-card gate for PR #14 (spec-gap-0001: docs-only sync of data-model.md to resolved D-006)? | Yes — waive: markdown-only spec amendment, no product behavior, no browser journey applies; every other merge gate is green | 2026-07-09 | Merging PR #14 (spec-gap-0001 stays open) |
 | ✅ PRM-SEAL-17 (resolved) | *(done)* | PR #17 changes a sealed loop gate (`.kitchenloop/uat-cards/seed-0006.md`); the loop may not merge it. | RESOLVED 2026-07-09 — operator reviewed by hand: legitimate NEW UAT card (not an edit of an evaluated card); money path codex-gated (INV-010/011/012, conservation, concurrency, RBAC, INV-028 all PASS); merged #17. Non-money follow-ups filed: seed-0006a (seller-vetting, high), seed-0006b (PMF payload, low). | 2026-07-09 | done |
 | ✅ UAT-PR18 (resolved) | *(done)* | Waive the UAT-card gate for PR #18 (QS3-1: remove/inline 20 knip-flagged unused exports — export-surface-only, no behavior change)? | RESOLVED 2026-07-09 — waived (export-surface-only, no runtime path, no browser journey applies); merged #18. | 2026-07-09 | done |
+| ✅ PRM-SEAL-20 (resolved) | *(done)* | PR #20 changes a sealed loop gate (`.kitchenloop/uat-cards/seed-0006a.md`); the loop may not merge it. | RESOLVED 2026-07-09 — operator reviewed: legit new UAT card; seller-vetting fix refuses a de-vetted seller (not_vetted, state conserved), falsifiable UAT card, L3-tested; merged #20. | 2026-07-09 | done |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -147,3 +148,5 @@ exercise). Blocked until answered: merging PR #18 (QS3-1 stays open). Advisory
 (non-blocking, pr-auditor): the cited `quality-sweep-iter-3` report is not
 committed in-tree (docs/internal/reports/ has only iterations 1-2) — a follow-up
 process-ticket candidate, not a change to this PR.
+
+**PRM-SEAL-20 context:** The mechanical sealed-path guard matched `.kitchenloop/uat-cards/seed-0006a.md` in PR #20's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside.
