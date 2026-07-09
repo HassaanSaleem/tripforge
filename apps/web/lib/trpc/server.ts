@@ -10,7 +10,7 @@
 // LLM wiring (INV-013/019): deterministic FakeLLM by default — the stack is
 // fully functional with zero keys; AnthropicLLM (Haiku-pinned) is injected when
 // ANTHROPIC_API_KEY is configured.
-import { buildContainer, createContext, type Container, type TrpcContext } from "@tripforge/api";
+import { buildContainer, createAppCaller, createContext, type Container, type TrpcContext } from "@tripforge/api";
 import { AnthropicLLM } from "@tripforge/llm";
 import { optionalEnv } from "@tripforge/shared";
 import { getDb } from "../db.js";
@@ -33,4 +33,13 @@ function getContainer(): Container {
 export async function createTrpcContext(headers: Headers): Promise<TrpcContext> {
   const session = await getSessionContext(headers);
   return createContext({ session, container: getContainer() });
+}
+
+/**
+ * In-process caller with NO session, for anonymous server components (spec 010
+ * research D3 — the client-view page). Same procedures, same contract as the
+ * mounted /api/trpc surface (INV-018); public procedures only will succeed.
+ */
+export function getAnonymousCaller() {
+  return createAppCaller(createContext({ session: null, container: getContainer() }));
 }

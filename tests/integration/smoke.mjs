@@ -358,6 +358,84 @@ async function main() {
   const doubleConserved = assertConserved(afterBook, afterDouble);
   check("build→book: double-book conserves state (zero delta)", doubleConserved.ok, doubleConserved.detail);
 
+  // ─── 9. Client-view share (spec 010): share → anonymous redacted view ─────
+  // The trust boundary against the BUILT stack: the agent mints the durable
+  // link; a cookie-less caller resolves it and the payload/page carry the
+  // agency's brand and sell prices — never platform naming or agent-
+  // confidential vocabulary (FR-006/FR-007, contract §5).
+
+  // 9a. Share: itinerary_share_link +1, nothing else; path carries the token.
+  const beforeShare = await snapshotTables();
+  const share = await agent.api("POST", "/api/trpc/workspace.itinerary.share", { itineraryId });
+  const sharedData = share.json?.result?.data;
+  check(
+    "client-view: share mints the durable link (status shared, /view/{token} path)",
+    sharedData?.status === "shared" && /^\/view\/[0-9a-f-]{36}$/i.test(sharedData?.path ?? ""),
+    share.text.slice(0, 300),
+  );
+  const afterShare = await snapshotTables();
+  const shareDelta = assertDelta(beforeShare, afterShare, { itinerary_share_link: 1 });
+  check("client-view: share delta is itinerary_share_link +1 (others conserved)", shareDelta.ok, shareDelta.detail);
+
+  // 9b. Re-share is idempotent: SAME token, zero state delta (FR-004).
+  const reshare = await agent.api("POST", "/api/trpc/workspace.itinerary.share", { itineraryId });
+  check(
+    "client-view: re-share returns the SAME durable token",
+    reshare.json?.result?.data?.token === sharedData?.token,
+    reshare.text.slice(0, 200),
+  );
+  const afterReshare = await snapshotTables();
+  const reshareConserved = assertConserved(afterShare, afterReshare);
+  check("client-view: re-share conserves state (zero delta)", reshareConserved.ok, reshareConserved.detail);
+
+  // 9c. ANONYMOUS resolve — plain cookie-less GET (link-bearer access, FR-005):
+  // found view + confidentiality scan over the exact payload served (SC-003).
+  const token = sharedData?.token;
+  const resolveRes = await get(`/api/trpc/clientView.itinerary?input=${encodeURIComponent(JSON.stringify({ token }))}`);
+  const resolveText = await resolveRes.text();
+  let resolveJson = {};
+  try {
+    resolveJson = JSON.parse(resolveText);
+  } catch {
+    /* asserted below */
+  }
+  const viewData = resolveJson?.result?.data;
+  check(
+    "client-view: anonymous resolve returns the redacted view (200/found)",
+    resolveRes.status === 200 && viewData?.status === "found",
+    `status=${resolveRes.status} ${resolveText.slice(0, 200)}`,
+  );
+  check(
+    "client-view: view carries the agency brand + sell prices",
+    (viewData?.view?.agencyName ?? "").length > 0 &&
+      (viewData?.view?.days ?? []).some((d) => (d.items ?? []).some((i) => i.sellMinor > 0)),
+    resolveText.slice(0, 200),
+  );
+  const forbiddenVocab = ["netRate", "netMinor", "markup", "supplyRef", "provenance", "budgetMode", "tripRequest", "agencyId"];
+  const leaked = forbiddenVocab.filter((k) => resolveText.includes(k));
+  check("client-view: payload carries ZERO agent-confidential vocabulary (SC-003)", leaked.length === 0, `leaked: ${leaked.join(",")}`);
+
+  // 9d. The anonymous PAGE is white-label (INV-020): agency brand, no platform naming.
+  const pageRes = await get(`/view/${token}`);
+  const pageHtml = await pageRes.text();
+  check("client-view: /view/{token} renders (200)", pageRes.status === 200, `got ${pageRes.status}`);
+  check(
+    "client-view: page carries the agency's brand, not the platform's",
+    pageHtml.includes(`L3 Booking Agency ${stamp}`) && !pageHtml.includes("TripForge") && !pageHtml.includes("Trellis"),
+    `brand=${pageHtml.includes(`L3 Booking Agency ${stamp}`)} platform=${pageHtml.includes("TripForge") || pageHtml.includes("Trellis")}`,
+  );
+
+  // 9e. Unknown token: typed not_found — the unavailable state reveals nothing (FR-003).
+  const unknownRes = await get(
+    `/api/trpc/clientView.itinerary?input=${encodeURIComponent(JSON.stringify({ token: "00000000-0000-4000-8000-000000000000" }))}`,
+  );
+  const unknownJson = await unknownRes.json().catch(() => ({}));
+  check(
+    "client-view: unknown token resolves typed not_found",
+    unknownRes.status === 200 && unknownJson?.result?.data?.status === "not_found",
+    `got ${unknownRes.status}`,
+  );
+
   if (failures > 0) {
     console.error(`\nL3 smoke FAILED: ${failures} assertion(s) failed.`);
     process.exit(1);

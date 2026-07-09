@@ -26,6 +26,9 @@ export const WATCHED_TABLES = [
   "booking",
   "booking_component",
   "markup_ledger",
+  // Client-view share (spec 010): watched so an orphan share row anywhere
+  // (or a share write on a conserving branch) turns the gate red.
+  "itinerary_share_link",
 ];
 
 // -q suppresses command tags (BEGIN/INSERT 0 n/ROLLBACK) so stdout carries query

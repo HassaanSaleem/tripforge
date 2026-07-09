@@ -8,6 +8,10 @@ const t = initTRPC.context<TrpcContext>().create();
 
 export const router = t.router;
 
+/** Server-side caller factory (spec 010 research D3): lets a server component
+ * invoke procedures in-process — same contract, no self-HTTP hop. */
+export const createCallerFactory = t.createCallerFactory;
+
 /** Open to anyone (e.g. health/liveness). */
 export const publicProcedure = t.procedure;
 

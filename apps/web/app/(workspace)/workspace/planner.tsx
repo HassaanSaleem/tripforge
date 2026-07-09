@@ -11,6 +11,7 @@
 import { useState, type FormEvent } from "react";
 import { trpc, type DraftOutput } from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
+import { ShareControl } from "./share-control.js";
 import {
   draftErrorMessage,
   draftFailureMessage,
@@ -203,6 +204,9 @@ export function Planner() {
           {/* Booking controls exist only inside a verified agent's drafted plan
               (spec 009 FR-009, research D2); keyed so a new draft resets the flow. */}
           <BookingFlow key={view.outcome.itinerary.id} itinerary={view.outcome.itinerary} />
+          {/* Client-view share (spec 010 US2) — same composition rule, keyed the
+              same way so a new draft resets the shared-link state. */}
+          <ShareControl key={`share-${view.outcome.itinerary.id}`} itineraryId={view.outcome.itinerary.id} />
         </>
       ) : null}
     </section>

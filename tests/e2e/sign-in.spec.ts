@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { signInAgency, signUpAgency } from "./support.js";
 
 // L4 session-establishment journey (spec 007, ticket seed-0008; INV-023/024,
 // INV-027). Runs against the BUILT compose image (playwright.config baseURL).
@@ -21,15 +22,10 @@ test.describe.configure({ mode: "serial" });
 test("self-serve sign-up creates account + agency and lands in the workspace (US2)", async ({
   page,
 }) => {
-  await page.goto("/sign-up");
-  await page.getByLabel("Your name").fill(agentName);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByLabel("Agency name").fill(agencyName);
-  await page.getByRole("button", { name: /Create account & agency/i }).click();
+  // Rate-limit-aware shared helper (support.ts) asserts the workspace landing.
+  await signUpAgency(page, { name: agentName, email, password, agencyName });
 
-  // Lands in the workspace, greeted by HUMAN names — user, agency, role (FR-006).
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Greeted by HUMAN names — user, agency, role (FR-006).
   await expect(page.getByText(agentName, { exact: true })).toBeVisible();
   await expect(page.getByText(agencyName, { exact: true })).toBeVisible();
   await expect(page.getByText(/role\s+owner/i)).toBeVisible();
@@ -43,12 +39,8 @@ test("sign-out ends the session; sign-in re-establishes agent context on a fresh
 }) => {
   // Sign in (fresh browser context in this test — no cookies carried over):
   // the session-create hook must auto-activate the agency (research D1).
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: /^Sign in$/i }).click();
-
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Rate-limit-aware shared helper (support.ts) — same landing assertion.
+  await signInAgency(page, { email, password });
   await expect(page.getByText(agentName, { exact: true })).toBeVisible();
   await expect(page.getByText(agencyName, { exact: true })).toBeVisible();
 
@@ -82,11 +74,7 @@ test("wrong password is refused with a human-readable error and no session (FR-0
 test("an already-signed-in agent visiting /sign-in is sent to the workspace (D7 edge case)", async ({
   page,
 }) => {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: /^Sign in$/i }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  await signInAgency(page, { email, password });
 
   await page.goto("/sign-in");
   await expect(page).toHaveURL(/\/workspace$/);

@@ -394,6 +394,27 @@ export const listingRating = pgTable(
   }),
 );
 
+// ─── Share (spec 010: client-view share link) ────────────────────────────────
+
+// One durable, unguessable client-view link per itinerary (spec 010 FR-003/004).
+// The uuid PK IS the share token (gen_random_uuid, 122 random bits — research
+// D1); UNIQUE(itinerary_id) is the one-link arbiter, deciding concurrent share
+// races in the DB (marketplace duplicate-license-gate precedent). Tenant-owned
+// (INV-004); cascades make links of deleted itineraries behave as unknown
+// tokens. NOT a canonical itinerary schema change — the jsonb document shape is
+// untouched. Create-only at v0 (revocation/expiry deferred, spec Assumptions).
+export const itineraryShareLink = pgTable("itinerary_share_link", {
+  token: uuid("token").primaryKey().defaultRandom(),
+  agencyId: text("agency_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  itineraryId: uuid("itinerary_id")
+    .notNull()
+    .unique()
+    .references(() => itinerary.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const schema = {
   user,
   session,
@@ -413,6 +434,7 @@ export const schema = {
   marketplaceLicense,
   revenueShareLedger,
   listingRating,
+  itineraryShareLink,
 };
 
 export type Schema = typeof schema;

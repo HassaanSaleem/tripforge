@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { signUpAgency } from "./support.js";
 
 // L4 booking journey (spec 009, ticket seed-0009b; INV-027). Runs against the
 // BUILT compose image under EITHER planner — the deterministic fake (INV-019,
@@ -27,13 +28,8 @@ const password = "booking-pass-9";
 test.describe.configure({ mode: "serial" });
 
 async function signUp(page: Page): Promise<void> {
-  await page.goto("/sign-up");
-  await page.getByLabel("Your name").fill(agentName);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByLabel("Agency name").fill(agencyName);
-  await page.getByRole("button", { name: /Create account & agency/i }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Rate-limit-aware shared helper (support.ts) — same landing assertion.
+  await signUpAgency(page, { name: agentName, email, password, agencyName });
 }
 
 async function draftTrip(page: Page): Promise<void> {

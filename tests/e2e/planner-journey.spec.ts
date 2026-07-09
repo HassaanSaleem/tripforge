@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { signInAgency, signUpAgency } from "./support.js";
 
 // L4 planner journey (spec 008, ticket seed-0009a; INV-027). Runs against the
 // BUILT compose image (playwright.config baseURL) under EITHER planner — the
@@ -32,11 +33,8 @@ const password = "planner-pass-9";
 test.describe.configure({ mode: "serial" });
 
 async function signIn(page: Page): Promise<void> {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: /^Sign in$/i }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Rate-limit-aware shared helper (support.ts) — same landing assertion.
+  await signInAgency(page, { email, password });
 }
 
 async function fillTripForm(page: Page): Promise<void> {
@@ -55,14 +53,9 @@ test("an agent drafts a trip and sees the rendered itinerary + budget fit (US1)"
   page,
 }) => {
   test.setTimeout(DRAFT_TIMEOUT_MS + 30_000);
-  // Fresh self-serve agent (same journey sign-in.spec.ts pins).
-  await page.goto("/sign-up");
-  await page.getByLabel("Your name").fill(agentName);
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill(password);
-  await page.getByLabel("Agency name").fill(agencyName);
-  await page.getByRole("button", { name: /Create account & agency/i }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Fresh self-serve agent (same journey sign-in.spec.ts pins), via the
+  // rate-limit-aware shared helper (support.ts) — same landing assertion.
+  await signUpAgency(page, { name: agentName, email, password, agencyName });
 
   // The planner form is part of the agent workspace (FR-001).
   await expect(page.getByRole("button", { name: "Draft itinerary" })).toBeVisible();

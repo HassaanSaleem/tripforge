@@ -7,6 +7,7 @@ import { z } from "zod";
 import { router, agentProcedure } from "../trpc.js";
 import { draftItinerary, tripRequestSchema } from "../services/planner.js";
 import { itineraryOverview } from "../services/booking.js";
+import { createShareLink, shareInputSchema } from "../services/client-view.js";
 
 const getInputSchema = z.strictObject({ itineraryId: z.uuid() });
 
@@ -21,6 +22,18 @@ export const itineraryRouter = router({
     .input((value) => getInputSchema.parse(value))
     .query(async ({ ctx, input }) => {
       const result = await itineraryOverview(ctx.container, ctx.session, input.itineraryId);
+      if (result.status === "not_found") {
+        throw new TRPCError({ code: "NOT_FOUND" });
+      }
+      return result;
+    }),
+
+  /** Mint (or return) THE durable client-view share link (spec 010 contract §1).
+   * Idempotent per itinerary; cross-tenant probes are NOT_FOUND (no oracle). */
+  share: agentProcedure
+    .input((value) => shareInputSchema.parse(value))
+    .mutation(async ({ ctx, input }) => {
+      const result = await createShareLink(ctx.container, ctx.session, input.itineraryId);
       if (result.status === "not_found") {
         throw new TRPCError({ code: "NOT_FOUND" });
       }
