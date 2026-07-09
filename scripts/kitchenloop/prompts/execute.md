@@ -109,7 +109,27 @@ scan (search `packages/` and read the relevant public surfaces) and record the d
 `reuse` / `extend` / `generalize` / `new` (with a one-line justification) — in the PR body. A
 near-duplicate of an existing export without a recorded decision is review-blocking.
 
-For each ticket, sequentially:
+**Batching policy (operator, 2026-07-09) — amortize the fixed per-cycle overhead
+(Live Test, regress, gate) without creating a PR pile-up.** A cycle produces
+exactly ONE of:
+- **(a) one FEATURE-sized ticket** on its own branch + PR (full SDD flow).
+  Anything touching money paths, the canonical itinerary schema, or the
+  supply-adapter boundary is ALWAYS its own cycle — never co-bundled.
+- **(b) a BUNDLE of small tickets** — bug-sized + improvement-sized items, each
+  roughly ≲1hr — worked together on a SINGLE shared branch
+  `kitchen/batch-<short_desc>` → **ONE PR** that lists every bundled ticket (one
+  `Ticket: <id>` line each in the body).
+
+When bundling (case b): create the branch ONCE (step 5), implement + commit each
+ticket separately (steps 6–10, one commit per ticket), run Live Test & Fix ONCE
+over the combined change (step 9), then open ONE PR and transition ALL bundled
+tickets to `in_review` (steps 11–13). This is the point of Step 1/Step 2 letting
+you pick 3–5 tickets: spend one cycle's overhead on several small fixes, not one
+— but in a SINGLE PR, so open-PR count still rises by at most one per cycle.
+NEVER put a feature-sized ticket in a bundle; if the top ticket is feature-sized,
+this cycle is case (a) and works that ticket alone.
+
+For each ticket (or each ticket in the bundle), sequentially:
 
 1. **Read** the ticket fully (from `.kitchenloop/backlog.json` when provider is `none`).
 2. **Read** relevant code files, docs, and patterns before implementing.
