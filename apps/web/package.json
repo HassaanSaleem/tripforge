@@ -15,6 +15,7 @@
     "@tripforge/db": "workspace:*",
     "@tripforge/llm": "workspace:*",
     "@tripforge/shared": "workspace:*",
+    "@trpc/client": "11.18.0",
     "@trpc/server": "^11.0.0",
     "better-auth": "^1.2.7",
     "next": "^15.1.6",

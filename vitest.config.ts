@@ -7,9 +7,15 @@ import { defineConfig } from "vitest/config";
 // or docker (spec 004 FR-014).
 // Workspace packages export TS source directly (`exports` -> ./src/index.ts), so
 // Vitest's esbuild transform resolves `@tripforge/*` imports with no build step.
+// apps/web/lib holds the web app's pure view-logic helpers (spec 008 research D8)
+// — DOM-free, so they run under the same node environment.
 export default defineConfig({
   test: {
-    include: ["packages/**/src/**/*.test.ts", "tests/live/**/__tests__/**/*.test.ts"],
+    include: [
+      "packages/**/src/**/*.test.ts",
+      "tests/live/**/__tests__/**/*.test.ts",
+      "apps/web/lib/**/*.test.ts",
+    ],
     exclude: ["**/node_modules/**", "**/dist/**", "**/.next/**"],
     environment: "node",
     passWithNoTests: false,

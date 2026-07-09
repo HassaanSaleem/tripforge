@@ -49,13 +49,45 @@ function tripDayCount(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86_400_000));
 }
 
-/** Tool executors closing over the composition root's ports (research D7). */
-function plannerToolDeps(container: Container): PlannerToolDeps {
+/**
+ * Canonical supply-search criteria, derived ONCE from the trip request — the
+ * single vocabulary shared by the planner's tool executors, the assembly-time
+ * verification sweep, and (via the persisted trip request) the quote flow's
+ * INV-028 hold re-establishment. Supply offer identity is keyed off these
+ * criteria, so any lexical drift between the sweeps silently drops genuinely
+ * tool-returned proposals as unknown offers (spec 008 live fix, FR-011).
+ */
+function canonicalCriteria(req: Pick<TripRequest, "destination" | "checkIn" | "checkOut" | "party">) {
+  const guests = req.party.adults + req.party.children;
+  const airport = `${req.destination} Airport`;
   return {
-    searchHotelRates: (c) => container.hotel.search(c),
-    searchActivities: (c) => container.activity.search(c),
-    quoteTransfer: (c) => container.transfer.search(c),
-    quoteCarRental: (c) => container.carRental.search(c),
+    hotel: { destination: req.destination, checkIn: req.checkIn, checkOut: req.checkOut, guests },
+    activity: { destination: req.destination, participants: guests },
+    transfer: { from: airport, to: req.destination, at: `${req.checkIn}T10:00:00Z`, passengers: guests },
+    carRental: {
+      pickupLocation: airport,
+      pickupAt: `${req.checkIn}T10:00:00Z`,
+      dropoffAt: `${req.checkOut}T10:00:00Z`,
+    },
+  };
+}
+
+/**
+ * Tool executors closing over the composition root's ports (research D7).
+ * Trip-scoped criteria are PINNED to the canonical trip request (spec 008
+ * live fix, FR-011): the model chooses WHICH returned offers to propose, but
+ * cannot search a different trip than the agent described. Every offer the
+ * model sees is therefore keyed exactly as the verification sweep re-reads
+ * it, so model-authored criteria phrasing ("Paris, France" for a "Paris"
+ * trip) can no longer drop tool-returned proposals at assembly.
+ */
+function plannerToolDeps(container: Container, req: TripRequest): PlannerToolDeps {
+  const criteria = canonicalCriteria(req);
+  return {
+    searchHotelRates: () => container.hotel.search(criteria.hotel),
+    searchActivities: () => container.activity.search(criteria.activity),
+    quoteTransfer: () => container.transfer.search(criteria.transfer),
+    quoteCarRental: () => container.carRental.search(criteria.carRental),
   };
 }
 
@@ -69,22 +101,11 @@ export async function verifiedSupplyCatalog(
   container: Container,
   req: Pick<TripRequest, "destination" | "checkIn" | "checkOut" | "party">,
 ): Promise<VerifiedOffer[]> {
-  const guests = req.party.adults + req.party.children;
-  const airport = `${req.destination} Airport`;
+  const criteria = canonicalCriteria(req);
   const [hotels, activities, transfers] = await Promise.all([
-    container.hotel.search({
-      destination: req.destination,
-      checkIn: req.checkIn,
-      checkOut: req.checkOut,
-      guests,
-    }),
-    container.activity.search({ destination: req.destination, participants: guests }),
-    container.transfer.search({
-      from: airport,
-      to: req.destination,
-      at: `${req.checkIn}T10:00:00Z`,
-      passengers: guests,
-    }),
+    container.hotel.search(criteria.hotel),
+    container.activity.search(criteria.activity),
+    container.transfer.search(criteria.transfer),
   ]);
   return [
     ...hotels.map<VerifiedOffer>((o) => ({
@@ -150,7 +171,7 @@ export async function draftItinerary(
         localTransportMinor: allocatedMinor("localTransport"),
       },
     },
-    tools: plannerToolDeps(container),
+    tools: plannerToolDeps(container, input),
   });
   if (drafted.status === "failed") {
     return { status: "planner_failed", reason: drafted.reason };
