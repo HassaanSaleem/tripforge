@@ -152,13 +152,10 @@
     "title": "Agency-admin surface consuming agencyAdminProcedure (member management + billing)",
     "body": "Feature-sized \u2014 route through Spec Kit. Low priority / forward-looking placeholder so the owner/admin tier is not orphaned.\n\nSource: docs/internal/reports/iteration-2-report.md [FEAT-1].\n\nPROBLEM: agencyAdminProcedure (owner/admin tier) exists in the tRPC middleware (packages/api/src/trpc.ts:49, exported packages/api/src/index.ts:20) but NO router consumes it. Member management and billing have no seed yet; markup-policy admin lands with seed-0005 (budget allocator + quote-then-book, markup control). The ladder contract is pinned by tests (agency-admin-rbac.test.ts, landed by seed-0007), so the eventual surface inherits a tested gate. Not a P0 gap today (per the report) \u2014 tracked so the tier gets a real consumer. In-phase, P0-adjacent, agent-side.\n\nFILE POINTERS: packages/api/src/trpc.ts:49 (agencyAdminProcedure); packages/api/src/index.ts:20; packages/api/src/__tests__/agency-admin-rbac.test.ts (pinned contract).\n\nACCEPTANCE CRITERIA:\n  1. At least one router/procedure consumes agencyAdminProcedure for a real admin op (member management or billing), covered by an L2 caller test that reuses the pinned ladder (owner/admin allowed; member/traveler FORBIDDEN; anon UNAUTHORIZED; INV-004 tenant scoping).\n  2. Markup-policy admin is explicitly tracked to seed-0005 rather than duplicated here.\n\nDepends on: seed-0007 (pins the agencyAdminProcedure contract). Related: seed-0005 (markup policy).",
     "type": "feature",
-    "priority": "high",
-    "state": "todo",
+    "priority": "low",
+    "state": "backlog",
     "created": "2026-07-06T00:00:00Z",
-    "pr_url": "",
-    "blockedBy": [
-      "seed-0008"
-    ]
+    "pr_url": ""
   },
   {
     "id": "spec-gap-0001",
@@ -345,7 +342,7 @@
     "pr_url": "",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
-      "seed-0009"
+      "seed-0009a"
     ]
   },
   {
@@ -359,7 +356,7 @@
     "pr_url": "",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
-      "seed-0009"
+      "seed-0009a"
     ]
   },
   {
@@ -375,5 +372,19 @@
     "blockedBy": [
       "seed-0008"
     ]
+  },
+  {
+    "id": "seed-0009a",
+    "type": "feature",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-09T00:00:00Z",
+    "pr_url": "",
+    "blockedBy": [
+      "seed-0008"
+    ],
+    "title": "Workspace UI: AI itinerary planner \u2014 prompt to a rendered draft itinerary, wired to planner tRPC",
+    "body": "DEMO SURFACE (core). Build apps/web/app/(workspace)/workspace into a real planner: an input for trip description + budget, call the planner/itinerary tRPC, and RENDER the returned canonical itinerary (days/items) in the browser. Replace the sign-in stub with the actual planner experience for authenticated agents. Live Test: a real browser journey plans a trip and sees the itinerary rendered.",
+    "notes": "Operator demo-path ticket. Core UI surface: sign-in (seed-0008) -> THIS -> booking UI (seed-0009b) -> view/marketplace."
   }
 ]
