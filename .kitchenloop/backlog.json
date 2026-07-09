@@ -388,7 +388,7 @@
     ],
     "title": "Workspace UI: AI itinerary planner \u2014 prompt to a rendered draft itinerary, wired to planner tRPC",
     "body": "DEMO SURFACE (core). Build apps/web/app/(workspace)/workspace into a real planner: an input for trip description + budget, call the planner/itinerary tRPC, and RENDER the returned canonical itinerary (days/items) in the browser. Replace the sign-in stub with the actual planner experience for authenticated agents. Live Test: a real browser journey plans a trip and sees the itinerary rendered.",
-    "notes": "Operator demo-path ticket. Core UI surface: sign-in (seed-0008) -> THIS -> booking UI (seed-0009b) -> view/marketplace."
+    "notes": "Operator demo-path ticket. Core UI surface: sign-in (seed-0008) -> THIS -> booking UI (seed-0009b) -> view/marketplace.\nKitchen Loop iteration 3 execute (2026-07-09): picked as top ticket (high feature, blocker seed-0008 merged PR #21); case (a) solo feature cycle via SDD. | Re-run 2026-07-09: prior execute built it fully (planner.tsx + 20 unit tests + e2e + SDD 008) but stalled on slow Docker verify-build before Live-Test/PR; work preserved on branch rescue/seed-0009a-planner-ui. Rebuild with cached Docker layers."
   },
   {
     "id": "17835855958084613060",
