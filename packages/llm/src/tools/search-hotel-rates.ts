@@ -7,7 +7,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { HotelOffer, HotelSearchCriteria } from "@tripforge/supply-adapter";
 
-export const searchHotelRatesInput = z.strictObject({
+const searchHotelRatesInput = z.strictObject({
   destination: z.string().min(1).describe("City or area to search"),
   checkIn: z.string().describe("Check-in date, ISO format (YYYY-MM-DD)"),
   checkOut: z.string().describe("Check-out date, ISO format (YYYY-MM-DD)"),
@@ -19,7 +19,7 @@ const _criteriaCheck: HotelSearchCriteria = {} as z.infer<typeof searchHotelRate
 void _criteriaCheck;
 
 /** Compact, supplier-agnostic offer serialization for the model's context. */
-export function serializeHotelOffers(offers: HotelOffer[]): string {
+function serializeHotelOffers(offers: HotelOffer[]): string {
   return JSON.stringify(
     offers.map((o) => ({
       offerId: o.offerId,

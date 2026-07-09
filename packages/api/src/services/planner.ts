@@ -40,7 +40,7 @@ export const tripRequestSchema = z
 
 export type TripRequest = z.infer<typeof tripRequestSchema>;
 
-export type DraftOutcome =
+type DraftOutcome =
   | { status: "drafted"; itinerary: Itinerary; fit: AssembleResult["fit"] }
   | { status: "infeasible"; reason: "budget_below_reserve" | "no_days" }
   | { status: "planner_failed"; reason: "malformed_output" | "no_proposals" };
@@ -50,7 +50,7 @@ function tripDayCount(checkIn: string, checkOut: string): number {
 }
 
 /** Tool executors closing over the composition root's ports (research D7). */
-export function plannerToolDeps(container: Container): PlannerToolDeps {
+function plannerToolDeps(container: Container): PlannerToolDeps {
   return {
     searchHotelRates: (c) => container.hotel.search(c),
     searchActivities: (c) => container.activity.search(c),

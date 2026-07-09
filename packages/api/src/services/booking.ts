@@ -50,13 +50,13 @@ export const quoteInputSchema = z.strictObject({
   itineraryId: z.uuid(),
   markupBps: z.number().int().min(0).max(10_000).default(1500),
 });
-export type QuoteInput = z.infer<typeof quoteInputSchema>;
+type QuoteInput = z.infer<typeof quoteInputSchema>;
 
 export const bookInputSchema = z.strictObject({
   itineraryId: z.uuid(),
   quoteRowIds: z.array(z.uuid()).min(1),
 });
-export type BookInput = z.infer<typeof bookInputSchema>;
+type BookInput = z.infer<typeof bookInputSchema>;
 
 export interface HeldQuote {
   quoteRowId: string;
@@ -70,11 +70,11 @@ export interface HeldQuote {
   expiresAt: string;
 }
 
-export type QuoteItemOutcome =
+type QuoteItemOutcome =
   | { itemId: string; outcome: "held"; quote: HeldQuote }
   | { itemId: string; outcome: "failed"; reason: "unknown_offer" | "no_rate" | "already_booked" };
 
-export type BookComponentOutcome =
+type BookComponentOutcome =
   | {
       quoteRowId: string;
       itemId: string;

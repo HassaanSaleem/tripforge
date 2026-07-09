@@ -6,7 +6,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { CarRentalOffer, CarRentalSearchCriteria } from "@tripforge/supply-adapter";
 
-export const quoteCarRentalInput = z.strictObject({
+const quoteCarRentalInput = z.strictObject({
   pickupLocation: z.string().min(1).describe("Pickup location"),
   dropoffLocation: z.string().min(1).optional().describe("Drop-off location; omit for round-trip"),
   pickupAt: z.string().describe("Pickup ISO datetime"),
@@ -17,7 +17,7 @@ export const quoteCarRentalInput = z.strictObject({
 const _criteriaCheck: CarRentalSearchCriteria = {} as z.infer<typeof quoteCarRentalInput>;
 void _criteriaCheck;
 
-export function serializeCarRentalOffers(offers: CarRentalOffer[]): string {
+function serializeCarRentalOffers(offers: CarRentalOffer[]): string {
   return JSON.stringify(
     offers.map((o) => ({
       offerId: o.offerId,

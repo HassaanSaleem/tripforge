@@ -9,7 +9,7 @@ import type { OfferBase, QuoteBase, SupplyPort } from "../ports/common.js";
 
 const MERCHANTS_OF_RECORD = ["platform", "agency", "supplier"];
 
-export interface FakeClock {
+interface FakeClock {
   now: () => number;
   advance: (ms: number) => void;
 }
@@ -24,7 +24,7 @@ export function makeFakeClock(startMs: number = Date.parse("2026-01-01T00:00:00Z
   };
 }
 
-export interface SupplyPortContractHarness<TCriteria> {
+interface SupplyPortContractHarness<TCriteria> {
   /** Fresh implementation on the given clock — no state may leak between calls. */
   makePort: (now: () => number) => SupplyPort<TCriteria, OfferBase, QuoteBase>;
   /** Criteria the implementation has inventory for. */

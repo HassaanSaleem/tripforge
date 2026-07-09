@@ -5,8 +5,6 @@
 // (ALWAYS-HALT) — the loop proposes, the owner authorizes the bump.
 import { ItinerarySchema, SCHEMA_VERSION, type Itinerary } from "./itinerary.js";
 
-export { SCHEMA_VERSION };
-
 /** A pure old→new upgrade. Takes an unknown (unvalidated) value and reshapes it. */
 type Migrator = (input: unknown) => unknown;
 

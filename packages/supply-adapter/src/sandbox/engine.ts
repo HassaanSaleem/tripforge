@@ -24,7 +24,7 @@ import type {
  */
 export const SANDBOX_FAIL_BOOK_OFFER_ID = "sandbox-fail-book";
 
-export interface SandboxEngineOptions {
+interface SandboxEngineOptions {
   /** Component tag baked into generated ids so cross-port ids never collide. */
   component: string;
   /** Hold window for quotes issued by this supplier (per-quote expiry, INV-006). */
