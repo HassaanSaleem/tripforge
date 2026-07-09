@@ -275,7 +275,8 @@
     "priority": "medium",
     "state": "backlog",
     "created": "2026-07-08T13:46:03Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): scope grew \u2014 the repeated FK/money column-group clones in packages/db/src/schema.ts now include the seed-0006 marketplace tables (jscpd clone triplet at L175-238, 86-126 tokens), and schema.ts crossed the compactness threshold at 418 lines (>400). The same column-builder extraction resolves both the duplication and the outlier. Witness: .kitchenloop/logs/regress-iter-3-jscpd.log."
   },
   {
     "id": "17835183631278801849",
@@ -285,7 +286,8 @@
     "priority": "low",
     "state": "backlog",
     "created": "2026-07-08T13:46:03Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): UNBLOCKED \u2014 both sequencing dependencies merged (PR #13 seed-0005, seed-0005c markup math now in packages/domain). booking.ts grew 531 -> 711 lines meanwhile (seed-0005b/d/e + spec-gap-0002 claim-gate work). Recommend grooming bump low -> medium. Witness: wc -l in regress-iter-3 transcript."
   },
   {
     "id": "17835183631278830499",
@@ -315,7 +317,7 @@
     "body": "TRUST gap from PR #17 codex gate (Medium). licenseListing (packages/marketplace/src/licensing.ts) checks the RESELLER's current vetting (isVetted(db, actor.agencyId)) but NOT the seller's (listing.sellerAgencyId). Spec 006 requires BOTH sides vetted at v0; the vetting helper's own comment says both must pass. So an active listing stays licensable after the seller's vetting is removed/invalidated. FIX: inside the license transaction, also isVetted(db, listing.sellerAgencyId) and refuse (unvetted) if not. Add an L3 test: licensing a de-vetted seller's active listing is refused with zero delta (no license/ledger/copy/PMF rows).",
     "type": "bug",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-09T00:00:00Z",
     "pr_url": "",
     "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main."
@@ -386,5 +388,15 @@
     "title": "Workspace UI: AI itinerary planner \u2014 prompt to a rendered draft itinerary, wired to planner tRPC",
     "body": "DEMO SURFACE (core). Build apps/web/app/(workspace)/workspace into a real planner: an input for trip description + budget, call the planner/itinerary tRPC, and RENDER the returned canonical itinerary (days/items) in the browser. Replace the sign-in stub with the actual planner experience for authenticated agents. Live Test: a real browser journey plans a trip and sees the itinerary rendered.",
     "notes": "Operator demo-path ticket. Core UI surface: sign-in (seed-0008) -> THIS -> booking UI (seed-0009b) -> view/marketplace."
+  },
+  {
+    "id": "17835855958084613060",
+    "title": "quality-sweep delta (iter-3 re-run): marketplace knip findings \u2014 unused @tripforge/shared dep + premature RatingAggregate export",
+    "body": "Found by the iteration-3 regress re-run delta sweep (2026-07-09) over code merged after the 2026-07-08 baseline sweep (b4b978e). knip in-image against the seed-0006a tree: (1) packages/marketplace/package.json declares @tripforge/shared as a dependency but no marketplace module imports it \u2014 remove the dep; (2) packages/marketplace/src/ratings.ts:32 exports interface RatingAggregate with no consumer \u2014 premature export, inline or un-export per the clean-architecture premature-export rule (mind the knip entry-export/TS4023 caveat if it is inference-load-bearing via index.ts); (3) knip config hints grew 7 -> 8 (marketplace src/index.ts redundant entry pattern) \u2014 fold into QS3-6 (17835183631278830499) when it runs. Witness: .kitchenloop/logs/regress-iter-3-knip.log (worktree kitchen-iter-3). Dedupe: QS3-1 (merged PR #18) covered the pre-marketplace export set; no open ticket covers these two.",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-09T08:26:35Z",
+    "pr_url": ""
   }
 ]
