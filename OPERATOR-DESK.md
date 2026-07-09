@@ -21,6 +21,8 @@ Rules for the loop:
 | ✅ UAT-PR18 (resolved) | *(done)* | Waive the UAT-card gate for PR #18 (QS3-1: remove/inline 20 knip-flagged unused exports — export-surface-only, no behavior change)? | RESOLVED 2026-07-09 — waived (export-surface-only, no runtime path, no browser journey applies); merged #18. | 2026-07-09 | done |
 | ✅ PRM-SEAL-20 (resolved) | *(done)* | PR #20 changes a sealed loop gate (`.kitchenloop/uat-cards/seed-0006a.md`); the loop may not merge it. | RESOLVED 2026-07-09 — operator reviewed: legit new UAT card; seller-vetting fix refuses a de-vetted seller (not_vetted, state conserved), falsifiable UAT card, L3-tested; merged #20. | 2026-07-09 | done |
 | ✅ PRM-SEAL-21 (resolved) | *(done)* | PR #21 sealed UAT card seed-0008.md | RESOLVED 2026-07-09 — legit new card; sign-in UI Live-Test PASS (browser journey), 254/254 tests, e2e 9/9; merged #21. | 2026-07-09 | done |
+| ✅ PRM-SEAL-23 (resolved) | *(done)* | PR #23 sealed UAT card seed-0009a.md | RESOLVED 2026-07-09 — legit NEW card (absent on main, not an edit). Planner UI Live-Test PASS: rendered "Lisbon City Break — 3 Days/2 Nights" itinerary on the premium theme (operator eyed the screenshot), e2e 12/12, in-image 278/278, L3 smoke 30/30, zero-context UAT evaluator 6/6 PASS. Both paused blockers resolved (empty-itinerary = real canonicalCriteria drift, fixed; signup-403 = BETTER_AUTH_URL origin, not a product bug). No schema/money/gate weakening. Merged #23 (4fd1aa77a). Latent booking deadlock filed seed-0015 (high). | 2026-07-09 | done |
+| REGRESS-ARTIFACT-LOSS | `fix artifact landing` | Authorize a kitchenloop.sh fix so post-phase auto-commits land regress/sweep artifacts durably (iteration branch or main), not on the worktree's current feature branch? | Yes — target `kitchen/iter-N` for phase-artifact commits regardless of the worktree's checked-out branch (or commit artifacts straight to a dedicated loop-state branch) | 2026-07-09 | Nothing today (this run's artifacts ride the open seed-0009a PR); recurs whenever regress runs on an already-merged feature branch |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -153,3 +155,21 @@ process-ticket candidate, not a change to this PR.
 **PRM-SEAL-20 context:** The mechanical sealed-path guard matched `.kitchenloop/uat-cards/seed-0006a.md` in PR #20's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside.
 
 **PRM-SEAL-21 context:** The mechanical sealed-path guard matched `.kitchenloop/uat-cards/seed-0008.md` in PR #21's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside.
+
+**PRM-SEAL-23 context:** The mechanical sealed-path guard matched `.kitchenloop/uat-cards/seed-0009a.md` in PR #23's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside.
+
+**REGRESS-ARTIFACT-LOSS** — Iteration 3 needed three regress runs because the
+orchestrator's post-phase auto-commit pushes artifacts (loop-state, sweep report,
+patterns, backlog snapshot) to the worktree's CURRENT branch: the 2026-07-08 run's
+commit was orphaned on `rescue/iter-3-b4b978e`, and the 07-09-morning run's commit
+(d999def) sat on `kitchen/fix-seed-0006a-seller-vetting` after PR #20 had already
+squash-merged — both green runs' state never reached main (this also explains the
+pr-auditor advisory on UAT-PR18 about the missing in-tree sweep report). The third
+run recovered the sweep report from d999def (now in-tree with provenance notes) and
+re-landed loop state. Root-queue tickets always survived; only worktree artifacts
+are at risk. The fix touches `scripts/kitchenloop/kitchenloop.sh` (loop machinery,
+operator-authorized by precedent) — the loop will not self-modify the orchestrator
+without this row being answered. Nothing is blocked today: the current regress ran
+on the not-yet-merged `kitchen/fix-seed-0009a-planner-ui`, so its artifacts enter
+PR-diff scope; the loss recurs whenever regress runs on a branch whose PR already
+merged.
