@@ -1,0 +1,117 @@
+// L3 — workspace.itinerary.list against a REAL database (spec 011 contract §2,
+// FR-010): the marketplace picker's read is tenant-scoped by construction —
+// two agencies draft through the real product path and each caller sees
+// EXACTLY its own rows (INV-004, no cross-tenant leakage), newest first, with
+// the 3-field projection only (no documents, no trip requests). The RBAC
+// ladder is re-pinned at this procedure (anon UNAUTHORIZED / traveler
+// FORBIDDEN) so the gate travels with the surface it protects.
+//
+// Env-gated like the sibling l3 suites: runs when DATABASE_URL points at a
+// live Postgres (compose stack); skipping without the env is loud, not green.
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
+import { createDb, organization, user as userTable, type DbHandle } from "@tripforge/db";
+import {
+  SandboxActivityAdapter,
+  SandboxCarRentalAdapter,
+  SandboxHotelAdapter,
+  SandboxTransferAdapter,
+} from "@tripforge/supply-adapter";
+import { FakeLLM } from "@tripforge/llm";
+import { appRouter } from "../routers/root.js";
+import { STATIC_RATES } from "../rates.js";
+import type { Container, SessionContext } from "../context.js";
+
+const DATABASE_URL = process.env.DATABASE_URL;
+const LONG = 30_000;
+
+describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", () => {
+  let handle: DbHandle;
+
+  beforeAll(() => {
+    handle = createDb(DATABASE_URL as string);
+  });
+  afterAll(async () => {
+    await handle.close();
+  });
+
+  function makeContainer(): Container {
+    return {
+      hotel: new SandboxHotelAdapter(),
+      activity: new SandboxActivityAdapter(),
+      transfer: new SandboxTransferAdapter(),
+      carRental: new SandboxCarRentalAdapter(),
+      llm: new FakeLLM(),
+      rates: STATIC_RATES,
+      db: handle.db,
+    };
+  }
+
+  async function makeAgency(name: string): Promise<SessionContext & { agencyId: string }> {
+    const agencyId = `l3il-agency-${randomUUID()}`;
+    const userId = `l3il-user-${randomUUID()}`;
+    await handle.db.insert(organization).values({ id: agencyId, name, slug: agencyId });
+    await handle.db.insert(userTable).values({ id: userId, name: `${name} User`, email: `${userId}@example.test` });
+    return { userId, agencyId, agencyRole: "member" };
+  }
+
+  function callerFor(session: SessionContext | null) {
+    return appRouter.createCaller({ session, container: makeContainer() });
+  }
+
+  async function draft(session: SessionContext, destination: string): Promise<string> {
+    const drafted = await callerFor(session).workspace.itinerary.draft({
+      destination,
+      checkIn: "2026-09-01",
+      checkOut: "2026-09-03",
+      party: { adults: 2, children: 0 },
+      budget: { mode: "hardCap", amountMinor: 100_000, currency: "USD" },
+    });
+    expect(drafted.status).toBe("drafted");
+    if (drafted.status !== "drafted") throw new Error("draft failed");
+    return drafted.itinerary.id;
+  }
+
+  it(
+    "each agency sees exactly its own itineraries, newest first, projection-only (INV-004)",
+    async () => {
+      const alpha = await makeAgency("Alpha Voyages");
+      const beta = await makeAgency("Beta Trails");
+      const alphaFirst = await draft(alpha, "Paris");
+      const alphaSecond = await draft(alpha, "Lisbon");
+      const betaOnly = await draft(beta, "Rome");
+
+      const alphaList = await callerFor(alpha).workspace.itinerary.list();
+      const betaList = await callerFor(beta).workspace.itinerary.list();
+
+      // Exactly its own rows — the other tenant's ids never appear.
+      expect(alphaList.itineraries.map((i) => i.id).sort()).toEqual([alphaFirst, alphaSecond].sort());
+      expect(betaList.itineraries.map((i) => i.id)).toEqual([betaOnly]);
+
+      // Newest first (createdAt is server-stamped on the real insert path).
+      const stamps = alphaList.itineraries.map((i) => Date.parse(i.createdAt));
+      expect(stamps[0]).toBeGreaterThanOrEqual(stamps[1] as number);
+
+      // Picker projection ONLY: no canonical document, no trip request.
+      for (const row of alphaList.itineraries) {
+        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "title"]);
+        expect(row.currency).toBe("USD");
+        expect(row.title.length).toBeGreaterThan(0);
+      }
+    },
+    LONG,
+  );
+
+  it(
+    "the RBAC ladder travels with the procedure: anon UNAUTHORIZED, traveler FORBIDDEN",
+    async () => {
+      await expect(callerFor(null).workspace.itinerary.list()).rejects.toMatchObject({
+        code: "UNAUTHORIZED",
+      });
+      await expect(
+        callerFor({ userId: `l3il-traveler-${randomUUID()}` }).workspace.itinerary.list(),
+      ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    },
+    LONG,
+  );
+});

@@ -35,6 +35,12 @@ export default async function WorkspacePage() {
     <>
       <header className="tf-header tf-workspace-header">
         <span className="tf-brand">TripForge</span>
+        <nav className="tf-nav" aria-label="Workspace">
+          <Link href="/workspace" aria-current="page">
+            Workspace
+          </Link>
+          <Link href="/marketplace">Marketplace</Link>
+        </nav>
         <div className="tf-id">
           <b>{identity.userName}</b>
           <i className="sep" aria-hidden="true" />

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { expect, type Page } from "@playwright/test";
 
 export interface AgencySignUp {
@@ -76,4 +77,32 @@ export async function signInAgency(page: Page, input: { email: string; password:
   }
 
   await expect(page).toHaveURL(/\/workspace$/);
+}
+
+/**
+ * OPERATOR-SIDE test arrangement (spec 011 research D10): vetting is a
+ * platform-operator action — the ONLY product writer of agency_vetting is
+ * packages/db/scripts/vet-agency.mjs, and nothing in the UI may vet. The e2e
+ * journeys therefore perform the operator's half directly against the compose
+ * Postgres (the same insert-the-row arrangement the L3 suites use), keyed by
+ * the unique agency name the test itself created. Idempotent; fails loudly if
+ * the agency does not exist.
+ */
+export function vetAgencyByName(agencyName: string): void {
+  const escaped = agencyName.replace(/'/g, "''");
+  const sql =
+    `INSERT INTO agency_vetting (agency_id, vetted_by) ` +
+    `SELECT id, 'e2e-operator' FROM organization WHERE name = '${escaped}' ` +
+    `ON CONFLICT (agency_id) DO NOTHING RETURNING agency_id`;
+  const out = execSync(
+    `docker compose exec -T postgres psql -U tripforge -d tripforge -tAc "${sql.replace(/"/g, '\\"')}"`,
+    { encoding: "utf8" },
+  );
+  const check = execSync(
+    `docker compose exec -T postgres psql -U tripforge -d tripforge -tAc "SELECT count(*) FROM agency_vetting v JOIN organization o ON o.id = v.agency_id WHERE o.name = '${escaped}'"`,
+    { encoding: "utf8" },
+  );
+  if (check.trim() !== "1") {
+    throw new Error(`vetAgencyByName: agency "${agencyName}" not vetted (insert output: ${out.trim()})`);
+  }
 }

@@ -6,6 +6,7 @@
 // only display strings that come from here (contract §3). The server stays
 // authoritative for every money value and booking outcome (FR-007/FR-008) —
 // nothing here computes money.
+import { formatBps, percentToBps } from "./basis-points.js";
 import { transportErrorMessage } from "./transport-error.js";
 import type { BookOutput, DraftOutput, QuoteOutput } from "./trpc/client.js";
 
@@ -25,23 +26,9 @@ type BookStatus = BookOutput["status"];
  * feature performs (FR-002/FR-007). Never throws; refusals are inline messages.
  */
 export function toMarkupBps(raw: string): { bps: number } | { error: string } {
-  const trimmed = raw.trim();
-  if (trimmed === "") {
-    return { error: "Enter a markup percentage (0–100)." };
-  }
-  const percent = Number(trimmed);
-  if (!Number.isFinite(percent)) {
-    return { error: "Markup must be a number between 0 and 100." };
-  }
-  if (percent < 0 || percent > 100) {
-    return { error: "Markup must be between 0% and 100%." };
-  }
-  const bps = Math.round(percent * 100);
-  // Basis points are whole: two decimal places at most (12.25% → 1225).
-  if (Math.abs(percent * 100 - bps) > 1e-9) {
-    return { error: "Markup supports at most two decimal places (e.g. 12.25)." };
-  }
-  return { bps };
+  // Shared digit-exact mapping (spec 011 research D5); subject interpolation
+  // keeps every message string this module ever returned byte-identical.
+  return percentToBps(raw, "Markup");
 }
 
 /**
@@ -97,7 +84,7 @@ export function bookStatusLabel(status: BookStatus): string {
  * shown next to it is the server's own integer (FR-007).
  */
 export function formatMarkupBps(bps: number): string {
-  return `${bps / 100}%`;
+  return formatBps(bps);
 }
 
 /**

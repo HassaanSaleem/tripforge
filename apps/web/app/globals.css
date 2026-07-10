@@ -257,6 +257,35 @@ label > input, label > select, label > textarea {
 .tf-share-link { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tf-share-link code { flex: 1 1 320px; background: var(--sand); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; font-family: var(--mono); font-size: 13px; word-break: break-all; user-select: all; }
 
+/* ---- marketplace (spec 011): nav, listing grid, split receipt, sell form ---- */
+.tf-nav { display: flex; gap: 16px; margin-right: auto; padding-left: 6px; font-size: 14.5px; }
+.tf-nav a { font-weight: 600; text-decoration: none; color: var(--ink-soft); }
+.tf-nav a:hover { color: var(--coral-deep); }
+.tf-nav a[aria-current="page"] { color: var(--sea-deep); box-shadow: inset 0 -2px 0 var(--sea); border-radius: 0; }
+
+.tf-market { display: grid; gap: 26px; }
+.tf-market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 10px; }
+.tf-market-card { display: grid; gap: 10px; align-content: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow-sm); animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }
+.tf-market-card h3 { margin: 0; }
+.tf-market-card button { justify-self: start; margin-top: 2px; }
+.tf-market-seller { color: var(--muted); font-size: 13.5px; margin: 0; }
+.tf-market-seller b { color: var(--ink); }
+.tf-market-price { font-size: 21px; margin: 0; color: var(--ink); }
+.tf-market-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.tf-market-mine { background: color-mix(in srgb, var(--gold) 16%, transparent); color: #8a6a24; border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
+.tf-market-terms { color: var(--ink-soft); font-size: 13.5px; margin: 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.tf-market-empty { color: var(--muted); font-style: italic; }
+
+.tf-market-receipt { margin-top: 16px; }
+.tf-market-receipt ul { list-style: none; margin: 0; padding: 0; max-width: 420px; }
+.tf-market-receipt li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); font-size: 14.5px; }
+.tf-market-receipt li:last-child { border-bottom: none; }
+
+.tf-market-form { max-width: 560px; }
+.tf-market-form label { display: grid; gap: 6px; }
+.tf-market-form button[type="submit"] { justify-self: start; min-width: 230px; margin-top: 4px; }
+.tf-market-listed { color: var(--ok); font-weight: 600; background: var(--ok-tint); border: 1px solid color-mix(in srgb, var(--ok) 25%, var(--line)); border-radius: var(--r-sm); padding: 10px 13px; }
+
 /* ---- client view (spec 010): white-label shared itinerary ----
    Rides the [data-plain] opt-out — clean white ground, the AGENCY is the only
    brand on the page (INV-020). Presentation only; platform naming forbidden. */

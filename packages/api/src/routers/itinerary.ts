@@ -7,6 +7,7 @@ import { z } from "zod";
 import { router, agentProcedure } from "../trpc.js";
 import { draftItinerary, tripRequestSchema } from "../services/planner.js";
 import { itineraryOverview } from "../services/booking.js";
+import { listItineraries } from "../services/itineraries.js";
 import { createShareLink, shareInputSchema } from "../services/client-view.js";
 
 const getInputSchema = z.strictObject({ itineraryId: z.uuid() });
@@ -16,6 +17,10 @@ export const itineraryRouter = router({
   draft: agentProcedure
     .input((value) => tripRequestSchema.parse(value))
     .mutation(({ ctx, input }) => draftItinerary(ctx.container, ctx.session, input)),
+
+  /** The agency's own itineraries, newest first — the marketplace listing
+   * picker's projection (spec 011 contract §2, INV-004 tenant-scoped). */
+  list: agentProcedure.query(({ ctx }) => listItineraries(ctx.container, ctx.session)),
 
   /** Canonical document + trip request + quote/booking summaries. */
   get: agentProcedure

@@ -28,3 +28,14 @@ export type QuoteInput = inferRouterInputs<AppRouter>["workspace"]["booking"]["q
 export type QuoteOutput = inferRouterOutputs<AppRouter>["workspace"]["booking"]["quote"];
 export type BookInput = inferRouterInputs<AppRouter>["workspace"]["booking"]["book"];
 export type BookOutput = inferRouterOutputs<AppRouter>["workspace"]["booking"]["book"];
+
+/**
+ * Marketplace + picker types via the same inference (spec 011 research D1):
+ * the trade-layer outcome unions and the my-itineraries projection stay
+ * un-exported server-side; inference keeps the browser exactly in sync.
+ */
+export type BrowseListingsOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["browseListings"];
+export type CreateListingInput = inferRouterInputs<AppRouter>["workspace"]["marketplace"]["createListing"];
+export type CreateListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["createListing"];
+export type LicenseListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["licenseListing"];
+export type MyItinerariesOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["list"];
