@@ -59,6 +59,33 @@ const INITIAL_FORM: ListingFormValues = {
   sharePercent: "10",
 };
 
+/**
+ * Read the listing form's values from the DOM at submit time. Some real input
+ * paths (browser autofill, password managers, automation fills) set a field's
+ * value without the events a controlled input needs, so React state can lag
+ * what the seller actually sees — and a refusal re-render would then silently
+ * snap a declared term (e.g. the revenue share) back to its default
+ * (seed-0009d-b, Constitution VI: the recorded split must match the declared
+ * terms). The DOM is what the seller saw when they pressed submit.
+ */
+function readListingFormValues(form: HTMLFormElement): ListingFormValues {
+  const read = (name: string): string => {
+    const field = form.elements.namedItem(name);
+    return field instanceof HTMLInputElement ||
+      field instanceof HTMLSelectElement ||
+      field instanceof HTMLTextAreaElement
+      ? field.value
+      : "";
+  };
+  return {
+    itineraryId: read("listItineraryId"),
+    title: read("listingTitle"),
+    feeMajor: read("listingFee"),
+    licenseTerms: read("listingTerms"),
+    sharePercent: read("listingShare"),
+  };
+}
+
 export function MarketplacePanel() {
   const [browse, setBrowse] = useState<BrowseState>({ phase: "loading" });
   const [picker, setPicker] = useState<PickerState>({ phase: "loading" });
@@ -93,15 +120,23 @@ export function MarketplacePanel() {
     setValues((current) => ({ ...current, [field]: value }));
   }
 
-  const pickedCurrency =
-    picker.phase === "loaded"
-      ? (picker.itineraries.find((itinerary) => itinerary.id === values.itineraryId)?.currency ?? "")
+  function currencyOf(itineraryId: string): string {
+    return picker.phase === "loaded"
+      ? (picker.itineraries.find((itinerary) => itinerary.id === itineraryId)?.currency ?? "")
       : "";
+  }
+
+  const pickedCurrency = currencyOf(values.itineraryId);
 
   async function handleList(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (form.phase === "submitting") return;
-    const mapped = toCreateListingInput(values, pickedCurrency);
+    // Submit what the seller SEES: read the DOM, then re-assert it into state
+    // so the refusal re-render can't snap an uncommitted field back to its
+    // default (seed-0009d-b).
+    const submitted = readListingFormValues(event.currentTarget);
+    setValues(submitted);
+    const mapped = toCreateListingInput(submitted, currencyOf(submitted.itineraryId));
     if ("error" in mapped) {
       setForm({ phase: "refused", message: mapped.error });
       return;
@@ -135,7 +170,10 @@ export function MarketplacePanel() {
           receipt: outcome,
           title: listing.title,
         });
-        await loadListings();
+        // The license just placed a white-label copy in THIS agency's
+        // workspace, so the sell-form picker projection is stale too —
+        // refresh both server reads in place (FR-011 parity, seed-0016).
+        await Promise.all([loadListings(), loadItineraries()]);
       } else {
         setLicense({
           listingId: listing.listingId,
@@ -355,9 +393,18 @@ function ListingForm({
             placeholder="e.g. 250"
             value={values.feeMajor}
             disabled={submitting}
+            aria-describedby={pickedCurrency ? undefined : "listingFeeHint"}
             onChange={(e) => onUpdate("feeMajor", e.target.value)}
           />
         </label>
+        {/* Outside the label on purpose: a hint belongs in the field's
+            DESCRIPTION, not its accessible NAME (which label content becomes —
+            "itinerary" in the name would break the field's identity). */}
+        {pickedCurrency ? null : (
+          <small id="listingFeeHint">
+            Priced in the picked itinerary&apos;s own currency — pick one above.
+          </small>
+        )}
         <label htmlFor="listingTerms">
           License terms
           <textarea

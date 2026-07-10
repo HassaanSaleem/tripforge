@@ -79,6 +79,32 @@ export async function signInAgency(page: Page, input: { email: string; password:
   await expect(page).toHaveURL(/\/workspace$/);
 }
 
+/** How long a live draft may take end-to-end (real LLM; FakeLLM is instant). */
+export const DRAFT_TIMEOUT_MS = 90_000;
+
+/**
+ * Draft the canonical Paris trip through the planner form — the same trip the
+ * L3 smoke proves live (Paris, hardCap 1000 USD) so e2e never depends on
+ * untested fixture economics. Shared test ARRANGEMENT for journeys whose
+ * subject needs an itinerary to exist (booking, client-view, marketplace);
+ * planner-journey.spec.ts keeps its own inline flow because drafting IS its
+ * subject there. `checkOut` varies per journey (trip length is not what these
+ * suites assert).
+ */
+export async function draftParisTrip(page: Page, checkOut = "2026-09-04"): Promise<void> {
+  await page.getByLabel("Destination").fill("Paris");
+  await page.getByLabel("Check-in").fill("2026-09-01");
+  await page.getByLabel("Check-out").fill(checkOut);
+  await page.getByLabel("Adults").fill("2");
+  await page.getByLabel("Children").fill("0");
+  await page.getByLabel("Trip style").selectOption("balanced");
+  await page.getByLabel("Budget", { exact: true }).fill("1000");
+  await page.getByLabel("Budget mode").selectOption("hardCap");
+  await page.getByLabel("Currency").fill("USD");
+  await page.getByRole("button", { name: "Draft itinerary" }).click();
+  await expect(page.getByTestId("draft-result")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
+}
+
 /**
  * OPERATOR-SIDE test arrangement (spec 011 research D10): vetting is a
  * platform-operator action — the ONLY product writer of agency_vetting is

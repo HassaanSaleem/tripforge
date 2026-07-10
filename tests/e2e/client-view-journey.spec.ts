@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Browser } from "@playwright/test";
-import { signUpAgency } from "./support.js";
+import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency } from "./support.js";
 
 // L4 client-view share journey (spec 010, ticket seed-0009c; INV-027). Runs
 // against the BUILT compose image under either planner (deterministic fake or
@@ -15,8 +15,6 @@ import { signUpAgency } from "./support.js";
 // (FR-003). The tokenless /view placeholder is pinned by trust-boundary.spec.ts
 // and smoke.spec.ts, both untouched by this feature.
 
-const DRAFT_TIMEOUT_MS = 90_000;
-
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const agentName = "Vera Viewer";
 const agencyName = `Vista Voyages ${runId.slice(-6)}`;
@@ -27,22 +25,6 @@ test.describe.configure({ mode: "serial" });
 
 async function signUp(page: Page): Promise<void> {
   await signUpAgency(page, { name: agentName, email, password, agencyName });
-}
-
-async function draftTrip(page: Page): Promise<void> {
-  // The same trip the L3 smoke proves live (Paris, hardCap 1000 USD) so e2e
-  // never depends on untested fixture economics.
-  await page.getByLabel("Destination").fill("Paris");
-  await page.getByLabel("Check-in").fill("2026-09-01");
-  await page.getByLabel("Check-out").fill("2026-09-04");
-  await page.getByLabel("Adults").fill("2");
-  await page.getByLabel("Children").fill("0");
-  await page.getByLabel("Trip style").selectOption("balanced");
-  await page.getByLabel("Budget", { exact: true }).fill("1000");
-  await page.getByLabel("Budget mode").selectOption("hardCap");
-  await page.getByLabel("Currency").fill("USD");
-  await page.getByRole("button", { name: "Draft itinerary" }).click();
-  await expect(page.getByTestId("draft-result")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
 }
 
 /** Open a url in a brand-new, cookie-less context (the traveler's browser). */
@@ -59,7 +41,7 @@ test("an agent shares a drafted trip and an anonymous traveler sees the white-la
 }) => {
   test.setTimeout(DRAFT_TIMEOUT_MS + 90_000);
   await signUp(page);
-  await draftTrip(page);
+  await draftParisTrip(page);
 
   // US2: the share control lives inside the drafted plan; one click mints the link.
   const shareControl = page.getByTestId("share-control");

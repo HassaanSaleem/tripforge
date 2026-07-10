@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { signUpAgency } from "./support.js";
+import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency } from "./support.js";
 
 // L4 booking journey (spec 009, ticket seed-0009b; INV-027). Runs against the
 // BUILT compose image under EITHER planner — the deterministic fake (INV-019,
@@ -16,9 +16,6 @@ import { signUpAgency } from "./support.js";
 // signed-out visitor sees no booking controls (US4). Existing planner/sign-in
 // negatives are NOT touched.
 
-// Draft round-trips are LLM-bound on keyed stacks (~10-20s observed live).
-const DRAFT_TIMEOUT_MS = 90_000;
-
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const agentName = "Bo Booker";
 const agencyName = `Bo Voyages ${runId.slice(-6)}`;
@@ -32,28 +29,12 @@ async function signUp(page: Page): Promise<void> {
   await signUpAgency(page, { name: agentName, email, password, agencyName });
 }
 
-async function draftTrip(page: Page): Promise<void> {
-  // The same trip the L3 smoke proves live (Paris, hardCap 1000 USD) so e2e
-  // never depends on untested fixture economics.
-  await page.getByLabel("Destination").fill("Paris");
-  await page.getByLabel("Check-in").fill("2026-09-01");
-  await page.getByLabel("Check-out").fill("2026-09-04");
-  await page.getByLabel("Adults").fill("2");
-  await page.getByLabel("Children").fill("0");
-  await page.getByLabel("Trip style").selectOption("balanced");
-  await page.getByLabel("Budget", { exact: true }).fill("1000");
-  await page.getByLabel("Budget mode").selectOption("hardCap");
-  await page.getByLabel("Currency").fill("USD");
-  await page.getByRole("button", { name: "Draft itinerary" }).click();
-  await expect(page.getByTestId("draft-result")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
-}
-
 test("an agent quotes with markup, books the holds, and a re-quote reports them booked (US1+US2, FR-008)", async ({
   page,
 }) => {
   test.setTimeout(DRAFT_TIMEOUT_MS + 90_000);
   await signUp(page);
-  await draftTrip(page);
+  await draftParisTrip(page);
 
   // Booking controls render only inside the drafted plan (FR-001): markup
   // control pre-filled with the platform default.

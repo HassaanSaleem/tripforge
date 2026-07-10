@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { signUpAgency, vetAgencyByName } from "./support.js";
+import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency, vetAgencyByName } from "./support.js";
 
 // L4 marketplace journey (spec 011, ticket seed-0009d; INV-027). Runs against
 // the BUILT compose image (playwright.config baseURL) under either planner —
@@ -16,8 +16,6 @@ import { signUpAgency, vetAgencyByName } from "./support.js";
 // 10% platform take → 225.00 seller credit / 25.00 platform take, the same
 // split the L3 suite pins against the ledger). Re-licensing refuses benignly.
 // A signed-out visitor never sees marketplace data (INV-024).
-
-const DRAFT_TIMEOUT_MS = 90_000;
 
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const seller = {
@@ -36,20 +34,6 @@ const listingTitle = `Paris weekender ${runId.slice(-6)}`;
 
 test.describe.configure({ mode: "serial" });
 
-async function draftTrip(page: Page): Promise<void> {
-  await page.getByLabel("Destination").fill("Paris");
-  await page.getByLabel("Check-in").fill("2026-09-01");
-  await page.getByLabel("Check-out").fill("2026-09-03");
-  await page.getByLabel("Adults").fill("2");
-  await page.getByLabel("Children").fill("0");
-  await page.getByLabel("Trip style").selectOption("balanced");
-  await page.getByLabel("Budget", { exact: true }).fill("1000");
-  await page.getByLabel("Budget mode").selectOption("hardCap");
-  await page.getByLabel("Currency").fill("USD");
-  await page.getByRole("button", { name: /Draft itinerary/i }).click();
-  await expect(page.getByTestId("draft-result")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
-}
-
 async function fillListingForm(page: Page): Promise<void> {
   // The picker option carries the itinerary title + currency; one itinerary
   // exists for this fresh agency, so pick by index 1 (0 is the placeholder).
@@ -65,7 +49,7 @@ test("a seller lists a drafted trip — refused unvetted, live once vetted (US1+
 }) => {
   test.setTimeout(DRAFT_TIMEOUT_MS + 60_000);
   await signUpAgency(page, seller);
-  await draftTrip(page);
+  await draftParisTrip(page, "2026-09-03");
 
   // To the marketplace via the workspace nav (contract §1).
   await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Marketplace" }).click();
@@ -109,6 +93,10 @@ test("another agency licenses it cross-tenant and sees the recorded split (US3)"
   await expect(card.getByText(seller.agencyName)).toBeVisible();
   await expect(card.getByText("Your listing")).toHaveCount(0);
 
+  // This fresh agency has nothing to sell yet — the empty sell-form state is
+  // the pre-license witness for the picker-refresh assertion below (seed-0016).
+  await expect(page.getByTestId("no-itineraries")).toBeVisible();
+
   await card.getByRole("button", { name: /License this trip/i }).click();
   const receipt = page.getByTestId("license-receipt");
   await expect(receipt).toBeVisible({ timeout: 15_000 });
@@ -120,6 +108,16 @@ test("another agency licenses it cross-tenant and sees the recorded split (US3)"
   await expect(receipt.getByText("25.00 USD", { exact: true })).toBeVisible();
   const copyRef = await receipt.locator("code").innerText();
   expect(copyRef).toMatch(/^[0-9a-f-]{36}$/);
+
+  // The receipt says the copy "is now in your workspace" — the sell-form
+  // picker on the SAME page must agree without a reload (seed-0016): the
+  // empty state is replaced in place and the copy is pickable. Structural
+  // assertions only (option count, not model-authored titles) so the spec
+  // stays planner-agnostic.
+  await expect(page.getByTestId("no-itineraries")).toHaveCount(0);
+  const pickerAfterLicense = page.getByLabel("Itinerary");
+  await expect(pickerAfterLicense).toBeVisible();
+  await expect(pickerAfterLicense.locator("option")).toHaveCount(2); // placeholder + the new copy
 
   // Re-license: benign typed refusal, no second charge pretended.
   await card.getByRole("button", { name: /License this trip/i }).click();
