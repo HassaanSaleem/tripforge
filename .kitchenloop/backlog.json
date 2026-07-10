@@ -256,9 +256,10 @@
     "body": "[QS3-2, quality-sweep-iter-3.md finding 2] jscpd (witness .kitchenloop/logs/sweep-iter-3-jscpd.log): packages/supply-adapter/src/sandbox/{hotel,transfer,activity,car-rental}.ts repeat the identical quote/book/cancel -> this.engine.* delegation (11 lines/92 tokens, 3 clone pairs vs transfer.ts). Per extraction thresholds (2+ callsites share a shape -> hoist the named concept): introduce one generic sandbox port adapter over SandboxEngine inside packages/supply-adapter/src/sandbox/, keeping per-port types via generics. Constitution V unaffected (all inside the adapter boundary). Pre-Write decision: generalize.",
     "type": "improvement",
     "priority": "medium",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-08T13:46:02Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 3): score 10/15 (U2/A5/I3) \u2014 largest baseline jscpd cluster (4x sandbox adapter delegation, verified still present); self-contained inside the adapter boundary, no prerequisites."
   },
   {
     "id": "17835183631278810084",
@@ -462,9 +463,10 @@
     "body": "Found by the iteration-3 regress third-attempt delta sweep (2026-07-09 evening) over code merged after the 07-09-morning delta \u2014 PR #21 (seed-0008 sign-in UI). jscpd (min-tokens 50): 3 clone pairs between apps/web/app/(workspace)/sign-in/sign-in-form.tsx and apps/web/app/(workspace)/sign-up/sign-up-form.tsx \u2014 largest 29 lines / 237 tokens (email+password labeled inputs + pending/error submit-state handler). Policy: duplication/extraction-thresholds rule in .claude/skills/typescript-clean-architecture/SKILL.md \u2014 hoist the named concept (shared credentials-fields component + submit-state hook) inside apps/web (e.g. app/(workspace)/components/ or lib/). Repo duplication total is now 2.34% vs the 1% script threshold (baseline 1.88% on 07-08, morning delta 1.77%) \u2014 this cluster is the growth. COORDINATE with seed-0009s (premium design-system pass): if the premium pass rebuilds the auth forms, do the extraction there instead of polishing the bare forms twice. Witness: .kitchenloop/logs/regress-iter-3-jscpd.log (kitchen-iter-3 worktree). Dedupe: QS3-2/QS3-3/QS3-4 cover the sandbox/LLM/schema clusters; ticket 17835855958084613060 covers marketplace knip; no open ticket covers auth-form duplication.",
     "type": "improvement",
     "priority": "medium",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-09T14:11:18Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 3): score 10/15 (U3/A4/I3) \u2014 repo duplication 2.34% vs 1% threshold and this auth-form cluster is the growth; seed-0009s (premium pass) merged without rebuilding the forms (clone verified live at HEAD), so extraction proceeds here."
   },
   {
     "id": "loop-uat-gate-comment-missing",
