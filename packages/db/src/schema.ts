@@ -99,6 +99,46 @@ export const invitation = pgTable("invitation", {
     .references(() => user.id, { onDelete: "cascade" }),
 });
 
+// ─── Shared column builders (product tables) ─────────────────────────────────
+//
+// The column groups the booking/marketplace tables repeat, named once. NOT
+// exported — table constants are this module's only public surface. Deliberate
+// variants stay inline at their table: nullable money (pmf_event.amount_minor),
+// the vetting PK-as-FK, and no-cascade itinerary/quote references.
+
+/** Integer minor-unit money amount + NOT NULL — the INV-009 shape. */
+const moneyMinor = (name: string) => bigint(name, { mode: "number" }).notNull();
+
+/** Tenant key of a tenant-OWNED row — the row dies with its agency (INV-004). */
+const agencyFk = (name = "agency_id") =>
+  text(name).notNull().references(() => organization.id, { onDelete: "cascade" });
+
+/** Agency party on an IMMUTABLE trade record — NO cascade: deleting an agency
+ *  with recorded trades must fail rather than erase ledger history. */
+const agencyRef = (name: string) => text(name).notNull().references(() => organization.id);
+
+/** Itinerary FK on rows that die with their itinerary. */
+const itineraryFk = (name = "itinerary_id") =>
+  uuid(name).notNull().references(() => itinerary.id, { onDelete: "cascade" });
+
+// The supplier-priced side of one bookable component: net price plus the
+// explicit conversion applied when the supplier priced in a foreign currency
+// (spec 005 FR-008; rate_* nullable = supplier priced in itinerary currency).
+const supplierNetColumns = () => ({
+  netMinor: moneyMinor("net_minor"),
+  netCurrency: text("net_currency").notNull(),
+  rateNumerator: bigint("rate_numerator", { mode: "number" }),
+  rateDenominator: bigint("rate_denominator", { mode: "number" }),
+});
+
+// The agency-priced side of the same component: sell in the itinerary currency
+// and who is merchant of record for it (PRD 9.4).
+const agencySellColumns = () => ({
+  sellMinor: moneyMinor("sell_minor"),
+  currency: text("currency").notNull(),
+  merchantOfRecord: text("merchant_of_record").notNull(),
+});
+
 // ─── PMF instrumentation (INV-021, Constitution MVP Scope Discipline) ─────────
 
 // Append-only PMF metric event store. Events are written in the SAME transaction
@@ -112,9 +152,7 @@ export const pmfEvent = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     type: text("type").notNull(),
-    agencyId: text("agency_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    agencyId: agencyFk(),
     actorUserId: text("actor_user_id").references(() => user.id, { onDelete: "set null" }),
     itineraryId: text("itinerary_id"),
     source: text("source"),
@@ -140,9 +178,7 @@ export const itinerary = pgTable(
   "itinerary",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agencyId: text("agency_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    agencyId: agencyFk(),
     title: text("title").notNull(),
     currency: text("currency").notNull(),
     document: jsonb("document").notNull(),
@@ -163,25 +199,16 @@ export const bookingQuote = pgTable(
   "booking_quote",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    agencyId: text("agency_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    itineraryId: uuid("itinerary_id")
-      .notNull()
-      .references(() => itinerary.id, { onDelete: "cascade" }),
+    agencyId: agencyFk(),
+    itineraryId: itineraryFk(),
     itemId: text("item_id").notNull(),
     port: text("port").notNull(),
     offerId: text("offer_id").notNull(),
     supplierQuoteId: text("supplier_quote_id").notNull(),
-    netMinor: bigint("net_minor", { mode: "number" }).notNull(),
-    netCurrency: text("net_currency").notNull(),
-    rateNumerator: bigint("rate_numerator", { mode: "number" }),
-    rateDenominator: bigint("rate_denominator", { mode: "number" }),
-    convertedNetMinor: bigint("converted_net_minor", { mode: "number" }).notNull(),
+    ...supplierNetColumns(),
+    convertedNetMinor: moneyMinor("converted_net_minor"),
     markupBps: bigint("markup_bps", { mode: "number" }).notNull(),
-    sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
-    currency: text("currency").notNull(),
-    merchantOfRecord: text("merchant_of_record").notNull(),
+    ...agencySellColumns(),
     expiresAt: timestamp("expires_at").notNull(),
     consumedAt: timestamp("consumed_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -195,12 +222,8 @@ export const bookingQuote = pgTable(
 // every component fails writes NOTHING (FR-011 conservation).
 export const booking = pgTable("booking", {
   id: uuid("id").primaryKey().defaultRandom(),
-  agencyId: text("agency_id")
-    .notNull()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  itineraryId: uuid("itinerary_id")
-    .notNull()
-    .references(() => itinerary.id, { onDelete: "cascade" }),
+  agencyId: agencyFk(),
+  itineraryId: itineraryFk(),
   status: text("status").notNull(), // confirmed | partially_confirmed
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -214,12 +237,8 @@ export const bookingComponent = pgTable(
     bookingId: uuid("booking_id")
       .notNull()
       .references(() => booking.id, { onDelete: "cascade" }),
-    agencyId: text("agency_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    itineraryId: uuid("itinerary_id")
-      .notNull()
-      .references(() => itinerary.id, { onDelete: "cascade" }),
+    agencyId: agencyFk(),
+    itineraryId: itineraryFk(),
     itemId: text("item_id").notNull(),
     port: text("port").notNull(),
     offerId: text("offer_id").notNull(),
@@ -231,13 +250,8 @@ export const bookingComponent = pgTable(
       .unique()
       .references(() => bookingQuote.id),
     supplierBookingId: text("supplier_booking_id").notNull(),
-    netMinor: bigint("net_minor", { mode: "number" }).notNull(),
-    netCurrency: text("net_currency").notNull(),
-    rateNumerator: bigint("rate_numerator", { mode: "number" }),
-    rateDenominator: bigint("rate_denominator", { mode: "number" }),
-    sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
-    currency: text("currency").notNull(),
-    merchantOfRecord: text("merchant_of_record").notNull(),
+    ...supplierNetColumns(),
+    ...agencySellColumns(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -254,15 +268,13 @@ export const bookingComponent = pgTable(
 // features build on — Constitution VI).
 export const markupLedger = pgTable("markup_ledger", {
   id: uuid("id").primaryKey().defaultRandom(),
-  agencyId: text("agency_id")
-    .notNull()
-    .references(() => organization.id, { onDelete: "cascade" }),
+  agencyId: agencyFk(),
   bookingComponentId: uuid("booking_component_id")
     .notNull()
     .references(() => bookingComponent.id, { onDelete: "cascade" }),
-  netMinor: bigint("net_minor", { mode: "number" }).notNull(),
-  sellMinor: bigint("sell_minor", { mode: "number" }).notNull(),
-  markupMinor: bigint("markup_minor", { mode: "number" }).notNull(),
+  netMinor: moneyMinor("net_minor"),
+  sellMinor: moneyMinor("sell_minor"),
+  markupMinor: moneyMinor("markup_minor"),
   currency: text("currency").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -292,14 +304,10 @@ export const marketplaceListing = pgTable(
   "marketplace_listing",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    sellerAgencyId: text("seller_agency_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    itineraryId: uuid("itinerary_id")
-      .notNull()
-      .references(() => itinerary.id, { onDelete: "cascade" }),
+    sellerAgencyId: agencyFk("seller_agency_id"),
+    itineraryId: itineraryFk(),
     title: text("title").notNull(),
-    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    priceMinor: moneyMinor("price_minor"),
     currency: text("currency").notNull(),
     licenseTerms: text("license_terms").notNull(),
     revenueShareBps: bigint("revenue_share_bps", { mode: "number" }).notNull(),
@@ -327,16 +335,12 @@ export const marketplaceLicense = pgTable(
     listingId: uuid("listing_id")
       .notNull()
       .references(() => marketplaceListing.id),
-    sellerAgencyId: text("seller_agency_id")
-      .notNull()
-      .references(() => organization.id),
-    resellerAgencyId: text("reseller_agency_id")
-      .notNull()
-      .references(() => organization.id),
+    sellerAgencyId: agencyRef("seller_agency_id"),
+    resellerAgencyId: agencyRef("reseller_agency_id"),
     copyItineraryId: uuid("copy_itinerary_id")
       .notNull()
       .references(() => itinerary.id),
-    priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
+    priceMinor: moneyMinor("price_minor"),
     currency: text("currency").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -359,15 +363,11 @@ export const revenueShareLedger = pgTable("revenue_share_ledger", {
     .notNull()
     .unique()
     .references(() => marketplaceLicense.id, { onDelete: "cascade" }),
-  sellerAgencyId: text("seller_agency_id")
-    .notNull()
-    .references(() => organization.id),
-  resellerAgencyId: text("reseller_agency_id")
-    .notNull()
-    .references(() => organization.id),
-  priceMinor: bigint("price_minor", { mode: "number" }).notNull(),
-  platformTakeMinor: bigint("platform_take_minor", { mode: "number" }).notNull(),
-  sellerCreditMinor: bigint("seller_credit_minor", { mode: "number" }).notNull(),
+  sellerAgencyId: agencyRef("seller_agency_id"),
+  resellerAgencyId: agencyRef("reseller_agency_id"),
+  priceMinor: moneyMinor("price_minor"),
+  platformTakeMinor: moneyMinor("platform_take_minor"),
+  sellerCreditMinor: moneyMinor("seller_credit_minor"),
   currency: text("currency").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
@@ -381,9 +381,7 @@ export const listingRating = pgTable(
     listingId: uuid("listing_id")
       .notNull()
       .references(() => marketplaceListing.id, { onDelete: "cascade" }),
-    raterAgencyId: text("rater_agency_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    raterAgencyId: agencyFk("rater_agency_id"),
     stars: bigint("stars", { mode: "number" }).notNull(), // 1..5, app-validated
     comment: text("comment"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -405,13 +403,8 @@ export const listingRating = pgTable(
 // untouched. Create-only at v0 (revocation/expiry deferred, spec Assumptions).
 export const itineraryShareLink = pgTable("itinerary_share_link", {
   token: uuid("token").primaryKey().defaultRandom(),
-  agencyId: text("agency_id")
-    .notNull()
-    .references(() => organization.id, { onDelete: "cascade" }),
-  itineraryId: uuid("itinerary_id")
-    .notNull()
-    .unique()
-    .references(() => itinerary.id, { onDelete: "cascade" }),
+  agencyId: agencyFk(),
+  itineraryId: itineraryFk().unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
