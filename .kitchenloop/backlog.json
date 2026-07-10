@@ -374,14 +374,26 @@
     "body": "DEMO SURFACE. Build a marketplace page: browse public listings, list a finished itinerary with terms, and license another agency's listing (receiving a white-label copy). Wire to the marketplace tRPC. Live Test: list + license flow in a real browser. USE the seed-0009s product design system / UI kit \u2014 polished components, not bare HTML.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-09T00:00:00Z",
-    "pr_url": "",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/27",
     "notes": "Filed by operator to build the working-UI DEMO path (backend + tRPC routers exist; apps/web pages are skeletons). Wire real UI to the live tRPC procedures. Depends on seed-0008 (sign-in) for auth.",
     "blockedBy": [
       "seed-0008",
       "seed-0009s"
-    ]
+    ],
+    "merged": "2026-07-10T00:00:00Z",
+    "merge_commit": "1f79143"
+  },
+  {
+    "id": "seed-0009d-a",
+    "title": "Marketplace UI follow-up: licensee rating control + seller deactivate-listing control",
+    "body": "Improvement-sized. Spec 011 (marketplace UI, PR #27) deliberately deferred two seller/licensee controls whose tRPC procedures ALREADY exist and are L3-tested (spec 006): (1) a licensee-only 'rate this trip' control (workspace.marketplace.rateListing \u2014 stars 1-5 + optional comment, upsert semantics; browse already displays aggregates via formatRating), and (2) a seller-only 'take off the marketplace' control on own listings (workspace.marketplace.deactivateListing, typed refusals deactivated/already_inactive/not_found). Wire both into apps/web/app/(workspace)/marketplace/marketplace-panel.tsx with pure message mapping in apps/web/lib/marketplace-flow.ts (FR-009 pattern: exhaustive switch + L1 tests) and extend tests/e2e/marketplace-journey.spec.ts (rate after license; deactivate removes the card from browse). Source: specs/011-marketplace-ui/spec.md Assumptions (deferral note).",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-10T00:00:00Z",
+    "pr_url": ""
   },
   {
     "id": "seed-0009a",
