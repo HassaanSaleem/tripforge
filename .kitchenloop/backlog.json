@@ -153,9 +153,10 @@
     "body": "Feature-sized \u2014 route through Spec Kit. Low priority / forward-looking placeholder so the owner/admin tier is not orphaned.\n\nSource: docs/internal/reports/iteration-2-report.md [FEAT-1].\n\nPROBLEM: agencyAdminProcedure (owner/admin tier) exists in the tRPC middleware (packages/api/src/trpc.ts:49, exported packages/api/src/index.ts:20) but NO router consumes it. Member management and billing have no seed yet; markup-policy admin lands with seed-0005 (budget allocator + quote-then-book, markup control). The ladder contract is pinned by tests (agency-admin-rbac.test.ts, landed by seed-0007), so the eventual surface inherits a tested gate. Not a P0 gap today (per the report) \u2014 tracked so the tier gets a real consumer. In-phase, P0-adjacent, agent-side.\n\nFILE POINTERS: packages/api/src/trpc.ts:49 (agencyAdminProcedure); packages/api/src/index.ts:20; packages/api/src/__tests__/agency-admin-rbac.test.ts (pinned contract).\n\nACCEPTANCE CRITERIA:\n  1. At least one router/procedure consumes agencyAdminProcedure for a real admin op (member management or billing), covered by an L2 caller test that reuses the pinned ladder (owner/admin allowed; member/traveler FORBIDDEN; anon UNAUTHORIZED; INV-004 tenant scoping).\n  2. Markup-policy admin is explicitly tracked to seed-0005 rather than duplicated here.\n\nDepends on: seed-0007 (pins the agencyAdminProcedure contract). Related: seed-0005 (markup policy).",
     "type": "feature",
     "priority": "low",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-06T00:00:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 3)"
   },
   {
     "id": "spec-gap-0001",
@@ -235,7 +236,8 @@
     "priority": "medium",
     "state": "todo",
     "created": "2026-07-08T00:00:00Z",
-    "blockedBy": []
+    "blockedBy": [],
+    "notes": "Kitchen Loop iteration 3 execute (2026-07-10): ASSESSED, not started. INV-028's wording ('any request handler that calls the LLM tool loop MUST stream') is unambiguous and the drafting UI (seed-0009a) now exists, so this is FEATURE-SIZED \u2014 streaming transport (tRPC/SSE) + planner service + progressive UI = own SDD cycle (case a), not a bundle item. Deferred for capacity after the diagnosis + QS3-4 + seed-0006b cycles; should be the next execute's top pick if no higher bug lands."
   },
   {
     "id": "17835183621278801481",
@@ -274,10 +276,10 @@
     "body": "[QS3-4, quality-sweep-iter-3.md finding 4] jscpd: packages/db/src/schema.ts repeats two column groups between booking tables (3 internal clone pairs, 86-126 tokens): the agencyId/itineraryId FK trio and the net/rate/sell money column group. Per extraction thresholds (value object: 2+ co-varying primitives travel together): name them as Drizzle column-builder helpers local to schema.ts. DB-internal refactor only \u2014 NOT a canonical itinerary schema change (no version bump, no operator gate); generated SQL must stay identical (verify with drizzle-kit diff or L3 smoke).",
     "type": "improvement",
     "priority": "medium",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-08T13:46:03Z",
-    "pr_url": "",
-    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): scope grew \u2014 the repeated FK/money column-group clones in packages/db/src/schema.ts now include the seed-0006 marketplace tables (jscpd clone triplet at L175-238, 86-126 tokens), and schema.ts crossed the compactness threshold at 418 lines (>400). The same column-builder extraction resolves both the duplication and the outlier. Witness: .kitchenloop/logs/regress-iter-3-jscpd.log.\nPromoted to todo by Kitchen Loop backlog grooming (iteration 3). Score: 9/15 (U:2 A:4 I:3) \u2014 top-scoring backlog candidate; regress flagged it twice (clone scope grew to the seed-0006 marketplace tables; schema.ts crossed the 400-line compactness threshold at 418) and one column-builder extraction resolves both findings. Improvement count in todo exceeds the 1-2 target: accepted because the backlog holds no bug/exploration tickets and the unblocked todo queue sat at the 5-ticket floor (seed-0009b/c blocked by unmerged seed-0009a)."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/28",
+    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): scope grew \u2014 the repeated FK/money column-group clones in packages/db/src/schema.ts now include the seed-0006 marketplace tables (jscpd clone triplet at L175-238, 86-126 tokens), and schema.ts crossed the compactness threshold at 418 lines (>400). The same column-builder extraction resolves both the duplication and the outlier. Witness: .kitchenloop/logs/regress-iter-3-jscpd.log.\nPromoted to todo by Kitchen Loop backlog grooming (iteration 3). Score: 9/15 (U:2 A:4 I:3) \u2014 top-scoring backlog candidate; regress flagged it twice (clone scope grew to the seed-0006 marketplace tables; schema.ts crossed the 400-line compactness threshold at 418) and one column-builder extraction resolves both findings. Improvement count in todo exceeds the 1-2 target: accepted because the backlog holds no bug/exploration tickets and the unblocked todo queue sat at the 5-ticket floor (seed-0009b/c blocked by unmerged seed-0009a).\nKitchen Loop iteration 3 execute (2026-07-10): picked as top medium improvement (quick win within tier; no bugs/features above it in todo). Money-table DDL file -> own cycle per batching policy, branch kitchen/fix-qs3-4-schema-column-builders.\nPR #28 (53907b2): moneyMinor/agencyFk/agencyRef/itineraryFk + supplierNetColumns/agencySellColumns local builders; DDL proven byte-identical (pg_dump diff, 924 lines; evidence .kitchenloop/evidence/iter-3/qs3-4/). Gates: 337/337 in-image vs compose Postgres, smoke PASS, e2e 19/19, lint/tsc/depcruise clean, log scan 1 documented-benign line. UAT skip (pure refactor) -> desk row UAT-PR28. HONEST NOTE: file is 433 lines, still >400 \u2014 duplication resolved, length outlier persists (module split is the next candidate if the sweep re-flags)."
   },
   {
     "id": "17835183631278801849",
@@ -329,10 +331,10 @@
     "body": "LOW drift from PR #17 codex gate. FR-014 asks the listing-licensed PMF instrumentation to carry license price + platform take + seller credit. Current code emits take_rate_accrued with only platform take + trip_created(source=licensed). Money state IS conserved (revenue_share_ledger has the full split) \u2014 this only aligns the PMF event payload to the spec wording. FIX: include price + platformTake + sellerCredit in the licensed PMF event.",
     "type": "improvement",
     "priority": "low",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-09T00:00:00Z",
-    "pr_url": "",
-    "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/29",
+    "notes": "Filed from PR #17 codex money-path gate (2026-07-09). seed-0006 merged; fix on a normal iteration branch off main.\nKitchen Loop iteration 3 execute (2026-07-10): picked as low-tier quick win after seed-0014 (medium) was assessed FEATURE-SIZED (INV-028 streaming = transport+service+UI change, own SDD cycle next iteration). Money-path-adjacent -> own cycle, branch kitchen/fix-seed-0006b-pmf-split.\nPR #29 (ee12b37): take_rate_accrued carries optional conserved split (priceMinor/sellerCreditMinor, recorder enforces price=take+credit); pmf_event +2 nullable cols; licensing passes domain-computed amounts. 346/346 in-image, smoke PASS, e2e 19/19, live DB witness all rows conserved. UAT card sealed (10 steps); evaluator spawning next \u2014 if the verdict comment is missing on the PR, the gate did NOT run (see UAT-VERDICT-DURABILITY)."
   },
   {
     "id": "seed-0009b",
@@ -466,8 +468,21 @@
     "body": "Loop-process/gate-integrity observation (operator-filed 2026-07-10). PRs #23, #24, #25 each carried a zero-context uat-evaluator verdict as a PR comment; #26 and #27 did NOT (0 comments) despite the PR bodies stating 'Evaluator verdict will be attached as a PR comment.' For #27 the operator ran the zero-context UAT by hand (PASS 12/12) and posted the verdict, but the loop's own gate should produce it. Investigate WHETHER the uat-evaluator step still runs in the loop pipeline for sealed-card PRs (and merely fails to post) or is being skipped, and WHERE the post step drops. NOTE: the UAT protocol is part of the sealed regulator \u2014 if the fix requires changing the protocol/pr-manager stages, that is an OPERATOR gate (desk row), not a loop commit. This ticket covers diagnosis only.",
     "type": "bug",
     "priority": "medium",
-    "state": "backlog",
+    "state": "in_review",
     "created": "2026-07-10T00:00:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 3)\nKitchen Loop iteration 3 execute (2026-07-10): DIAGNOSIS COMPLETE \u2014 report at docs/internal/reports/uat-gate-comment-investigation.md. Not a skipped gate: two session-lifecycle deaths between PR creation and comment post. #26: session died on 'Credit balance is too low' 1s after gh pr create (gate never started; transcript 798af106). #27: gate ran fully, evaluator COMPLETED with PRODUCT_FAIL (revenue-share 7.5->10 snap-back, filed seed-0009d-b) at 10:14Z, user interrupt at 10:15:09Z killed the parent before verdict consumption \u2014 orphaned in /tmp/uat-seed-0009d, recovered + posted late on PR #27. Fixes are sealed-regulator (UAT-GATE.md, PRM-SEAL checklist, execute Step 0 orphan scan) -> desk row UAT-VERDICT-DURABILITY. No PR (loop-process diagnosis; deliverables ride kitchen/iter-3). Operator adjudicates closure via the desk row."
+  },
+  {
+    "id": "seed-0009d-b",
+    "title": "Marketplace listing form: declared revenue share can silently revert to the 10% default (recovered UAT PRODUCT_FAIL, PR #27)",
+    "body": "Bug-sized \u2014 deterministic repro FIRST, then fix if real. Source: the recovered zero-context uat-evaluator run for seed-0009d (evidence /tmp/uat-seed-0009d/.kitchenloop/uat-runs/seed-0009d/evidence.md, verdict PRODUCT_FAIL; recovered by ticket loop-uat-gate-comment-missing, report docs/internal/reports/uat-gate-comment-investigation.md).\n\nOBSERVED (loop evaluator, PR #27 HEAD d6698a4): seller fills 'Revenue share %' with 7.5 -> Step-4 submission refused (not vetted, expected) -> the share field SNAPS BACK to the 10 default while title/fee/terms persist -> the Step-6 retry lists at 10% (split 225.00+25.00 of 250.00 USD) despite the seller having typed 7.5. COUNTER-WITNESS: the operator's hand-run of the SAME sealed card at the SAME HEAD had 7.5% stick (PASS 12/12, .kitchenloop/uat-runs/seed-0009d/evidence.md). So the failure is interaction-dependent.\n\nCODE READING: apps/web/app/(workspace)/marketplace/marketplace-panel.tsx:101-122 \u2014 values are NOT reset on a refused submission (setValues(INITIAL_FORM) runs only on success), and the input is a controlled component (value={values.sharePercent}, onChange wired). The snap-back is the classic symptom of a fill that never committed to React state: the refusal re-render restores the state value ('10') over the uncommitted DOM value ('7.5'). Two hypotheses: (a) PRODUCT \u2014 some real input paths (autofill, password managers, certain fill mechanisms) skip the events React needs, so a real seller's declared terms can be silently replaced by the default on the money/trust path (Constitution VI: recorded split must match declared terms); (b) TOOLING \u2014 Playwright-MCP's fill on this number input doesn't commit, i.e. an evaluator-environment artifact that will keep producing false PRODUCT_FAILs on future UAT cards.\n\nACCEPTANCE:\n  1. Deterministic repro attempt: an e2e spec fills 7.5 via Playwright fill(), submits pre-vetting (refused), re-submits post-vetting, asserts the listing card shows '7.5% revenue share'; plus a manual/MCP-driven variant matching the evaluator's fill technique.\n  2. If (a) PRODUCT: fix so the declared share survives a refused submission regardless of fill path (e.g. read the submitted value from the form event, or re-assert DOM value into state on submit), with the repro red-then-green; ESCALATE priority to high/critical.\n  3. If (b) TOOLING: document the hazard in the ticket + loop memory, and the fix proposal for card-writing guidance goes to the operator (UAT protocol is sealed).\n  4. Either way: the listing flow's declared-terms integrity gets a pinned regression test.\n\nDepends on: seed-0009d (merged, PR #27). Related: seed-0009d-a (rating/deactivate controls), desk row UAT-VERDICT-DURABILITY.",
+    "type": "bug",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-10T00:00:00Z",
+    "pr_url": "",
+    "blockedBy": [],
+    "notes": "Filed by Kitchen Loop iteration-3 execute (2026-07-10) from the recovered orphaned UAT verdict on PR #27. Medium (not high): equal-weight counter-witness (operator hand-run PASS at same HEAD), no conservation break (recorded split matched displayed split), likely fill-tooling artifact \u2014 but the declared-terms path is trust surface, so it needs the deterministic repro before the next marketplace UI change."
   }
 ]
