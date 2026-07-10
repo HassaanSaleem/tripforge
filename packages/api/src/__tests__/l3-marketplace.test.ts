@@ -291,7 +291,16 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
         .from(pmfEvent)
         .where(and(eq(pmfEvent.agencyId, seller.agencyId), eq(pmfEvent.type, "take_rate_accrued")));
       expect(take).toHaveLength(1);
-      expect(take[0]).toMatchObject({ amountMinor: 2_500, currency: "USD", itineraryId: licensed.copyItineraryId });
+      // FR-014: the licensed event carries the FULL split — license price,
+      // platform take (amountMinor), seller credit — and it conserves.
+      expect(take[0]).toMatchObject({
+        amountMinor: 2_500,
+        priceMinor: 25_000,
+        sellerCreditMinor: 22_500,
+        currency: "USD",
+        itineraryId: licensed.copyItineraryId,
+      });
+      expect((take[0]?.amountMinor ?? 0) + (take[0]?.sellerCreditMinor ?? 0)).toBe(take[0]?.priceMinor);
       const resold = await handle.db
         .select()
         .from(pmfEvent)

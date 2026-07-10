@@ -104,6 +104,36 @@ describe("validatePmfEvent", () => {
     expect(err?.reason).toBe(reason);
   });
 
+  // take_rate_accrued full-split fields (spec 006 FR-014, seed-0006b): both or
+  // neither, integer minor units, and the split must conserve EXACTLY.
+  const validSplit: PmfEvent = {
+    ...validTakeRateAccrued,
+    priceMinor: 25_000,
+    sellerCreditMinor: 20_000,
+    amountMinor: 5_000,
+  };
+
+  it("accepts take_rate_accrued carrying a conserved full split (FR-014)", () => {
+    expect(validatePmfEvent(validSplit)).toBeNull();
+  });
+
+  it("still accepts take_rate_accrued WITHOUT the split (non-license accruals)", () => {
+    expect(validatePmfEvent(validTakeRateAccrued)).toBeNull();
+  });
+
+  it.each([
+    ["split_pair_incomplete", { ...validSplit, sellerCreditMinor: undefined }],
+    ["split_pair_incomplete", { ...validTakeRateAccrued, sellerCreditMinor: 20_000 }],
+    ["non_integer_amount", { ...validSplit, sellerCreditMinor: 20_000.5, priceMinor: 25_000.5 }],
+    ["negative_amount", { ...validSplit, sellerCreditMinor: -1, priceMinor: 4_999 }],
+    ["split_not_conserved", { ...validSplit, priceMinor: 25_001 }],
+    ["unexpected_money_fields", { ...validBookingConfirmed, priceMinor: 1, sellerCreditMinor: 1 }],
+  ])("rejects a bad split with reason %s", (reason, event) => {
+    const err = validatePmfEvent(event);
+    expect(err).toBeInstanceOf(PmfEventValidationError);
+    expect(err?.reason).toBe(reason);
+  });
+
   it("rejects float money even when close to an integer (INV-009)", () => {
     expect(validatePmfEvent({ ...validBookingConfirmed, amountMinor: 100.000001 })?.reason).toBe(
       "non_integer_amount",
@@ -131,6 +161,8 @@ describe("recordPmfEvent", () => {
       itineraryId: "itin-1",
       source: "self_built",
       amountMinor: null,
+      priceMinor: null,
+      sellerCreditMinor: null,
       currency: null,
     });
   });
@@ -145,6 +177,8 @@ describe("recordPmfEvent", () => {
       itineraryId: "itin-1",
       source: null,
       amountMinor: 250_000,
+      priceMinor: null,
+      sellerCreditMinor: null,
       currency: "USD",
     });
   });
@@ -159,6 +193,28 @@ describe("recordPmfEvent", () => {
       itineraryId: null,
       source: null,
       amountMinor: 5_000,
+      priceMinor: null,
+      sellerCreditMinor: null,
+      currency: "EUR",
+    });
+  });
+
+  it("maps the take_rate_accrued full split to the exact row shape (FR-014)", async () => {
+    const { executor, calls } = stubExecutor();
+    await recordPmfEvent(executor, {
+      ...validTakeRateAccrued,
+      priceMinor: 25_000,
+      sellerCreditMinor: 20_000,
+    });
+    expect(calls[0]?.row).toEqual({
+      type: "take_rate_accrued",
+      agencyId: "agency-2",
+      actorUserId: null,
+      itineraryId: null,
+      source: null,
+      amountMinor: 5_000,
+      priceMinor: 25_000,
+      sellerCreditMinor: 20_000,
       currency: "EUR",
     });
   });

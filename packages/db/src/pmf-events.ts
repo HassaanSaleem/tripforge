@@ -44,6 +44,13 @@ export type PmfEvent =
       currency: string;
       itineraryId?: string;
       actorUserId?: string;
+      /**
+       * Full license split (spec 006 FR-014) — set BOTH when the take was
+       * accrued via a marketplace license. Conservation is enforced:
+       * priceMinor = amountMinor (platform take) + sellerCreditMinor EXACTLY.
+       */
+      priceMinor?: number;
+      sellerCreditMinor?: number;
     }
   // Marketplace liquidity observability (spec 006 research D4) — no-money
   // types; the license transaction's money is measured by take_rate_accrued
@@ -75,7 +82,9 @@ export type PmfEventValidationReason =
   | "unexpected_money_fields"
   | "missing_source"
   | "invalid_source"
-  | "unexpected_source";
+  | "unexpected_source"
+  | "split_pair_incomplete"
+  | "split_not_conserved";
 
 export class PmfEventValidationError extends Error {
   readonly reason: PmfEventValidationReason;
@@ -148,6 +157,45 @@ export function validatePmfEvent(event: unknown): PmfEventValidationError | null
   } else if (e.amountMinor !== undefined || e.currency !== undefined) {
     return new PmfEventValidationError("unexpected_money_fields", `${type} carries no money`);
   }
+  if (type === "take_rate_accrued") {
+    const hasPrice = e.priceMinor !== undefined;
+    const hasCredit = e.sellerCreditMinor !== undefined;
+    if (hasPrice !== hasCredit) {
+      return new PmfEventValidationError(
+        "split_pair_incomplete",
+        "priceMinor and sellerCreditMinor must be set together (FR-014 full split)",
+      );
+    }
+    if (hasPrice) {
+      for (const [field, value] of [
+        ["priceMinor", e.priceMinor],
+        ["sellerCreditMinor", e.sellerCreditMinor],
+      ] as const) {
+        if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+          return new PmfEventValidationError(
+            "non_integer_amount",
+            `${field} must be an integer minor-unit amount, got ${String(value)}`,
+          );
+        }
+        if (value < 0) {
+          return new PmfEventValidationError("negative_amount", `${field}=${value}`);
+        }
+      }
+      // Row-local conservation (INV-011 spirit): the recorded split must add up
+      // to the license price EXACTLY — price = platform take + seller credit.
+      if ((e.priceMinor as number) !== (e.amountMinor as number) + (e.sellerCreditMinor as number)) {
+        return new PmfEventValidationError(
+          "split_not_conserved",
+          `priceMinor=${String(e.priceMinor)} != amountMinor=${String(e.amountMinor)} + sellerCreditMinor=${String(e.sellerCreditMinor)}`,
+        );
+      }
+    }
+  } else if (e.priceMinor !== undefined || e.sellerCreditMinor !== undefined) {
+    return new PmfEventValidationError(
+      "unexpected_money_fields",
+      `${type} carries no license split`,
+    );
+  }
   if (type === "trip_created") {
     if (e.source === undefined) {
       return new PmfEventValidationError("missing_source", "trip_created requires source");
@@ -182,6 +230,8 @@ export async function recordPmfEvent(executor: PmfEventExecutor, event: PmfEvent
     itineraryId: "itineraryId" in event ? (event.itineraryId ?? null) : null,
     source: event.type === "trip_created" ? event.source : null,
     amountMinor: "amountMinor" in event ? event.amountMinor : null,
+    priceMinor: event.type === "take_rate_accrued" ? (event.priceMinor ?? null) : null,
+    sellerCreditMinor: event.type === "take_rate_accrued" ? (event.sellerCreditMinor ?? null) : null,
     currency: "currency" in event ? event.currency : null,
   });
 }

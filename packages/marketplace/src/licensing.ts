@@ -148,6 +148,9 @@ export async function licenseListing(
 
       // Take-rate revenue is attributed to the SELLER agency ("take-rate
       // revenue per active agent"); the copy is the reseller's resold trip.
+      // The event carries the FULL split (FR-014: license price, platform
+      // take as amountMinor, seller credit) — conservation enforced by the
+      // recorder: priceMinor = amountMinor + sellerCreditMinor.
       await recordPmfEvent(tx, {
         type: "take_rate_accrued",
         agencyId: listing.sellerAgencyId,
@@ -155,6 +158,8 @@ export async function licenseListing(
         currency: listing.currency,
         itineraryId: copyId,
         actorUserId: actor.userId,
+        priceMinor: listing.priceMinor,
+        sellerCreditMinor: split.sellerCredit.amountMinor,
       });
       await recordPmfEvent(tx, {
         type: "trip_created",

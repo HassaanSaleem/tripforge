@@ -157,6 +157,11 @@ export const pmfEvent = pgTable(
     itineraryId: text("itinerary_id"),
     source: text("source"),
     amountMinor: bigint("amount_minor", { mode: "number" }),
+    // Full license split (spec 006 FR-014) — populated only on take_rate_accrued
+    // events accrued via a marketplace license; conservation is validated at
+    // write time: price_minor = amount_minor + seller_credit_minor EXACTLY.
+    priceMinor: bigint("price_minor", { mode: "number" }),
+    sellerCreditMinor: bigint("seller_credit_minor", { mode: "number" }),
     currency: text("currency"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
