@@ -459,5 +459,15 @@
     "state": "backlog",
     "created": "2026-07-09T14:11:18Z",
     "pr_url": ""
+  },
+  {
+    "id": "loop-uat-gate-comment-missing",
+    "title": "Investigate: zero-context UAT evaluator verdict not posted as a PR comment on sealed-card PRs (#26, #27)",
+    "body": "Loop-process/gate-integrity observation (operator-filed 2026-07-10). PRs #23, #24, #25 each carried a zero-context uat-evaluator verdict as a PR comment; #26 and #27 did NOT (0 comments) despite the PR bodies stating 'Evaluator verdict will be attached as a PR comment.' For #27 the operator ran the zero-context UAT by hand (PASS 12/12) and posted the verdict, but the loop's own gate should produce it. Investigate WHETHER the uat-evaluator step still runs in the loop pipeline for sealed-card PRs (and merely fails to post) or is being skipped, and WHERE the post step drops. NOTE: the UAT protocol is part of the sealed regulator \u2014 if the fix requires changing the protocol/pr-manager stages, that is an OPERATOR gate (desk row), not a loop commit. This ticket covers diagnosis only.",
+    "type": "bug",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-10T00:00:00Z",
+    "pr_url": ""
   }
 ]
