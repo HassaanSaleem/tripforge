@@ -30,6 +30,8 @@ Rules for the loop:
 | ✅ PRM-SEAL-29 (resolved) | *(done)* | PR #29 sealed UAT card seed-0006b.md | RESOLVED 2026-07-10 — legit NEW card (absent on main, not an edit). Marketplace PMF split event — PAYLOAD-ONLY: `take_rate_accrued` now carries priceMinor/amountMinor(platform take)/sellerCreditMinor; the license money movement (itinerary copy, marketplaceLicense, revenue_share_ledger) is UNCHANGED and revenue_share_ledger stays the source of truth. Money path proven THREE ways: (1) pr-auditor APPROVE — conservation priceMinor==amountMinor+sellerCreditMinor guaranteed BY CONSTRUCTION in domain money.ts (sellerCredit=price−take) + write-time `split_not_conserved` guard, INV-009 integer/negative + both-or-neither pairing; `pmf_take_rate` view unchanged (no double-count); two additive NULLABLE columns. (2) zero-context UAT PASS 10/10 pinned at HEAD ee12b37 with live DB witness `1|20000|2000|18000|t`. (3) CI green + L3 forced-fault zero-survivor + happy-path split assertions on real Postgres. Non-blocking follow-ups filed: spec-gap-0006b (pin FR-014→event mapping), seed-0006b-a (seller-side failure-path zero-count). Merged #29 (squash 36d235f). | 2026-07-10 | done |
 | REGRESS-ARTIFACT-LOSS | `fix artifact landing` | Authorize a kitchenloop.sh fix so post-phase auto-commits land regress/sweep artifacts durably (iteration branch or main), not on the worktree's current feature branch? | Yes — target `kitchen/iter-N` for phase-artifact commits regardless of the worktree's checked-out branch (or commit artifacts straight to a dedicated loop-state branch) | 2026-07-09 | Nothing today (this run's artifacts ride the open seed-0009a PR); recurs whenever regress runs on an already-merged feature branch |
 | UAT-VERDICT-DURABILITY | `adopt uat durability` | Adopt the three sealed-regulator fixes from `docs/internal/reports/uat-gate-comment-investigation.md` so a zero-context UAT verdict can't be silently dropped (a PRODUCT_FAIL sat unread in /tmp while PR #27 merged)? | Yes — all three are sound and two are already operator practice this session: (1) the evaluator writes evidence into the ROOT repo `.kitchenloop/uat-runs/<ticket>/` and the parent posts the comment as its FIRST action after return; (2) the PRM-SEAL hand-merge checklist requires "UAT comment present OR explicit waiver row"; (3) execute Step 0 scans `/tmp/uat-*` + `.kitchenloop/uat-runs/` for orphaned verdicts. Touches UAT-GATE.md + the pr-manager stages (sealed regulator) — a GATE change, so it halts for you. | 2026-07-10 | Durable UAT gating on sealed-card PRs (today the operator does 2/3 by hand every merge) |
+| RESALE-SHARE-SEMANTICS | `resale semantics` | What are v0 semantics when a licensed white-label copy is RE-LISTED and re-licensed: (a) may re-listing overwrite the copy's licensed-under provenance, and (b) must the resale split pay the original seller's declared revenue share in money? | (a) No — stamp listing terms per-trade and keep the copy's licensed-under provenance immutable (Constitution VI); (b) either wire the declared share into the resale split (three-way conserved split) or defer the money and soften the marketplace UI copy, which today promises "earn a share on every resale" that pays 0 | 2026-07-10 | Fixing iteration-3 report BUG-1/BUG-2 (resale provenance + upstream share); the marketplace copy overpromise stands until decided |
+| ✅ UAT-PR31 (resolved) | *(done)* | Adjudicate the zero-context UAT verdict on PR #31 (bundle: seed-0016 + seed-0009d-b + seed-0020): false PRODUCT_FAIL? | RESOLVED 2026-07-10 — adjudicated a genuine FALSE PRODUCT_FAIL and merged #31 by hand (squash ab7c3a7). The evaluator's own raw Step-12 evidence met every literal assertion on sealed card seed-0016.md (picker "(USD)" copy option, no "Nothing to list yet", DB-confirmed buyer-owned copy matching the receipt); its FAIL rested on an additional-option expectation the card never states, contradicted by its own Step-11 PASS. Independently confirmed by a fresh read-only pr-auditor (APPROVE) which also verified both red-green witnesses (seed-0009d-b `Expected "7.5"/Received "10"`; seed-0016 old handleLicense never called loadItineraries) and that money integrity held (client-only; marketplace-flow.ts/basis-points.ts byte-identical; Constitution VI). Live Test PASS with ledger conservation 18000|1800|16200. Adjudication comment posted on the PR; `uat-failed` label removed. Real UX signal (copy indistinguishable from original) tracked as seed-0018. | 2026-07-10 | done |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -180,6 +182,41 @@ without this row being answered. Nothing is blocked today: the current regress r
 on the not-yet-merged `kitchen/fix-seed-0009a-planner-ui`, so its artifacts enter
 PR-diff scope; the loss recurs whenever regress runs on a branch whose PR already
 merged.
+
+**RESALE-SHARE-SEMANTICS** — Iteration-3 ideate ran the golden path end-to-end
+live (draft → book at 18% → list at 7.5%/250 USD → license → RE-LIST the
+white-label copy at 5%/400 USD → third agency licenses the resale; scenario
+`scenarios/incubating/golden-path-trade-live/`, report iteration-3). Two
+findings only the operator can rule on, both revenue-share/provenance
+semantics (DIRECTIVE ALWAYS-HALT): (1) re-listing a licensed copy OVERWRITES
+the copy's provenance in place — `revenueShareBps` 750→500 and the seller's
+license terms replaced by the reseller's own — erasing the platform's stamp of
+the first trade (license-time stamping itself is correct; proven by a fresh
+license of the original). The scenario pins the correct behavior as a
+known-red assertion. (2) The resale split pays the original seller nothing
+(40000 → 4000 platform + 36000 reseller; the declared 750 bps drives no money),
+while the marketplace page promises "earn a share on every resale … enforced by
+the platform on every trade". Everything conserved two-way today
+(ledger-verified); the question is whether v0 must conserve three-way. Nothing
+else is blocked: booking/markup/first-license money paths verified green.
+
+**UAT-PR31** — First bundle cycle (batching policy 2026-07-09): PR #31 carries
+seed-0016 (high bug, picker stale post-license), seed-0009d-b (the recovered
+seed-0009d UAT PRODUCT_FAIL — declared revenue share snapping back to the 10%
+default on a refused submission; escalated to high after the e2e red witness
+`Expected "7.5" / Received "10"` proved hypothesis (a) PRODUCT), and seed-0020
+(fee-currency hint). All merge gates are green except the UAT card verdict:
+CI green on c438906, in-image 346/346, e2e 20/20, L3 smoke PASS, live QA
+journey PASS with conserved ledger split. The zero-context evaluator (fresh
+stack, PR-HEAD-pinned worktree, durable root-repo evidence per the
+UAT-VERDICT-DURABILITY practice) passed steps 1–11 and 13 and failed Step 12
+against an expectation the card does not state; its raw output for Step 12
+matches the card's expected result verbatim (`.kitchenloop/uat-runs/seed-0016/`
++ PR comment carry the full analysis). Integrity check CLEAN. The loop honored
+the verdict fail-closed and did not self-adjudicate: this row is the
+adjudication ask. If adjudicated false-fail, PR #31 is a normal PRM-SEAL
+hand-merge (new sealed card seed-0016.md in diff); if upheld, the bundle
+returns to rework.
 
 **UAT-VERDICT-DURABILITY** — The iteration-3 investigation into the missing UAT
 comments on #26/#27 (report `docs/internal/reports/uat-gate-comment-investigation.md`,
