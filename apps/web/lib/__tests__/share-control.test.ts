@@ -5,7 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { TRPCClientError } from "@trpc/client";
 import { shareErrorMessage, shareUrl } from "../share-control.js";
-import { itemKindLabel, scheduleLine } from "../client-view.js";
+import { itemKindLabel, priceQualifier, scheduleLine, totalIncludesEstimates } from "../client-view.js";
 
 function trpcError(code: string) {
   return new TRPCClientError("boom", {
@@ -113,5 +113,23 @@ describe("itemKindLabel / scheduleLine (traveler page strings, contract §3)", (
         mode: "private",
       }),
     ).toBe("LIS Airport → Hotel Baixa · private");
+  });
+});
+
+describe("priceQualifier / totalIncludesEstimates (spec 013 FR-004)", () => {
+  const priced = (booked: boolean) =>
+    ({ kind: "activity", title: "Fado evening", booked, sellMinor: 9900 }) as const;
+  const unpriced = { kind: "activity", title: "Free stroll", booked: false, sellMinor: null } as const;
+
+  it("a priced, un-booked item is an estimate; a booked price is confirmed; unpriced has no qualifier", () => {
+    expect(priceQualifier(priced(false))).toBe("estimate");
+    expect(priceQualifier(priced(true))).toBeNull();
+    expect(priceQualifier(unpriced)).toBeNull();
+  });
+
+  it("the total includes estimates exactly when some shown price is un-booked", () => {
+    expect(totalIncludesEstimates([priced(true), unpriced])).toBe(false);
+    expect(totalIncludesEstimates([priced(true), priced(false)])).toBe(true);
+    expect(totalIncludesEstimates([])).toBe(false);
   });
 });

@@ -10,16 +10,19 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
+  bookingComponent as bookingComponentTable,
   count,
   createDb,
   eq,
   itinerary as itineraryTable,
   itineraryShareLink,
+  markupLedger as markupLedgerTable,
   organization,
   user as userTable,
   type Db,
   type DbHandle,
 } from "@tripforge/db";
+import type { Itinerary } from "@tripforge/itinerary-schema";
 import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
@@ -205,11 +208,12 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
         for (const item of day.items) {
           confidential.push(item.id);
           // Draft-time documents set sellPrice = netRate (markup applies at
-          // quote time — assemble.ts FR-007), so the net AMOUNT is only a
-          // scannable secret when it differs from the item's own sell price.
-          // The distinct-value redaction case is pinned by the L1 projection
-          // suite with separate net/sell sentinels; here the KEY scan above
-          // plus ids/refs/budget cover the stored-row side.
+          // quote time — assemble.ts FR-007), so on this UN-BOOKED trip the
+          // net AMOUNT is only a scannable secret when it differs from the
+          // item's own sell price. BOOKED items project the booking record's
+          // sell instead (spec 013) — that case is pinned by the seed-0025
+          // tests below and the L1 suite's distinct net/sell sentinels; here
+          // the KEY scan above plus ids/refs/budget cover the stored-row side.
           if (item.pricing && item.pricing.netRate.amountMinor !== item.pricing.sellPrice.amountMinor) {
             confidential.push(item.pricing.netRate.amountMinor);
           }
@@ -278,6 +282,151 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
       const items = resolved.view.days.flatMap((d) => d.items);
       expect(items.filter((i) => i.booked)).toHaveLength(1);
       expect(items.find((i) => i.booked)?.title).toBe(bookedTitle);
+    },
+    LONG,
+  );
+
+  /** Zip the redacted view's items with the stored document's items — the
+   * projection preserves day order (sorted by dayNumber) and item order, and
+   * the view deliberately carries no item ids, so positional pairing is the
+   * association. Returns [documentItem, viewItem] pairs. */
+  function zipViewWithDocument(document: Itinerary, view: { days: Array<{ items: unknown[] }> }) {
+    const docItems = [...document.days].sort((a, b) => a.dayNumber - b.dayNumber).flatMap((d) => d.items);
+    const viewItems = view.days.flatMap((d) => d.items) as Array<{ booked: boolean; sellMinor: number | null }>;
+    expect(viewItems).toHaveLength(docItems.length);
+    return docItems.map((doc, i) => [doc, viewItems[i]!] as const);
+  }
+
+  /** The persisted per-item booked sells for an itinerary (booking_component
+   * ground truth), plus the markup_ledger sell sum for the same components. */
+  async function persistedBookedMoney(itineraryId: string) {
+    const componentRows = await handle.db
+      .select({
+        itemId: bookingComponentTable.itemId,
+        sellMinor: bookingComponentTable.sellMinor,
+        componentId: bookingComponentTable.id,
+      })
+      .from(bookingComponentTable)
+      .where(eq(bookingComponentTable.itineraryId, itineraryId));
+    const ledgerRows = await handle.db
+      .select({ sellMinor: markupLedgerTable.sellMinor, componentId: markupLedgerTable.bookingComponentId })
+      .from(markupLedgerTable);
+    const componentIds = new Set(componentRows.map((c) => c.componentId));
+    const ledgerSellSum = ledgerRows
+      .filter((l) => componentIds.has(l.componentId))
+      .reduce((sum, l) => sum + l.sellMinor, 0);
+    return { sellByItemId: new Map(componentRows.map((c) => [c.itemId, c.sellMinor])), ledgerSellSum };
+  }
+
+  it(
+    "seed-0025: a fully booked trip is priced from the booking record — view equals ledger exactly (spec 013 FR-001/FR-002/SC-001)",
+    async () => {
+      const agent = await makeAgency("Marginal Gains Travel");
+      const itineraryId = await draftItinerary(agent);
+      const shared = await callerFor(agent).workspace.itinerary.share({ itineraryId });
+      expect(shared.status).toBe("shared");
+      if (shared.status !== "shared") return;
+
+      // Quote EVERY bookable item at a deliberately non-default markup, then
+      // book all holds — the exact live repro (quickstart §4, 2200 bps).
+      const quoted = await callerFor(agent).workspace.booking.quote({ itineraryId, markupBps: 2200 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const held = quoted.items.flatMap((i) => (i.outcome === "held" ? [i] : []));
+      expect(held.length).toBeGreaterThan(1);
+      const booked = await callerFor(agent).workspace.booking.book({
+        itineraryId,
+        quoteRowIds: held.map((h) => h.quote.quoteRowId),
+      });
+      expect(booked.status).toBe("confirmed");
+
+      // Ground truth: the persisted booking_component sells (net × 1.22).
+      const { sellByItemId, ledgerSellSum } = await persistedBookedMoney(itineraryId);
+      expect(sellByItemId.size).toBe(held.length);
+
+      const [row] = await handle.db.select().from(itineraryTable).where(eq(itineraryTable.id, itineraryId));
+      const document = parseItinerary(row?.document);
+
+      const resolved = await callerFor(null).clientView.itinerary({ token: shared.token });
+      expect(resolved.status).toBe("found");
+      if (resolved.status !== "found") return;
+
+      // Per item: the traveler sees the BOOKED sell (never the document's
+      // draft placeholder, which equals the confidential net rate).
+      for (const [docItem, viewItem] of zipViewWithDocument(document, resolved.view)) {
+        const bookedSell = sellByItemId.get(docItem.id);
+        if (bookedSell !== undefined) {
+          expect(viewItem.booked).toBe(true);
+          expect(viewItem.sellMinor, `item ${docItem.id} must show the booked sell`).toBe(bookedSell);
+          // …and therefore never the confidential net (the document's
+          // draft placeholder) — the margin-exposure defect this pins.
+          expect(viewItem.sellMinor).not.toBe(docItem.pricing?.netRate.amountMinor);
+        }
+      }
+
+      // Total: exact minor-unit equality with the markup ledger (SC-001) —
+      // every bookable item was booked and unbookable items carry no price at
+      // draft time only if unpriced; fold both sources like the view does.
+      const unbookedDocSum = [...document.days]
+        .flatMap((d) => d.items)
+        .filter((i) => !sellByItemId.has(i.id) && i.pricing)
+        .reduce((sum, i) => sum + (i.pricing?.sellPrice.amountMinor ?? 0), 0);
+      expect(resolved.view.totalSellMinor).toBe(ledgerSellSum + unbookedDocSum);
+    },
+    LONG,
+  );
+
+  it(
+    "seed-0025: a mixed trip folds booked sells with document estimates (spec 013 FR-002/FR-003)",
+    async () => {
+      const agent = await makeAgency("Half Booked Holidays");
+      const itineraryId = await draftItinerary(agent);
+      const shared = await callerFor(agent).workspace.itinerary.share({ itineraryId });
+      expect(shared.status).toBe("shared");
+      if (shared.status !== "shared") return;
+
+      const quoted = await callerFor(agent).workspace.booking.quote({ itineraryId, markupBps: 2200 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const held = quoted.items.flatMap((i) => (i.outcome === "held" ? [i] : []));
+      expect(held.length).toBeGreaterThan(1);
+
+      // Book ONLY the first hold — the rest stay estimates.
+      const target = held[0]!;
+      const booked = await callerFor(agent).workspace.booking.book({
+        itineraryId,
+        quoteRowIds: [target.quote.quoteRowId],
+      });
+      expect(booked.status).toBe("confirmed");
+
+      const { sellByItemId } = await persistedBookedMoney(itineraryId);
+      expect(sellByItemId.size).toBe(1);
+      const bookedSell = sellByItemId.get(target.itemId);
+      expect(bookedSell).toBe(target.quote.sellMinor);
+
+      const [row] = await handle.db.select().from(itineraryTable).where(eq(itineraryTable.id, itineraryId));
+      const document = parseItinerary(row?.document);
+
+      const resolved = await callerFor(null).clientView.itinerary({ token: shared.token });
+      expect(resolved.status).toBe("found");
+      if (resolved.status !== "found") return;
+
+      let expectedTotal = 0;
+      for (const [docItem, viewItem] of zipViewWithDocument(document, resolved.view)) {
+        if (docItem.id === target.itemId) {
+          // The one booked item shows the realized client price…
+          expect(viewItem.booked).toBe(true);
+          expect(viewItem.sellMinor).toBe(bookedSell);
+          expectedTotal += bookedSell ?? 0;
+        } else {
+          // …while un-booked items keep the document's stored estimate,
+          // untouched (FR-003 — no re-quote, no drift).
+          expect(viewItem.booked).toBe(false);
+          expect(viewItem.sellMinor).toBe(docItem.pricing?.sellPrice.amountMinor ?? null);
+          expectedTotal += docItem.pricing?.sellPrice.amountMinor ?? 0;
+        }
+      }
+      expect(resolved.view.totalSellMinor).toBe(expectedTotal);
     },
     LONG,
   );

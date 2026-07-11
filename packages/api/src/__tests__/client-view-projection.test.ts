@@ -5,6 +5,7 @@
 // fixture), so a projection that leaks any agent-confidential field goes red
 // regardless of what the page later renders.
 import { describe, it, expect } from "vitest";
+import { money, MoneyError, type Money } from "@tripforge/domain";
 import { parseItinerary } from "@tripforge/itinerary-schema";
 import { toClientItineraryView } from "../services/client-view.js";
 
@@ -85,8 +86,12 @@ function fullDocumentInput(): Record<string, unknown> {
 
 const AGENCY_NAME = "Wanderlust Travel Co";
 
-function project(bookedItemIds: ReadonlySet<string> = new Set()) {
-  return toClientItineraryView(parseItinerary(fullDocumentInput()), AGENCY_NAME, bookedItemIds);
+/** Booked-price sentinel: distinct from every document sentinel (net 42111,
+ * stored sell 52000) so assertions can prove WHICH source was projected. */
+const BOOKED_STAY_SELL = 60500;
+
+function project(bookedPriceByItemId: ReadonlyMap<string, Money> = new Map()) {
+  return toClientItineraryView(parseItinerary(fullDocumentInput()), AGENCY_NAME, bookedPriceByItemId);
 }
 
 describe("toClientItineraryView — allowlist projection (FR-007)", () => {
@@ -176,13 +181,13 @@ describe("toClientItineraryView — allowlist projection (FR-007)", () => {
     const input = fullDocumentInput();
     const days = input.days as Array<{ items: Array<{ pricing?: unknown }> }>;
     for (const day of days) for (const item of day.items) delete item.pricing;
-    const view = toClientItineraryView(parseItinerary(input), AGENCY_NAME, new Set());
+    const view = toClientItineraryView(parseItinerary(input), AGENCY_NAME, new Map());
     expect(view.totalSellMinor).toBeNull();
     expect(view.days.flatMap((d) => d.items).every((i) => i.sellMinor === null)).toBe(true);
   });
 
-  it("marks exactly the items whose ids are in the booked set (FR-009)", () => {
-    const view = project(new Set(["item-stay-sentinel"]));
+  it("marks exactly the items with a booked price (FR-009 — the map's key set IS the booked set)", () => {
+    const view = project(new Map([["item-stay-sentinel", money(BOOKED_STAY_SELL, "USD")]]));
     const flags = view.days.flatMap((d) => d.items).map((i) => [i.title, i.booked]);
     expect(flags).toEqual([
       ["Hotel Baixa", true],
@@ -201,8 +206,45 @@ describe("toClientItineraryView — allowlist projection (FR-007)", () => {
 
     const input = fullDocumentInput();
     input.days = [];
-    const view = toClientItineraryView(parseItinerary(input), AGENCY_NAME, new Set());
+    const view = toClientItineraryView(parseItinerary(input), AGENCY_NAME, new Map());
     expect(view.days).toEqual([]);
     expect(view.totalSellMinor).toBeNull();
+  });
+});
+
+describe("toClientItineraryView — booked-price projection (spec 013)", () => {
+  it("a booked item is priced from the booking record, never the document (FR-001)", () => {
+    const view = project(new Map([["item-stay-sentinel", money(BOOKED_STAY_SELL, "USD")]]));
+    const [stay] = view.days[0]!.items;
+    expect(stay).toMatchObject({ kind: "stay", booked: true, sellMinor: BOOKED_STAY_SELL });
+
+    // The stale document sell (52000) must not appear anywhere in the payload
+    // for the booked item — the traveler sees only the realized client price.
+    expect(JSON.stringify(view)).not.toContain("52000");
+
+    // Un-booked items keep the document's stored estimate, untouched (FR-003).
+    const [transfer] = view.days[1]!.items;
+    expect(transfer).toMatchObject({ kind: "transfer", booked: false, sellMinor: 4000 });
+  });
+
+  it("a booked item with NO document pricing still shows the booked price (edge case)", () => {
+    const view = project(new Map([["item-activity-sentinel", money(9900, "USD")]]));
+    const [, activity] = view.days[0]!.items;
+    expect(activity).toMatchObject({ kind: "activity", booked: true, sellMinor: 9900 });
+  });
+
+  it("the trip total folds exactly the shown values — booked sells + estimates (FR-002)", () => {
+    const view = project(
+      new Map([
+        ["item-stay-sentinel", money(BOOKED_STAY_SELL, "USD")],
+        ["item-activity-sentinel", money(9900, "USD")],
+      ]),
+    );
+    // booked stay + booked (document-unpriced) activity + un-booked transfer estimate
+    expect(view.totalSellMinor).toBe(BOOKED_STAY_SELL + 9900 + 4000);
+  });
+
+  it("a booked price in a foreign currency fails loudly — never a silently wrong total (research D3)", () => {
+    expect(() => project(new Map([["item-stay-sentinel", money(BOOKED_STAY_SELL, "EUR")]]))).toThrow(MoneyError);
   });
 });

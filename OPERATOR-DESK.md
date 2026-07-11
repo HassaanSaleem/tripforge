@@ -33,6 +33,7 @@ Rules for the loop:
 | RESALE-SHARE-SEMANTICS | `resale semantics` | What are v0 semantics when a licensed white-label copy is RE-LISTED and re-licensed: (a) may re-listing overwrite the copy's licensed-under provenance, and (b) must the resale split pay the original seller's declared revenue share in money? | (a) No — stamp listing terms per-trade and keep the copy's licensed-under provenance immutable (Constitution VI); (b) either wire the declared share into the resale split (three-way conserved split) or defer the money and soften the marketplace UI copy, which today promises "earn a share on every resale" that pays 0 | 2026-07-10 | Fixing iteration-3 report BUG-1/BUG-2 (resale provenance + upstream share); the marketplace copy overpromise stands until decided |
 | ✅ UAT-PR31 (resolved) | *(done)* | Adjudicate the zero-context UAT verdict on PR #31 (bundle: seed-0016 + seed-0009d-b + seed-0020): false PRODUCT_FAIL? | RESOLVED 2026-07-10 — adjudicated a genuine FALSE PRODUCT_FAIL and merged #31 by hand (squash ab7c3a7). The evaluator's own raw Step-12 evidence met every literal assertion on sealed card seed-0016.md (picker "(USD)" copy option, no "Nothing to list yet", DB-confirmed buyer-owned copy matching the receipt); its FAIL rested on an additional-option expectation the card never states, contradicted by its own Step-11 PASS. Independently confirmed by a fresh read-only pr-auditor (APPROVE) which also verified both red-green witnesses (seed-0009d-b `Expected "7.5"/Received "10"`; seed-0016 old handleLicense never called loadItineraries) and that money integrity held (client-only; marketplace-flow.ts/basis-points.ts byte-identical; Constitution VI). Live Test PASS with ledger conservation 18000|1800|16200. Adjudication comment posted on the PR; `uat-failed` label removed. Real UX signal (copy indistinguishable from original) tracked as seed-0018. | 2026-07-10 | done |
 | ✅ PRM-SEAL-34 (resolved) | *(done)* | PR #34 sealed UAT card seed-0017.md | RESOLVED 2026-07-11 — legit NEW card (absent on main, not an edit). Workspace itinerary-list panel (spec 012): the agency's trips newest-first, reopenable to continue work/book, a draft appears without page reload. READ-SIDE/UI ONLY — reuses the existing L3-proven tenant-scoped `workspace.itinerary.list`/`get` procedures; no new server capability, no canonical-schema change, no money math, no migration. Proven: (1) pr-auditor APPROVE — tenant scoping AIRTIGHT (client supplies no tenant id; server derives agencyId in agentProcedure from the verified session; both reads filter `scopedWhere`; cross-tenant `get` → NOT_FOUND); pre-existing INV-004 L3 test intact + new real-Postgres license→buyer-list assertion; grep confirms zero money/schema/migration files touched. (2) zero-context UAT PASS 13/13 (durable root-repo evidence, loop now writing to `.kitchenloop/uat-runs/` on its own). (3) CI green, in-image 353/353, e2e 23/23, Live Test PASS (receipt conservation 180.00=162.00+18.00). Merged #34 (squash 13a68b0). | 2026-07-11 | done |
+| UAT-PR36 | `adjudicate uat pr36` | Adjudicate the zero-context UAT verdict on PR #36 (seed-0025, booked-price fidelity): false PRODUCT_FAIL from a token transcription slip? | Adjudicate false-fail and hand-merge #36 as a normal PRM-SEAL (new sealed card seed-0025.md in diff) — the failing Step 6 navigated to a token with two hex chars transposed (`…c8a4…` → `…c84a…`); the DB's real token serves every card assertion (424.31 USD, 152.50 USD, 6× Booked, no net rates), ledger-exact at 42431 minor | 2026-07-11 | Merging PR #36; seed-0025 stays in_progress; workspace-subtotal follow-up seed-0026 stays blocked on it |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -224,6 +225,27 @@ the verdict fail-closed and did not self-adjudicate: this row is the
 adjudication ask. If adjudicated false-fail, PR #31 is a normal PRM-SEAL
 hand-merge (new sealed card seed-0016.md in diff); if upheld, the bundle
 returns to rework.
+
+**UAT-PR36** — Second false PRODUCT_FAIL of the UAT gate (first: UAT-PR31), new
+failure class: the sealed card asks the evaluator to "record the full /view/…
+URL" and re-navigate to it, and the haiku evaluator transcribed the 36-char
+token from the page with one two-character transposition (`adbfc8a4…` read as
+`adbfc84a…`; its own step-5-retry.png shows the extraction friction). The
+mistyped token correctly rendered the typed unavailable state — the very
+behavior Step 8 of the same card pins as CORRECT — and the evaluator scored it
+as the feature failing. Mechanical refutation on the PR (analysis comment):
+the DB holds exactly one link for the booked trip; fetching the REAL token
+serves 424.31 USD / 152.50 USD / 6× Booked / zero net-rate strings; the
+markup_ledger cross-check is exact (42431 minor). Independent same-HEAD
+witnesses: e2e booked journey (24/24), implementer MCP journey screenshots,
+reseller scenario's new hard price-fidelity assertion. Everything else on the
+PR is green: 361/361 in-image, lint/tsc/depcruise clean, smoke PASS, Live Test
+PASS, integrity check clean, evaluator steps 1–5/7/8 PASS. Fail-closed
+honored: `uat-failed` tag stays, seed-0025 stays in_progress, no self-merge.
+Card-writing lesson for future cards (loop practice, not a gate change): never
+make the evaluator transcribe long tokens — pin "click the link" or assert on
+the same page. If adjudicated false-fail, PR #36 is a normal PRM-SEAL
+hand-merge; if upheld, seed-0025 returns to rework with the operator's repro.
 
 **UAT-VERDICT-DURABILITY** — The iteration-3 investigation into the missing UAT
 comments on #26/#27 (report `docs/internal/reports/uat-gate-comment-investigation.md`,

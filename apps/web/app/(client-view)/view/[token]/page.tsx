@@ -12,7 +12,12 @@ import type { Metadata } from "next";
 import type { ClientViewItem } from "@tripforge/api";
 import { getAnonymousCaller } from "../../../../lib/trpc/server.js";
 import { formatMinorAmount } from "../../../../lib/planner-form.js";
-import { itemKindLabel, scheduleLine } from "../../../../lib/client-view.js";
+import {
+  itemKindLabel,
+  priceQualifier,
+  scheduleLine,
+  totalIncludesEstimates,
+} from "../../../../lib/client-view.js";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +76,9 @@ export default async function SharedItineraryPage({ params }: PageProps) {
   }
 
   const { view } = result;
+  // Booked prices come from the booking record (spec 013); when any shown
+  // price is still an un-booked estimate, the total must say so (FR-004).
+  const allItems = view.days.flatMap((day) => day.items);
   return (
     <div data-plain className="tf-client-root">
       <main>
@@ -84,6 +92,9 @@ export default async function SharedItineraryPage({ params }: PageProps) {
               <strong className="tf-price">
                 {formatMinorAmount(view.totalSellMinor, view.currency)}
               </strong>
+              {totalIncludesEstimates(allItems) ? (
+                <small className="tf-price-note">includes estimates</small>
+              ) : null}
             </p>
           ) : null}
         </header>
@@ -124,6 +135,7 @@ export default async function SharedItineraryPage({ params }: PageProps) {
 
 function ItemRow({ item, currency }: { item: ClientViewItem; currency: string }) {
   const schedule = scheduleLine(item);
+  const qualifier = priceQualifier(item);
   return (
     <li>
       <span className={`d d--${item.kind}`} aria-hidden="true" />
@@ -135,7 +147,10 @@ function ItemRow({ item, currency }: { item: ClientViewItem; currency: string })
         {schedule ? <small>{schedule}</small> : null}
       </span>
       {item.sellMinor !== null ? (
-        <span className="tf-price">{formatMinorAmount(item.sellMinor, currency)}</span>
+        <span className={item.booked ? "tf-price tf-price--booked" : "tf-price"}>
+          {formatMinorAmount(item.sellMinor, currency)}
+          {qualifier ? <small className="tf-price-note">{qualifier}</small> : null}
+        </span>
       ) : (
         <span aria-hidden="true" />
       )}

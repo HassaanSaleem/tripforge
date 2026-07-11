@@ -65,6 +65,11 @@ test("an agent shares a drafted trip and an anonymous traveler sees the white-la
     await expect(traveler.getByText(/[\d,]+\.\d{2} USD/).first()).toBeVisible();
     await expect(traveler.getByText(/Trip total/i)).toBeVisible();
 
+    // spec 013 (FR-004): nothing is booked yet, so every shown price is an
+    // estimate and the total says it includes estimates.
+    await expect(traveler.locator(".tf-client-items .tf-price-note").first()).toBeVisible();
+    await expect(traveler.locator(".tf-client-total .tf-price-note")).toHaveText("includes estimates");
+
     // INV-020 negatives on the TOKENIZED page: platform naming appears nowhere —
     // body, title — and agent-confidential vocabulary never reaches the page.
     await expect(traveler.getByText(/TripForge/i)).toHaveCount(0);
@@ -90,6 +95,59 @@ test("an agent shares a drafted trip and an anonymous traveler sees the white-la
   // FR-004 (one durable link, idempotent re-share) is pinned by the L3 suite —
   // the UI exposes a single mint action per drafted plan, so there is no
   // browser-side double-share surface to exercise here.
+});
+
+test("a booked trip is priced from the booking record on the traveler view (spec 013 US1)", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(DRAFT_TIMEOUT_MS + 120_000);
+  // Fresh agency for this test — serial mode does not share the session context.
+  await signUpAgency(page, {
+    name: "Betty Booked",
+    email: `betty-${runId}@example.test`,
+    password,
+    agencyName: `Booked Voyages ${runId.slice(-6)}`,
+  });
+  await draftParisTrip(page);
+
+  // Quote at a deliberately NON-default markup and book every hold — the
+  // seed-0025 live repro (quickstart §4).
+  await page.getByLabel("Markup %").fill("22");
+  await page.getByRole("button", { name: "Quote live prices" }).click();
+  await expect(page.getByTestId("quote-review")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Book selected items" }).click();
+  const confirmation = page.getByTestId("booking-confirmation");
+  await expect(confirmation).toBeVisible({ timeout: 15_000 });
+  await expect(confirmation.getByRole("heading", { name: "Booking confirmed" })).toBeVisible();
+
+  // The confirmation's per-component client prices are the contract: exact
+  // formatted server integers (net × 22%, spec 009 FR-007).
+  const confirmedPrices = await confirmation.locator(".tf-price").allTextContents();
+  expect(confirmedPrices.length).toBeGreaterThan(0);
+
+  // Share the now-booked trip and open it as the traveler.
+  const shareControl = page.getByTestId("share-control");
+  await shareControl.getByRole("button", { name: "Share with client" }).click();
+  const urlText = shareControl.getByTestId("share-url");
+  await expect(urlText).toBeVisible({ timeout: 15_000 });
+  const sharedUrl = (await urlText.textContent())?.trim() ?? "";
+
+  const { context, page: traveler } = await openAnonymously(browser, sharedUrl);
+  try {
+    await expect(traveler.getByText(/Trip total/i)).toBeVisible();
+    // spec 013 SC-001, UI-to-UI and planner-agnostic: every booked client
+    // price the AGENT saw on the confirmation appears verbatim for the
+    // TRAVELER — the page can no longer show the net-rate draft placeholder.
+    for (const price of confirmedPrices) {
+      await expect(traveler.getByText(price.trim()).first()).toBeVisible();
+    }
+    // Booked items are marked, and none of them reads as an estimate (FR-004).
+    expect(await traveler.locator(".tf-client-booked").count()).toBeGreaterThan(0);
+    expect(await traveler.locator("li:has(.tf-client-booked) .tf-price-note").count()).toBe(0);
+  } finally {
+    await context.close();
+  }
 });
 
 test("an unknown token renders the neutral unavailable state (FR-003)", async ({ page }) => {

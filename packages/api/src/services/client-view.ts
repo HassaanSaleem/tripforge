@@ -16,7 +16,7 @@
 // cross-tenant probe is indistinguishable from an unknown itinerary (FR-002).
 // Resolution is anonymous by design (link-bearer access, spec Assumptions) and
 // reads fresh per request (INV-028 — the row is the only state).
-import { addMoney, type Money } from "@tripforge/domain";
+import { addMoney, money, MoneyError, type Money } from "@tripforge/domain";
 import { parseItinerary, type Itinerary } from "@tripforge/itinerary-schema";
 import {
   eq,
@@ -81,15 +81,20 @@ export interface ClientItineraryView {
 
 /**
  * PURE allowlist projection: canonical document → traveler payload. `booked`
- * comes from the caller-supplied set of item ids with a confirmed
- * booking_component (research D6). Read-only — the document is never modified
+ * comes from the caller-supplied map of item ids to their confirmed
+ * booking_component sell — the map's key set IS the booked set (spec 013,
+ * research D2/D6). Booked items are priced from the booking record (the
+ * realized client price, net × markup), never from the document's draft
+ * placeholder, whose stored sellPrice equals the confidential net rate until
+ * a quote realizes markup (spec 013 FR-001); un-booked items keep the stored
+ * estimate (FR-003). Read-only — the document is never modified
  * (Constitution IV); the output leaves the platform toward the traveler's
  * browser and re-enters nothing.
  */
 export function toClientItineraryView(
   document: Itinerary,
   agencyName: string,
-  bookedItemIds: ReadonlySet<string>,
+  bookedPriceByItemId: ReadonlyMap<string, Money>,
 ): ClientItineraryView {
   let total: Money | undefined;
 
@@ -99,13 +104,22 @@ export function toClientItineraryView(
       dayNumber: day.dayNumber,
       ...(day.date !== undefined ? { date: day.date } : {}),
       items: day.items.map((item) => {
-        const sellPrice = item.pricing?.sellPrice;
+        const bookedPrice = bookedPriceByItemId.get(item.id);
+        if (bookedPrice && bookedPrice.currency !== document.currency) {
+          // Tripwire (research D3): quote-time recording guarantees the
+          // component currency equals the itinerary currency, so a mismatch
+          // is data corruption — fail loudly, never render a wrong total.
+          throw new MoneyError(
+            `booked component currency ${bookedPrice.currency} does not match itinerary currency ${document.currency}`,
+          );
+        }
+        const sellPrice = bookedPrice ?? item.pricing?.sellPrice;
         if (sellPrice) {
           total = total ? addMoney(total, sellPrice) : sellPrice;
         }
         const base = {
           title: item.title,
-          booked: bookedItemIds.has(item.id),
+          booked: bookedPrice !== undefined,
           sellMinor: sellPrice ? sellPrice.amountMinor : null,
         };
         switch (item.kind) {
@@ -230,15 +244,23 @@ export async function resolveShareLink(
   // Boundary re-validation (INV-001): the document is canonical on read too.
   const document = parseItinerary(row.document);
 
+  // Booked items are priced from the booking record (spec 013): the component
+  // sell is the realized client price, recorded in the itinerary currency at
+  // quote time. `money()` re-validates; the component's OWN currency is used
+  // so a corrupted cross-currency row trips the projection's loud guard.
   const components = await db
-    .select({ itemId: bookingComponentTable.itemId })
+    .select({
+      itemId: bookingComponentTable.itemId,
+      sellMinor: bookingComponentTable.sellMinor,
+      currency: bookingComponentTable.currency,
+    })
     .from(bookingComponentTable)
     .where(
       scopedWhere(bookingComponentTable.agencyId, link.agencyId, eq(bookingComponentTable.itineraryId, link.itineraryId)),
     );
-  const bookedItemIds = new Set(components.map((c) => c.itemId));
+  const bookedPriceByItemId = new Map(components.map((c) => [c.itemId, money(c.sellMinor, c.currency)]));
 
   const agencyName = (await getOrganizationName(db, link.agencyId)) ?? "Your travel agency";
 
-  return { status: "found", view: toClientItineraryView(document, agencyName, bookedItemIds) };
+  return { status: "found", view: toClientItineraryView(document, agencyName, bookedPriceByItemId) };
 }

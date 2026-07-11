@@ -423,6 +423,15 @@ business action; the existing plan→book metric view counts them.
   well within serverless timeouts; response streaming for long AI drafts is
   deferred with a note in the plan (a follow-up ticket) rather than built
   speculatively now.
+- **Where the realized (booked) sell price lives — amended by spec 013
+  (2026-07-11, seed-0025)**: the draft-time document sets `sellPrice = netRate`
+  as a placeholder ("markup applies at quote time") — that equality is
+  DRAFT-ONLY semantics. The client price realized by quote→book is recorded on
+  the booking records (`booking_quote`/`booking_component`/`markup_ledger`),
+  which are the single source of truth for realized money; traveler-facing
+  read surfaces project the booked sell from the booking record at read time.
+  The booking flow never writes the canonical document (no book-time
+  stamping). See `specs/013-booked-price-fidelity/spec.md`.
 
 ## Out of Scope
 

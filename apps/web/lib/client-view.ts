@@ -26,6 +26,22 @@ function occupancyLine(adults: number, children: number): string {
 }
 
 /**
+ * Price qualifier for an item's shown price (spec 013 FR-004): a priced,
+ * un-booked item is an estimate; a booked item's price is the confirmed
+ * booking-record price (the Booked badge carries that state, so it needs no
+ * extra word). Boolean presentation logic only — never money arithmetic.
+ */
+export function priceQualifier(item: ClientViewItem): "estimate" | null {
+  return item.sellMinor !== null && !item.booked ? "estimate" : null;
+}
+
+/** True when any shown price is still an estimate — the trip total must say
+ * so instead of reading as fully confirmed (spec 013 FR-004). */
+export function totalIncludesEstimates(items: readonly ClientViewItem[]): boolean {
+  return items.some((item) => priceQualifier(item) !== null);
+}
+
+/**
  * One schedule line per item from the redacted view's kind-specific facts
  * (data-model §5). Returns null when an item carries no schedule facts to
  * show (e.g. an activity without a start time or duration).

@@ -154,6 +154,11 @@ flow, reload the share link, and verify exactly that item carries a confirmed ma
   item's sell price where a pricing snapshot exists. It MUST show a trip total equal to
   the sum of the shown item sell prices, computed server-side (no client-side money
   arithmetic beyond display formatting).
+  > **Amended by spec 013 (2026-07-11, seed-0025):** for an item covered by a confirmed
+  > booking, the shown sell price is the booked client price from the booking record
+  > (read-time projection), never the document's stored draft price; the trip total
+  > folds booked prices with un-booked stored estimates and remains the sum of exactly
+  > the values shown. The view distinguishes confirmed (booked) prices from estimates.
 - **FR-009**: Items covered by a confirmed booking MUST carry a visible confirmed
   ("Booked") mark; unbooked items carry none.
 - **FR-010**: The client surface MUST NOT expose workspace affordances (sign-in,
@@ -214,3 +219,10 @@ flow, reload the share link, and verify exactly that item carries a confirmed ma
   granularity for the P0 demo path and matches "agent sends the client one URL".
 - **Prices shown are the itinerary's stored sell prices**: the client view reflects
   what the agent's document says today; it does not re-quote live inventory.
+  > **Amended by spec 013 (2026-07-11, seed-0025):** this bullet was written for the
+  > un-booked case and is now scoped to it. Items covered by a confirmed booking are
+  > priced from the BOOKING RECORD (the realized client price recorded at booking:
+  > net × markup), projected at read time — never the document's draft placeholder,
+  > which equals the confidential net rate until a quote realizes markup. Un-booked
+  > items keep the stored estimate, and the view still never re-quotes live
+  > inventory. See `specs/013-booked-price-fidelity/spec.md` (storage decision).
