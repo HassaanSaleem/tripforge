@@ -10,6 +10,7 @@ import { TRPCClientError } from "@trpc/client";
 import { percentToBps, formatBps } from "../basis-points.js";
 import {
   createListingFailureMessage,
+  formatEarnings,
   formatRating,
   formatShareBps,
   licenseFailureMessage,
@@ -165,6 +166,20 @@ describe("formatRating / formatShareBps (research D8, contract §6)", () => {
   it("scales share basis points for display", () => {
     expect(formatShareBps(1_000)).toBe("10%");
     expect(formatShareBps(750)).toBe("7.5%");
+  });
+});
+
+describe("formatEarnings (spec 014 US1, FR-002/FR-003)", () => {
+  it("shows an explicit zero for a never-licensed listing", () => {
+    expect(formatEarnings(0, 0, "USD")).toBe("0 licenses · 0.00 USD earned");
+  });
+
+  it("singularizes exactly one license", () => {
+    expect(formatEarnings(1, 22_500, "USD")).toBe("1 license · 225.00 USD earned");
+  });
+
+  it("renders the exact server total verbatim, no rounding beyond the currency's own precision", () => {
+    expect(formatEarnings(2, 45_000, "USD")).toBe("2 licenses · 450.00 USD earned");
   });
 });
 

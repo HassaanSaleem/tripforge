@@ -533,6 +533,56 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
     },
     LONG,
   );
+
+  it(
+    "seller earnings (spec 014 US1): browseListings reports the exact license count and seller-credit sum, seller-only",
+    async () => {
+      const seller = await makeAgency("Atlas DMC");
+      const resellerA = await makeAgency("Nomad Collective");
+      const resellerB = await makeAgency("Third Agency");
+      await vet(seller.agencyId);
+      await vet(resellerA.agencyId);
+      await vet(resellerB.agencyId);
+      const itineraryId = await draftItinerary(seller);
+      const listed = await callerFor(seller).workspace.marketplace.createListing({ itineraryId, ...LISTING_INPUT });
+      expect(listed.status).toBe("listed");
+      if (listed.status !== "listed") return;
+
+      // Before any license: an explicit zero, never absent (FR-003).
+      const beforeBrowse = await callerFor(seller).workspace.marketplace.browseListings();
+      expect(beforeBrowse.listings.find((l) => l.listingId === listed.listingId)).toMatchObject({
+        licenseCount: 0,
+        sellerCreditTotalMinor: 0,
+      });
+
+      const licenseA = await callerFor(resellerA).workspace.marketplace.licenseListing({
+        listingId: listed.listingId,
+      });
+      const licenseB = await callerFor(resellerB).workspace.marketplace.licenseListing({
+        listingId: listed.listingId,
+      });
+      expect(licenseA.status).toBe("licensed");
+      expect(licenseB.status).toBe("licensed");
+      if (licenseA.status !== "licensed" || licenseB.status !== "licensed") return;
+
+      const exactSum = licenseA.sellerCreditMinor + licenseB.sellerCreditMinor;
+      const sellerBrowse = await callerFor(seller).workspace.marketplace.browseListings();
+      expect(sellerBrowse.listings.find((l) => l.listingId === listed.listingId)).toMatchObject({
+        licenseCount: 2,
+        sellerCreditTotalMinor: exactSum,
+      });
+
+      // Seller-only (FR-004): no other agency's browse ever sees earnings for
+      // a listing it does not own — including the resellers who just licensed it.
+      const resellerABrowse = await callerFor(resellerA).workspace.marketplace.browseListings();
+      expect(resellerABrowse.listings.find((l) => l.listingId === listed.listingId)).toMatchObject({
+        mine: false,
+        licenseCount: null,
+        sellerCreditTotalMinor: null,
+      });
+    },
+    LONG,
+  );
 });
 
 /** Wrap a real Db so the Nth `insert` INSIDE the next transaction throws —

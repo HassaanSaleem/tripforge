@@ -7,7 +7,7 @@
 // The server stays authoritative for every money value (FR-003/SC-004) —
 // nothing here computes money.
 import { percentToBps, formatBps } from "./basis-points.js";
-import { currencyFractionDigits } from "./planner-form.js";
+import { currencyFractionDigits, formatMinorAmount } from "./planner-form.js";
 import { transportErrorMessage } from "./transport-error.js";
 import type {
   BrowseListingsOutput,
@@ -131,6 +131,17 @@ export function formatRating(average: number | null, count: number): string {
     return "Not yet rated";
   }
   return `★ ${average.toFixed(1)} (${count})`;
+}
+
+/**
+ * Seller earnings display for the caller's own listing card (spec 014 US1,
+ * FR-002/FR-003): an explicit "0 licenses" for a never-licensed listing,
+ * else the exact license count and seller-credit total the server computed
+ * (no arithmetic here — formatMinorAmount only).
+ */
+export function formatEarnings(licenseCount: number, sellerCreditTotalMinor: number, currency: string): string {
+  const licenses = licenseCount === 1 ? "1 license" : `${licenseCount} licenses`;
+  return `${licenses} · ${formatMinorAmount(sellerCreditTotalMinor, currency)} earned`;
 }
 
 /**

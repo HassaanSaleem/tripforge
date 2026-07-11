@@ -92,12 +92,49 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
       const stamps = alphaList.itineraries.map((i) => Date.parse(i.createdAt));
       expect(stamps[0]).toBeGreaterThanOrEqual(stamps[1] as number);
 
-      // Picker projection ONLY: no canonical document, no trip request.
+      // Picker projection ONLY: no canonical document, no trip request. Every
+      // unlisted trip carries an explicit null listing (spec 014 FR-008), not
+      // an absent field.
       for (const row of alphaList.itineraries) {
-        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "title"]);
+        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "listing", "title"]);
         expect(row.currency).toBe("USD");
         expect(row.title.length).toBeGreaterThan(0);
+        expect(row.listing).toBeNull();
       }
+    },
+    LONG,
+  );
+
+  it(
+    "an active listing marks the trip; deactivating clears the mark (spec 014 US2)",
+    async () => {
+      const seller = await makeAgency("Epsilon Voyages");
+      await handle.db.insert(agencyVetting).values({ agencyId: seller.agencyId, vettedBy: "l3il-test-operator" });
+      const tripId = await draft(seller, "Porto");
+
+      const before = await callerFor(seller).workspace.itinerary.list();
+      expect(before.itineraries.find((i) => i.id === tripId)?.listing).toBeNull();
+
+      const listed = await callerFor(seller).workspace.marketplace.createListing({
+        itineraryId: tripId,
+        title: "Porto long weekend — proven route",
+        priceMinor: 25_000,
+        licenseTerms: "White-label permitted; keep attribution lineage.",
+        revenueShareBps: 750,
+      });
+      expect(listed.status).toBe("listed");
+      if (listed.status !== "listed") throw new Error("listing failed");
+
+      const after = await callerFor(seller).workspace.itinerary.list();
+      expect(after.itineraries.find((i) => i.id === tripId)?.listing).toEqual({
+        listingId: listed.listingId,
+        priceMinor: 25_000,
+        currency: "USD",
+      });
+
+      await callerFor(seller).workspace.marketplace.deactivateListing({ listingId: listed.listingId });
+      const afterOff = await callerFor(seller).workspace.itinerary.list();
+      expect(afterOff.itineraries.find((i) => i.id === tripId)?.listing).toBeNull();
     },
     LONG,
   );

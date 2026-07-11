@@ -13,7 +13,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trpc, type GetItineraryOutput, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
-import { formatCreatedDate, listErrorMessage, openErrorMessage } from "../../../lib/itinerary-list.js";
+import { formatCreatedDate, formatListedBadge, listErrorMessage, openErrorMessage } from "../../../lib/itinerary-list.js";
 import { BookingFlow } from "./booking-flow.js";
 import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
@@ -107,6 +107,11 @@ export function ItineraryList({ refreshToken }: { refreshToken: number }) {
             <li key={trip.id} className="tf-trip-row" data-testid="trip-row">
               <b>{trip.title}</b>
               <span className="tf-badge">{trip.currency}</span>
+              {trip.listing ? (
+                <span className="tf-badge tf-badge--listed" data-testid="trip-listed">
+                  {formatListedBadge(trip.listing)}
+                </span>
+              ) : null}
               <time dateTime={trip.createdAt}>{formatCreatedDate(trip.createdAt)}</time>
               <button
                 type="button"

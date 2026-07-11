@@ -3,6 +3,7 @@
 // timezone are pinned (research D6): server HTML and client hydration must
 // render the same text on any host, and the e2e asserts the visible date.
 // No money logic lives here (FR-009 — amounts go through formatMinorAmount).
+import { formatMinorAmount } from "./planner-form.js";
 import { transportErrorMessage } from "./transport-error.js";
 
 const CREATED_DATE = new Intl.DateTimeFormat("en-GB", {
@@ -15,6 +16,12 @@ const CREATED_DATE = new Intl.DateTimeFormat("en-GB", {
 /** ISO-8601 timestamp → "9 Jul 2026" (en-GB short month, UTC). */
 export function formatCreatedDate(iso: string): string {
   return CREATED_DATE.format(new Date(iso));
+}
+
+/** "Listed" badge text for a trip with an active marketplace listing (spec
+ * 014 US2, FR-007): the listing's own fee/currency, no arithmetic here. */
+export function formatListedBadge(listing: { priceMinor: number; currency: string }): string {
+  return `Listed · ${formatMinorAmount(listing.priceMinor, listing.currency)}`;
 }
 
 /**

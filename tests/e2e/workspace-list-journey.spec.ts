@@ -85,6 +85,12 @@ test("arrangement: the owner lists the drafted trip on the marketplace", async (
   await page.getByLabel("Revenue share %").fill("7.5");
   await page.getByRole("button", { name: /List it on the marketplace/i }).click();
   await expect(page.getByTestId("listing-created")).toBeVisible({ timeout: 15_000 });
+
+  // Listed mark (spec 014 US2): the owner's workspace trip list now carries
+  // the listing's fee/currency alongside the row, no reload needed.
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Workspace" }).click();
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.getByTestId("trip-listed")).toHaveText("Listed · 250.00 USD");
 });
 
 test("a licensed white-label copy lands in the buyer's workspace list and opens (US3b/FR-007)", async ({

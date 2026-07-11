@@ -4,7 +4,7 @@
 // the trips wording (contract §2/§3 — only these strings ever reach the panel).
 import { describe, it, expect } from "vitest";
 import { TRPCClientError } from "@trpc/client";
-import { formatCreatedDate, listErrorMessage, openErrorMessage } from "../itinerary-list.js";
+import { formatCreatedDate, formatListedBadge, listErrorMessage, openErrorMessage } from "../itinerary-list.js";
 
 function trpcError(code: string) {
   return new TRPCClientError("boom", {
@@ -23,6 +23,16 @@ describe("formatCreatedDate (research D6)", () => {
     // timeZone: "UTC" makes server HTML and client hydration agree.
     expect(formatCreatedDate("2026-12-31T23:59:59.000Z")).toBe("31 Dec 2026");
     expect(formatCreatedDate("2027-01-01T00:00:01.000Z")).toBe("1 Jan 2027");
+  });
+});
+
+describe("formatListedBadge (spec 014 US2, FR-007)", () => {
+  it("renders the listing's own fee and currency, no arithmetic", () => {
+    expect(formatListedBadge({ priceMinor: 25_000, currency: "USD" })).toBe("Listed · 250.00 USD");
+  });
+
+  it("respects the currency's own fraction digits", () => {
+    expect(formatListedBadge({ priceMinor: 450, currency: "JPY" })).toBe("Listed · 450 JPY");
   });
 });
 

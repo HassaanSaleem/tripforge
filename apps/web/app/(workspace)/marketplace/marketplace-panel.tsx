@@ -17,6 +17,7 @@ import { trpc, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
 import { formatMinorAmount } from "../../../lib/planner-form.js";
 import {
   createListingFailureMessage,
+  formatEarnings,
   formatRating,
   formatShareBps,
   licenseFailureMessage,
@@ -264,6 +265,11 @@ function ListingCard({
         <span className="tf-badge">{formatShareBps(listing.revenueShareBps)} revenue share</span>
         {listing.mine ? <span className="tf-badge tf-market-mine">Your listing</span> : null}
       </div>
+      {listing.mine && listing.licenseCount !== null && listing.sellerCreditTotalMinor !== null ? (
+        <p className="tf-market-earnings" data-testid="listing-earnings">
+          {formatEarnings(listing.licenseCount, listing.sellerCreditTotalMinor, listing.currency)}
+        </p>
+      ) : null}
       <p className="tf-market-terms">{listing.licenseTerms}</p>
       {listing.mine ? null : (
         <button

@@ -125,6 +125,7 @@ button:active, .tf-btn:active { transform: translateY(1px); }
 .tf-brand::before { content: "◇"; color: var(--sea); margin-right: 9px; }
 .tf-eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--sea-deep); }
 .tf-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: var(--sea-tint); color: var(--sea-deep); border: 1px solid color-mix(in srgb, var(--sea) 22%, var(--line)); }
+.tf-badge--listed { background: color-mix(in srgb, var(--gold) 16%, transparent); color: #8a6a24; border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
 .tf-price { font-variant-numeric: tabular-nums; font-weight: 640; }
 
 /* ---- white-label opt-out: /view shows agency brand only, no platform theme --- */
@@ -273,6 +274,7 @@ label > input, label > select, label > textarea {
 .tf-market-price { font-size: 21px; margin: 0; color: var(--ink); }
 .tf-market-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .tf-market-mine { background: color-mix(in srgb, var(--gold) 16%, transparent); color: #8a6a24; border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
+.tf-market-earnings { color: var(--ink); font-size: 13.5px; font-weight: 600; margin: 0; }
 .tf-market-terms { color: var(--ink-soft); font-size: 13.5px; margin: 0; border-top: 1px solid var(--line); padding-top: 10px; }
 .tf-market-empty { color: var(--muted); font-style: italic; }
 

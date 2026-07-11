@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency, vetAgencyByName } from "./support.js";
+import { DRAFT_TIMEOUT_MS, draftParisTrip, signInAgency, signUpAgency, vetAgencyByName } from "./support.js";
 
 // L4 marketplace journey (spec 011, ticket seed-0009d; INV-027). Runs against
 // the BUILT compose image (playwright.config baseURL) under either planner —
@@ -77,6 +77,12 @@ test("a seller lists a drafted trip — refused unvetted, live once vetted (US1+
   await expect(card.getByText("250.00 USD")).toBeVisible();
   await expect(card.getByText("7.5% revenue share")).toBeVisible();
   await expect(card.getByText("Not yet rated")).toBeVisible();
+  // Seller earnings surface (spec 014 US1): explicit zero before any license.
+  await expect(card.getByTestId("listing-earnings")).toHaveText("0 licenses · 0.00 USD earned");
+
+  // Workspace trip list (spec 014 US2): the "Listed" mark carries the fee.
+  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Workspace" }).click();
+  await expect(page.getByTestId("trip-listed")).toHaveText("Listed · 250.00 USD");
 });
 
 test("another agency licenses it cross-tenant and sees the recorded split (US3)", async ({
@@ -122,6 +128,19 @@ test("another agency licenses it cross-tenant and sees the recorded split (US3)"
   // Re-license: benign typed refusal, no second charge pretended.
   await card.getByRole("button", { name: /License this trip/i }).click();
   await expect(card.getByText(/already licensed this trip/)).toBeVisible({ timeout: 15_000 });
+});
+
+test("the seller's own card now shows the license and the exact seller credit (spec 014 US1)", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await signInAgency(page, { email: seller.email, password: seller.password });
+  await page.goto("/marketplace");
+  const card = page.getByTestId("listing-card").filter({ hasText: listingTitle });
+  await expect(card).toHaveCount(1, { timeout: 15_000 });
+  // 250.00 USD at the fixed 10% platform take → 225.00 seller credit (same
+  // split the L3 suite pins), now visible on the seller's own card.
+  await expect(card.getByTestId("listing-earnings")).toHaveText("1 license · 225.00 USD earned");
 });
 
 test("a signed-out visitor gets the membership prompt, never marketplace data (INV-024)", async ({

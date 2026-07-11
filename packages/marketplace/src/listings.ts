@@ -20,6 +20,7 @@ import { z } from "zod";
 import { isVetted } from "./vetting.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { ratingAggregates } from "./ratings.js";
+import { earningsAggregates } from "./earnings.js";
 import type { MarketplaceActor } from "./types.js";
 
 export const createListingInputSchema = z.strictObject({
@@ -137,6 +138,10 @@ export interface BrowseListing {
   ratingAverage: number | null;
   ratingCount: number;
   mine: boolean;
+  /** Seller-only (spec 014 US1); null for listings the caller does not own. */
+  licenseCount: number | null;
+  /** Seller-only, in the listing's own currency; null for listings the caller does not own. */
+  sellerCreditTotalMinor: number | null;
 }
 
 /**
@@ -164,14 +169,23 @@ export async function browseListings(db: Db, actor: MarketplaceActor): Promise<{
     db,
     rows.map((r) => r.listingId),
   );
+  // Earnings are seller-only (research D2): scope the query itself to the
+  // caller's own agency and own listing ids, so another agency's revenue is
+  // never fetched by this call, let alone returned.
+  const ownListingIds = rows.filter((r) => r.sellerAgencyId === actor.agencyId).map((r) => r.listingId);
+  const earnings = await earningsAggregates(db, actor.agencyId, ownListingIds);
   return {
     listings: rows.map((r) => {
       const agg = aggregates.get(r.listingId);
+      const mine = r.sellerAgencyId === actor.agencyId;
+      const earned = mine ? (earnings.get(r.listingId) ?? { licenseCount: 0, sellerCreditTotalMinor: 0 }) : null;
       return {
         ...r,
         ratingAverage: agg?.average ?? null,
         ratingCount: agg?.count ?? 0,
-        mine: r.sellerAgencyId === actor.agencyId,
+        mine,
+        licenseCount: earned?.licenseCount ?? null,
+        sellerCreditTotalMinor: earned?.sellerCreditTotalMinor ?? null,
       };
     }),
   };
