@@ -1,13 +1,14 @@
 // Kitchen Loop iteration-3 scenario (T3 Frontier; feature revenue-share ×
 // marketplace arrangement; platforms web+api; user_types agent-seller + client):
-// "The seller gets paid — but is never told." A seller lists a finished trip,
+// "The seller gets paid — and now IS told." A seller lists a finished trip,
 // a reseller licenses it (first sale). The platform records the conserved split
 // (revenue_share_ledger, INV-012) and hands the BUYER a receipt — this script
-// then walks every read surface the SELLER has and pins the frontier boundary:
-// no API projection and no key on the listing card ever tells the seller they
-// earned their credit. Finally it proves the traveler side of the same trade is
-// structurally free of ALL revenue-share data (fee, split, terms, bps,
-// provenance) on both the anonymous clientView payload and the SSR /view page.
+// then walks every read surface the SELLER has and pins the trust boundary:
+// the seller's own listing card projects their earnings (licenseCount,
+// sellerCreditTotalMinor), scoped so no OTHER agency's browse view ever sees
+// them. Finally it proves the traveler side of the same trade is structurally
+// free of ALL revenue-share data (fee, split, terms, bps, provenance) on both
+// the anonymous clientView payload and the SSR /view page.
 //
 // L3-style, 4-layer: real requests against the built compose image, parsed
 // responses, STATE-DELTA assertions against the platform's own money integers.
@@ -16,12 +17,13 @@
 // (OPERATOR-DESK RESALE-SHARE-SEMANTICS) — nothing here re-lists the copy or
 // asserts resale money.
 //
-// GAP PINS (flip when the seller-earnings surface lands): the "no earnings
-// key on the listing card" and "no earnings procedure" checks below assert
-// TODAY'S absence — they are the machine-readable form of the gap analysis in
-// docs/internal/reports/iteration-3-report.md (fifth pass). When triage lands a
-// seller-scoped projection over revenue_share_ledger, update these checks to
-// assert the projection instead (and extend with its conservation identity).
+// GAP CLOSED (seed-0031 backfill, was open at iteration-3 ideate time): the
+// "no earnings key on the listing card" pin from docs/internal/reports/
+// iteration-3-report.md (fifth pass) is flipped to a real assertion now that
+// seed-0030 (same iteration) landed the licenseCount/sellerCreditTotalMinor
+// projection on browseListings. The remaining GAP PIN below (no dedicated
+// workspace.marketplace.earnings/.licenses procedure) is still accurate as of
+// this backfill — the surface landed by enriching browseListings instead.
 //
 // Operator-side arrangement: marketplace vetting is a platform-operator action
 // (spec 011 research D10) — like tests/e2e/support.ts, the script performs the
@@ -29,6 +31,13 @@
 //
 // Usage: docker compose up --build --wait
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/revenue-share-seller-visibility/scenario.mjs
+
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "revenue-share", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 4, "tier": "T3", "note": "seller's own listing card projects licenseCount + sellerCreditTotalMinor conserved from the ledger; other agencies' browse views see null for the same listing (seed-0030 gap closed + re-verified in this backfill)" },
+//   { "feature": "revenue-share", "platform": "api", "user_type": "client", "result": "pass", "iteration": 3, "tier": "T3", "note": "anonymous clientView payload + SSR /view page structurally free of ALL revenue-share data (fee, split, terms, bps, provenance)" }
+// ]
+// KITCHENLOOP-COVERAGE-END
 
 import { execFileSync } from "node:child_process";
 
@@ -216,22 +225,29 @@ async function main() {
   const mine = cards.find((l) => (l.listingId ?? l.id) === listingId);
   check("seller: own listing visible on the browse surface", !!mine, browse.text.slice(0, 300));
   if (mine) {
-    // GAP PIN — today's card projects listing TERMS only. No key on it (or
-    // anywhere in the browse payload) carries earnings semantics: nothing
-    // counts licenses sold, nothing surfaces the 297.90 credit the ledger
-    // already holds for this seller. Flip when the earnings surface lands.
-    const keys = [...collectKeys(browse.data)];
-    const earningsKeys = keys.filter(
-      (k) =>
-        /earn|credit|income|payout|sold|balance|proceeds|licen[cs]e[ds]|licen[cs]ecount/.test(k) &&
-        !["licenseterms", "revenuesharebps"].includes(k), // declared TERMS, not earnings
-    );
+    // GAP CLOSED (seed-0030): browseListings now projects the seller's own
+    // earnings directly onto their own card — licenseCount + the exact
+    // conserved credit sum from revenue_share_ledger (297.90 = 29790 minor,
+    // matching the ledger/PMF checks above). Was a GAP PIN asserting the
+    // ABSENCE of any such key; flipped to assert the real projection once
+    // seed-0030 landed it (same iteration).
     check(
-      "seller: GAP PIN — no earnings/licensed-count key anywhere on the browse payload",
-      earningsKeys.length === 0,
-      `unexpected earnings-like keys: ${earningsKeys.join(", ")} (the surface may have landed — update this scenario)`,
+      "seller: own listing card now surfaces licenseCount (1) and sellerCreditTotalMinor (29790), matching the ledger",
+      mine.licenseCount === 1 && mine.sellerCreditTotalMinor === 29_790,
+      `got licenseCount=${mine.licenseCount} sellerCreditTotalMinor=${mine.sellerCreditTotalMinor}`,
     );
   }
+  // Tenant scoping (FR-004): the RESELLER's own browse view must never see
+  // earnings for a listing it does not own (null, not the seller's numbers).
+  const browseAsReseller = await trpcQuery(reseller.jar, "workspace.marketplace.browseListings");
+  const sellerCardForReseller = (browseAsReseller.data?.listings ?? []).find(
+    (l) => (l.listingId ?? l.id) === listingId,
+  );
+  check(
+    "reseller: sees the seller's listing but earnings fields are null (not their data)",
+    !!sellerCardForReseller && sellerCardForReseller.licenseCount === null && sellerCardForReseller.sellerCreditTotalMinor === null,
+    JSON.stringify(sellerCardForReseller),
+  );
   // A real user re-submit: the sell form still OFFERS the already-listed
   // itinerary (offer-then-refuse friction, see report), but the platform
   // refuses typed with the EXISTING listing's id and conserves state — the

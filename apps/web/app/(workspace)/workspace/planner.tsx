@@ -208,7 +208,9 @@ export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
           <DraftResult outcome={view.outcome} />
           {/* Booking controls exist only inside a verified agent's drafted plan
               (spec 009 FR-009, research D2); keyed so a new draft resets the flow. */}
-          <BookingFlow key={view.outcome.itinerary.id} itinerary={view.outcome.itinerary} />
+          {/* A just-drafted itinerary has no booking history yet — always the
+              form's default markup (seed-0028 only prefills on REOPEN). */}
+          <BookingFlow key={view.outcome.itinerary.id} itinerary={view.outcome.itinerary} latestBookedMarkupBps={null} />
           {/* Client-view share (spec 010 US2) — same composition rule, keyed the
               same way so a new draft resets the shared-link state. */}
           <ShareControl key={`share-${view.outcome.itinerary.id}`} itineraryId={view.outcome.itinerary.id} />

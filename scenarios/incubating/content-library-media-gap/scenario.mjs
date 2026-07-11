@@ -40,6 +40,15 @@
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/content-library-media-gap/scenario.mjs
 // Exit 0 = every pinned behavior holds; non-zero = a real regression.
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "content-library", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T3", "note": "draft refuses media key typed; dormant media fields round-trip []; scraped-web source refused on read (D-006.c); no attach affordance exists (the gap)" },
+//   { "feature": "content-library", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T3", "note": "licensing a media-bearing listing succeeds; white-label copy carries the gallery verbatim incl. original agency's agent-upload attribution" },
+//   { "feature": "content-library", "platform": "api", "user_type": "client", "result": "fail", "iteration": 4, "tier": "T3", "note": "live re-verify (seed-0031 bundle) found the STRENGTHENED FR-010 check self-contradictory, not a product bug: STOCK_SENTINEL ('eiffel-dusk-sentinel.jpg') is a literal substring of STOCK_URL, whose presence the check ALSO requires (FR-009 affordance) -- ticketed for a scenario-only fixture fix, not filed as a product defect" },
+//   { "feature": "content-library", "platform": "web", "user_type": "client", "result": "fail", "iteration": 4, "tier": "T3", "note": "live re-verify (seed-0031 bundle): SAME self-contradictory fixture bug as the api/client entry, on the /view SSR page's copy of the check" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 import { execFileSync } from "node:child_process";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";

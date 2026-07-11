@@ -315,6 +315,55 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
   );
 
   it(
+    "itinerary.get reflects the LAST booked generation's markup, not the form's default (seed-0028)",
+    async () => {
+      const session = await makeAgency();
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+
+      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+
+      // No bookings yet: null, not a guessed default.
+      const freshView = await caller.workspace.itinerary.get({ itineraryId });
+      expect(freshView.status).toBe("found");
+      if (freshView.status !== "found") return;
+      expect(freshView.latestBookedMarkupBps).toBeNull();
+
+      // Book a subset at a NON-default 2200 bps.
+      const quoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 2200 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const firstIds = quoted.items.flatMap((i) => (i.outcome === "held" ? [i.quote.quoteRowId] : []));
+      expect(firstIds.length).toBeGreaterThan(1);
+      const firstBook = await caller.workspace.booking.book({ itineraryId, quoteRowIds: firstIds.slice(0, 1) });
+      expect(firstBook.status === "confirmed" || firstBook.status === "partially_confirmed").toBe(true);
+
+      const afterFirst = await caller.workspace.itinerary.get({ itineraryId });
+      expect(afterFirst.status).toBe("found");
+      if (afterFirst.status !== "found") return;
+      expect(afterFirst.latestBookedMarkupBps).toBe(2200);
+
+      // Book the REST at a DIFFERENT rate (1000 bps) — reopening must reflect
+      // this newer generation, not the first one.
+      const requoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 1000 });
+      expect(requoted.status).toBe("quoted");
+      if (requoted.status !== "quoted") return;
+      const remainingIds = requoted.items.flatMap((i) => (i.outcome === "held" ? [i.quote.quoteRowId] : []));
+      expect(remainingIds.length).toBeGreaterThan(0);
+      const secondBook = await caller.workspace.booking.book({ itineraryId, quoteRowIds: remainingIds });
+      expect(secondBook.status === "confirmed" || secondBook.status === "partially_confirmed").toBe(true);
+
+      const afterSecond = await caller.workspace.itinerary.get({ itineraryId });
+      expect(afterSecond.status).toBe("found");
+      if (afterSecond.status !== "found") return;
+      expect(afterSecond.latestBookedMarkupBps).toBe(1000);
+    },
+    LONG,
+  );
+
+  it(
     "partial failure: failing component reports typed reason and writes ZERO rows; siblings confirm (US3)",
     async () => {
       const session = await makeAgency();

@@ -12,6 +12,7 @@ import {
   bookingErrorMessage,
   formatHoldExpiry,
   formatMarkupBps,
+  initialMarkupPercent,
   itemMetaIndex,
   itemMetaOf,
   quoteFailureMessage,
@@ -112,6 +113,23 @@ describe("display formatting (research D7)", () => {
     const formatted = formatHoldExpiry("2026-09-01T10:30:00.000Z");
     expect(formatted.startsWith("Held until ")).toBe(true);
     expect(formatted.length).toBeGreaterThan("Held until ".length);
+  });
+});
+
+describe("initialMarkupPercent (seed-0028)", () => {
+  it("defaults to 15 when the trip has no booked generation yet", () => {
+    expect(initialMarkupPercent(null)).toBe("15");
+  });
+
+  it("seeds from the last booked generation's rate, not the default", () => {
+    expect(initialMarkupPercent(2200)).toBe("22");
+    expect(initialMarkupPercent(1225)).toBe("12.25");
+    expect(initialMarkupPercent(0)).toBe("0");
+  });
+
+  it("round-trips back through toMarkupBps to the same bps (no client-side money math)", () => {
+    expect(bpsOf(initialMarkupPercent(2200))).toBe(2200);
+    expect(bpsOf(initialMarkupPercent(1225))).toBe(1225);
   });
 });
 

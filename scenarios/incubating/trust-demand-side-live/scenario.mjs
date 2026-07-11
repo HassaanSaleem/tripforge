@@ -37,6 +37,14 @@
 // Usage: docker compose up --build --wait
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/trust-demand-side-live/scenario.mjs
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "trust", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "live browser (companion pass, evidence .kitchenloop/evidence/iter-3-ideate-f/): reseller seat walked live" },
+//   { "feature": "trust", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "legitimate reseller with a licensed copy still cannot itinerary.get the seller's original; IDOR row-substitution probe refused" },
+//   { "feature": "trust", "platform": "api", "user_type": "client", "result": "pass", "iteration": 3, "tier": "T2", "note": "anonymous/traveler session hitting the full agent-gated surface -- refused live end-to-end" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 import { execFileSync } from "node:child_process";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";

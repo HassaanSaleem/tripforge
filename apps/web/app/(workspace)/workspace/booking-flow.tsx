@@ -19,6 +19,7 @@ import {
   bookingErrorMessage,
   formatHoldExpiry,
   formatMarkupBps,
+  initialMarkupPercent,
   itemMetaIndex,
   itemMetaOf,
   quoteFailureMessage,
@@ -36,8 +37,17 @@ type BookingViewState =
   | { phase: "concluded"; outcome: BookOutput }
   | { phase: "failed"; message: string };
 
-export function BookingFlow({ itinerary }: { itinerary: DraftedItinerary }) {
-  const [markupPercent, setMarkupPercent] = useState("15");
+export function BookingFlow({
+  itinerary,
+  latestBookedMarkupBps,
+}: {
+  itinerary: DraftedItinerary;
+  /** The trip's most recently booked generation's markup (null if nothing
+   * booked yet) — reopening a partially-booked trip should reflect what was
+   * ALREADY booked instead of silently resetting to the 15% default (seed-0028). */
+  latestBookedMarkupBps: number | null;
+}) {
+  const [markupPercent, setMarkupPercent] = useState(() => initialMarkupPercent(latestBookedMarkupBps));
   const [inputError, setInputError] = useState<string | null>(null);
   const [view, setView] = useState<BookingViewState>({ phase: "idle" });
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());

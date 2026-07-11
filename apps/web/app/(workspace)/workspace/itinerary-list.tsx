@@ -299,7 +299,7 @@ function OpenedTrip({
           extended by spec 012 D4): booking + share render only inside a
           verified agent's workspace surface; keyed so opening another trip
           resets both flows. */}
-      <BookingFlow key={itineraryId} itinerary={itinerary} />
+      <BookingFlow key={itineraryId} itinerary={itinerary} latestBookedMarkupBps={overview.latestBookedMarkupBps} />
       <ShareControl key={`share-${itineraryId}`} itineraryId={itineraryId} />
     </section>
   );

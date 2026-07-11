@@ -6,7 +6,7 @@
 // only display strings that come from here (contract §3). The server stays
 // authoritative for every money value and booking outcome (FR-007/FR-008) —
 // nothing here computes money.
-import { formatBps, percentToBps } from "./basis-points.js";
+import { bpsToPercentInput, formatBps, percentToBps } from "./basis-points.js";
 import { transportErrorMessage } from "./transport-error.js";
 import type { BookOutput, DraftOutput, QuoteOutput } from "./trpc/client.js";
 
@@ -85,6 +85,18 @@ export function bookStatusLabel(status: BookStatus): string {
  */
 export function formatMarkupBps(bps: number): string {
   return formatBps(bps);
+}
+
+/** Default markup input, in percent (matches the form's original hardcoded default). */
+export const DEFAULT_MARKUP_PERCENT = "15";
+
+/**
+ * Seed the markup input from the trip's own booking history (seed-0028):
+ * the most recently booked generation's rate when one exists, else the
+ * form's default — never a client-side guess.
+ */
+export function initialMarkupPercent(latestBookedMarkupBps: number | null): string {
+  return latestBookedMarkupBps === null ? DEFAULT_MARKUP_PERCENT : bpsToPercentInput(latestBookedMarkupBps);
 }
 
 /**

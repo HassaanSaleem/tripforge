@@ -255,14 +255,34 @@ Write a report to docs/internal/reports/iteration-{{ITERATION_NUM}}-report.md:
 [SUCCESS | PARTIAL | BLOCKED — summary]
 ```
 
-### Step 6: Update Coverage Matrix
+### Step 6: Declare Coverage In The Scenario, Then Derive The Matrix
 
-**IMPORTANT — Re-read before writing**: The coverage matrix is shared mutable state. Re-read it immediately before editing, as another phase may have modified it.
+**Do NOT hand-edit `{{COVERAGE_MATRIX_PATH}}`** — it is a GENERATED file (seed-0031).
+Two independently hand-authored summaries of "what's tested" (this matrix and
+loop-state.md's prose) used to silently drift from each other and from the
+scenario files themselves; the fix is a single source of truth.
 
-If `{{COVERAGE_MATRIX_PATH}}` exists, update it with the combo(s) you exercised this iteration:
-- Add each tested combination to the `tested` list
-- Update `tested_combos` count and `coverage_pct`
-- Set `last_updated` to today's date
+1. In the scenario script you just wrote (`scenarios/incubating/<slug>/scenario.mjs`),
+   add a `// KITCHENLOOP-COVERAGE-BEGIN` / `// KITCHENLOOP-COVERAGE-END` comment
+   block near the top (after the usage line, before the first `import`/code) —
+   a JSON array of the feature × platform × user_type combos this scenario
+   actually exercises, e.g.:
+   ```
+   // KITCHENLOOP-COVERAGE-BEGIN
+   // [
+   //   { "feature": "booking", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": {{ITERATION}}, "tier": "T2", "note": "one-line summary" }
+   // ]
+   // KITCHENLOOP-COVERAGE-END
+   ```
+   `feature`/`platform`/`user_type` must match `kitchenloop.yaml`'s `spec.dimensions`
+   vocabulary exactly; `result` is `"pass"` or `"fail"`. If a combo was only
+   proven via a companion live-browser (Playwright MCP) pass rather than by
+   this script's own HTTP calls, say so in the `note` (see any existing
+   scenario file for the convention).
+2. Run `node scripts/kitchenloop/derive-coverage.mjs` to regenerate
+   `{{COVERAGE_MATRIX_PATH}}` from every scenario's declared block. It
+   validates the vocabulary and fails loudly on a missing/malformed block —
+   fix the block, don't work around the script.
 
 ### Step 7: Machine-Readable Tier Tag
 

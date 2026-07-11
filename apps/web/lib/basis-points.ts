@@ -31,3 +31,13 @@ export function percentToBps(raw: string, subject: string): { bps: number } | { 
 export function formatBps(bps: number): string {
   return `${bps / 100}%`;
 }
+
+/**
+ * The inverse direction, for seeding a percent input's value from a
+ * server-returned rate: 1500 → "15", 1225 → "12.25" (no "%" — this feeds a
+ * form field, not display text). Same display-scaling as formatBps, not
+ * money arithmetic.
+ */
+export function bpsToPercentInput(bps: number): string {
+  return String(bps / 100);
+}

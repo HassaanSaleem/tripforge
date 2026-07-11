@@ -10,7 +10,7 @@ Design intent under live test for the first time: licensing inherits
 `tripRequest` "so the reseller can re-quote supply on the copy"
 (`packages/marketplace/src/licensing.ts`, research D8).
 
-## What it asserts (40 checks, L3-style 4-layer)
+## What it asserts (47 checks incl. new per-item price-fidelity assertions, seed-0033; L3-style 4-layer)
 
 - **Booking on a copy works**: quote holds every bookable component of the
   licensed copy; book confirms each with a supplier ref.
@@ -29,16 +29,17 @@ Design intent under live test for the first time: licensing inherits
   the platform (full surface incl. tab title, INV-020 class); booked marks
   reflect the live bookings; a guessed token resolves to the typed neutral
   `not_found`.
-- **Price-fidelity observation (not asserted — BUG-1 of the iteration-3 third
-  pass report)**: the client view's shown prices are the DOCUMENT's stored
-  `sellPrice`, which the draft path sets equal to `netRate`
-  (`packages/domain/src/assemble.ts` — "markup applies at quote time") and the
-  quote/book flow never writes back. The traveler therefore reads the agency's
-  net cost beside "Booked" badges (observed live: view total 34780 minor vs
-  42431 minor booked sells). Kept as a logged observation so the scenario
-  stays green on the parts whose intended behavior is settled; the fix is a
-  cross-spec product decision (specs 005/010, canonical schema `item.ts`
-  documents `sellPrice` as "client-facing (net + agency markup)").
+- **Price fidelity — hard assertion (fixed by seed-0025, promoted from an
+  observation to a `check(...)` on THIS licensed-copy path by seed-0033)**:
+  BUG-1 of the iteration-3 third pass report found the client view showing the
+  DOCUMENT's stored `sellPrice` (equal to `netRate` at draft time) beside
+  "Booked" badges instead of the realized booking sell. `client-view.ts`'s
+  `bookedPriceByItemId` read-time projection (PR #36) fixed this generally;
+  this scenario now asserts per-item — every booked item's shown price equals
+  ITS OWN booking record's sell, zero-delta against the reseller's
+  `markup_ledger` sum — confirming the fix generalizes to a licensed
+  white-label copy (`whiteLabelCopy()` preserves `item.id` across the copy),
+  not just a self-built original.
 
 ## Run it
 

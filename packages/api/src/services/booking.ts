@@ -720,6 +720,12 @@ export async function itineraryOverview(
         consumed: boolean;
       }>;
       bookings: Array<{ bookingId: string; status: string; createdAt: string }>;
+      /** The markup rate of the most recently booked generation (the
+       * consumed quote row with the latest consumedAt), or null when the
+       * trip has no booked components yet (seed-0028: reopening a
+       * partially-booked trip should reflect what was ALREADY booked, not
+       * silently reset to the form's 15% default). */
+      latestBookedMarkupBps: number | null;
     }
 > {
   const db = container.db;
@@ -757,6 +763,11 @@ export async function itineraryOverview(
   // Expired unconsumed rows are never served — expiry can only trigger a
   // re-quote (spec 005 quote lifecycle; contract §2: active + consumed only).
   const now = Date.now();
+  const consumedRows = quotes.filter((q) => q.consumedAt !== null);
+  const latestConsumed = consumedRows.reduce<(typeof consumedRows)[number] | null>(
+    (latest, row) => (latest === null || row.consumedAt! > latest.consumedAt! ? row : latest),
+    null,
+  );
   return {
     status: "found",
     itinerary: row.document,
@@ -772,5 +783,6 @@ export async function itineraryOverview(
         consumed: q.consumedAt !== null,
       })),
     bookings: bookings.map((b) => ({ bookingId: b.id, status: b.status, createdAt: b.createdAt.toISOString() })),
+    latestBookedMarkupBps: latestConsumed?.markupBps ?? null,
   };
 }

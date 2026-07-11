@@ -8,6 +8,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createAndActivateAgency, signUpWithEmail } from "../../../lib/auth-client.js";
+import { CredentialsFields, useSubmitState } from "../auth-form.js";
 
 /** URL-safe slug from the agency name + random suffix (org slugs are unique). */
 function agencySlug(name: string): string {
@@ -26,27 +27,15 @@ export function SignUpForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agencyName, setAgencyName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const { pending, error, run } = useSubmitState();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setPending(true);
-    setError(null);
+    const signedUp = await run(() => signUpWithEmail(name, email, password));
+    if (!signedUp) return;
 
-    const signUpError = await signUpWithEmail(name, email, password);
-    if (signUpError) {
-      setError(signUpError);
-      setPending(false);
-      return;
-    }
-
-    const agencyError = await createAndActivateAgency(agencyName, agencySlug(agencyName));
-    if (agencyError) {
-      setError(agencyError);
-      setPending(false);
-      return;
-    }
+    const agencyCreated = await run(() => createAndActivateAgency(agencyName, agencySlug(agencyName)));
+    if (!agencyCreated) return;
 
     router.push("/workspace");
     router.refresh();
@@ -67,33 +56,13 @@ export function SignUpForm() {
           style={{ display: "block", width: "100%" }}
         />
       </label>
-      <label htmlFor="email">
-        Email
-        <input
-          id="email"
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ display: "block", width: "100%" }}
-        />
-      </label>
-      <label htmlFor="password">
-        Password
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ display: "block", width: "100%" }}
-        />
-      </label>
+      <CredentialsFields
+        email={email}
+        onEmailChange={setEmail}
+        password={password}
+        onPasswordChange={setPassword}
+        passwordAutoComplete="new-password"
+      />
       <label htmlFor="agencyName">
         Agency name
         <input

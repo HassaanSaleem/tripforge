@@ -14,6 +14,14 @@
 // Usage: BASE_URL=http://localhost:3000 node scenarios/incubating/agent-onboarding-live/scenario.mjs
 // Exit 0 = full journey passes; non-zero = a real failure.
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "trust", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 2, "tier": "T1", "note": "sign-up -> FORBIDDEN pre-membership -> org create/set-active -> whoami {agencyId, owner}; two tenants isolated (INV-004)" },
+//   { "feature": "trust", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 4, "tier": "T1", "note": "live re-verify (seed-0031 bundle): anon /workspace membership prompt; authenticated /workspace greeting shows agency name + owner role" },
+//   { "feature": "trust", "platform": "web", "user_type": "client", "result": "pass", "iteration": 4, "tier": "T1", "note": "live re-verify (seed-0031 bundle): BUG-2 (INV-020 /view tab title leak) fixed by seed-0011/seed-0012 confirmed still fixed -- was incorrectly still marked fail from iteration 2, the exact class of drift this ticket exists to prevent" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
 let failures = 0;
@@ -108,9 +116,18 @@ async function onboardAgent(label, agencyName, agencySlug) {
   check(`[${label}] founding agent holds the owner role`, who?.role === "owner", JSON.stringify(who));
 
   // 6. Web surface: /workspace greets the signed-in agent (INV-024 UX gate).
+  // NOTE (seed-0031 backfill, live re-verify): the greeting copy this
+  // assertion originally pinned ("Signed in as agent <id>") was redesigned by
+  // seed-0008's IMP-2 fix to show human names instead of raw ids — now
+  // `<b>{userName}</b> · {agencyName} · role {role}` (workspace/page.tsx).
+  // Re-pinned on the agency name, which this scenario already tracks.
   const ws = await fetch(`${BASE}/workspace`, { headers: { cookie: cookieHeader(jar) } });
   const wsHtml = await ws.text();
-  check(`[${label}] /workspace renders the agent greeting`, ws.status === 200 && wsHtml.includes("Signed in as agent"), `status ${ws.status}`);
+  check(
+    `[${label}] /workspace renders the agent greeting (agency name, owner role)`,
+    ws.status === 200 && wsHtml.includes(agencyName) && wsHtml.includes("owner"),
+    `status ${ws.status}`,
+  );
 
   return { orgId, who };
 }

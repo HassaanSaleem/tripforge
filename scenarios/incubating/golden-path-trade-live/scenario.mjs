@@ -20,6 +20,21 @@
 // Exit 0 = full journey passes; non-zero = a real failure (see README for the
 // intentional known-failing assertion pinning the re-list provenance mutation).
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "itinerary-builder", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "live browser (companion pass): sign-up -> Paris 3-day draft, day subtotals + budget table all fits (FakeLLM keyless)" },
+//   { "feature": "itinerary-builder", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "workspace.itinerary.draft persists a budget-fit draft; document canonical on read" },
+//   { "feature": "booking", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "live browser (companion pass): custom 18% markup quote -> 6 holds -> book -> confirmation with supplier refs" },
+//   { "feature": "booking", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "quote/book at 1800 bps; markup_ledger conserves net+markup=sell incl. FX-converted nets" },
+//   { "feature": "marketplace", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "live browser (companion pass): unvetted listing refused typed; vetted listing live with verbatim terms" },
+//   { "feature": "marketplace", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "createListing refused not_vetted -> listed once vetted; revenue_share_bps stored verbatim (750)" },
+//   { "feature": "marketplace", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "live browser (companion pass): BUG-3 (sell panel stale until reload) fixed same iteration (seed-0016, PR #31)" },
+//   { "feature": "marketplace", "platform": "api", "user_type": "agent-reseller", "result": "fail", "iteration": 3, "tier": "T2", "note": "BUG-1: re-listing a licensed copy overwrites its licensed-under provenance -- open, desk RESALE-SHARE-SEMANTICS (intentional known-failing assertion, see README)" },
+//   { "feature": "revenue-share", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "live browser (companion pass): license receipt renders the conserved split 250.00 = 225.00 + 25.00" },
+//   { "feature": "revenue-share", "platform": "api", "user_type": "agent-reseller", "result": "fail", "iteration": 3, "tier": "T2", "note": "BUG-2: resale split pays the original seller nothing while UI promises earn a share on every resale -- open, desk RESALE-SHARE-SEMANTICS" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 import { execFileSync } from "node:child_process";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
@@ -135,6 +150,13 @@ async function main() {
     itineraryId,
     markupBps: MARKUP_BPS,
   });
+  // NOTE (seed-0032): unwraps straight to `.quote`, dropping each row's
+  // `itemId` — safe ONLY here because nothing below needs to correlate a
+  // held/booked row back to a specific document item. If you copy this
+  // idiom into a new scenario that DOES need per-item correlation (e.g.
+  // per-item price-fidelity), keep the outer `{ itemId, quote }` shape
+  // instead — see reseller-builds-fresh or reseller-books-copy-live for the
+  // safe pattern (`held.map(r => [r.itemId, r.quote.sellMinor])`).
   const held = (quote.data?.items ?? []).filter((i) => i.outcome === "held").map((i) => i.quote);
   check("seller: quote holds at least one component", held.length > 0, quote.text.slice(0, 300));
   for (const row of held) {

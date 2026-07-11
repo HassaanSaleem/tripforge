@@ -21,6 +21,13 @@
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/partially-booked-client-view/scenario.mjs
 // Exit 0 = full journey passes; non-zero = a real failure.
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "booking", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "two booking generations at different markups on one trip" },
+//   { "feature": "booking", "platform": "api", "user_type": "client", "result": "pass", "iteration": 3, "tier": "T2", "note": "traveler share link across the trip's life -- draft estimates, partial booking, second generation at a different markup -- booked items priced from their own record (spec 013 FR-001..005)" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 import { execFileSync } from "node:child_process";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";

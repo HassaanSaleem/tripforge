@@ -103,9 +103,21 @@ number, and the failing numbers). This makes every subsequent loop phase refuse 
 operator deletes the file. Do NOT create HALT for a warning-only condition (e.g. a security-scan
 warning or a missing L3 smoke test) — those are reported, not halting.
 
-### Step 3.5: Report Coverage Stats
+### Step 3.5: Regenerate And Report Coverage Stats
 
-If `{{COVERAGE_MATRIX_PATH}}` exists, read it and include a coverage summary in the iteration output:
+Run `node scripts/kitchenloop/derive-coverage.mjs` to regenerate
+`{{COVERAGE_MATRIX_PATH}}` from every `scenarios/incubating/*/scenario.mjs`
+file's own `KITCHENLOOP-COVERAGE` declaration (seed-0031 — this is the ONLY
+writer of the matrix's `tested`/`tested_combos`/`coverage_pct` fields; never
+hand-edit them, in this step or when writing loop-state.md's Coverage section
+below). If it exits non-zero (a scenario file has a missing/malformed block or
+an out-of-vocabulary combo), treat that as a WARNING in the regress output —
+fix the offending scenario file if you can identify it, otherwise leave the
+existing matrix file as-is and note the failure; do not paper over it.
+
+Then read the regenerated file and include a coverage summary in the iteration
+output (and in loop-state.md's Coverage section, Step 4 below — pull the
+numbers from this file, don't re-derive or restate them by hand):
 - Total combos in spec surface
 - Combos tested so far
 - Coverage percentage

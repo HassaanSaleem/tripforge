@@ -21,6 +21,14 @@
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/reseller-books-copy-live/scenario.mjs
 // Exit 0 = full journey passes; non-zero = a real failure.
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "marketplace", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "licenses a white-label copy; tripRequest inherited so the reseller can re-quote supply on the copy (D8)" },
+//   { "feature": "booking", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "reseller quotes+books net-rate inventory inside their licensed copy at their own markup" },
+//   { "feature": "booking", "platform": "api", "user_type": "client", "result": "pass", "iteration": 4, "tier": "T2", "note": "client share link on a licensed white-label copy; price-fidelity promoted from a logged observation to a hard per-item zero-delta assertion (seed-0033), confirming seed-0025's fix (PR #36) generalizes to the licensed-copy path" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 import { execFileSync } from "node:child_process";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
@@ -167,13 +175,17 @@ async function main() {
     itineraryId: copyId,
     markupBps: RESELLER_MARKUP_BPS,
   });
-  const held = (quote.data?.items ?? []).filter((i) => i.outcome === "held").map((i) => i.quote);
+  // Keep the OUTER { itemId, quote } shape (not just .quote) — itemId is the
+  // only handle correlating a held/booked row back to its document item below
+  // (seed-0032: unwrapping to .quote silently drops it and is a copy-paste
+  // footgun for future scenario authors).
+  const held = (quote.data?.items ?? []).filter((i) => i.outcome === "held");
   check(
     "reseller: quoting INSIDE the licensed copy holds at least one component (licensing D8 intent)",
     quote.data?.status === "quoted" && held.length > 0,
     quote.text.slice(0, 300),
   );
-  for (const row of held) {
+  for (const { quote: row } of held) {
     // FX-converted nets: the net×1.22 identity is exact only for USD nets, but
     // every row must carry the reseller's markup and price in the trip currency.
     const sameCurrency = row.netCurrency === "USD";
@@ -188,7 +200,7 @@ async function main() {
   // ── BOOK the copy ─────────────────────────────────────────────────────────
   const book = await trpcMutate(reseller.jar, "workspace.booking.book", {
     itineraryId: copyId,
-    quoteRowIds: held.map((r) => r.quoteRowId),
+    quoteRowIds: held.map((r) => r.quote.quoteRowId),
   });
   const confirmed = (book.data?.components ?? []).filter((c) => c.outcome === "confirmed");
   check(
@@ -218,12 +230,22 @@ async function main() {
   const ledgerSells = psql(
     `SELECT string_agg(sell_minor::text, ',' ORDER BY sell_minor) FROM markup_ledger WHERE agency_id = '${reseller.orgId}'`,
   );
-  const heldSells = held.map((r) => r.sellMinor).sort((a, b) => a - b).join(",");
+  const heldSells = held.map((r) => r.quote.sellMinor).sort((a, b) => a - b).join(",");
   check(
     `reseller: ledger sells are exactly the 22%-markup quote sells (independent of seller/default markup)`,
     ledgerSells === heldSells,
     `ledger [${ledgerSells}] vs held [${heldSells}]`,
   );
+
+  // The copy's own document, in the reseller's session — item order here
+  // matches how the client view flattens days.items positionally (the
+  // traveler payload carries no item id, spec 010 FR-007 allowlist), so this
+  // is the correlation handle for the price-fidelity assertion below.
+  const copyDoc = await trpcQuery(reseller.jar, "workspace.itinerary.get", { itineraryId: copyId });
+  const docItems = (copyDoc.data?.itinerary?.days ?? []).flatMap((d) => d.items ?? []);
+  check("reseller: licensed copy document has items to correlate", docItems.length > 0, `only ${docItems.length} items`);
+  const orderedDocIds = docItems.map((i) => i.id);
+  const bookedSellByItemId = new Map(held.map((r) => [r.itemId, r.quote.sellMinor]));
 
   // ── Share: the reseller hands the CLIENT a link to the branded copy ──────
   const share = await trpcMutate(reseller.jar, "workspace.itinerary.share", { itineraryId: copyId });
@@ -266,15 +288,33 @@ async function main() {
   );
   check('client: payload never names the platform ("TripForge")', !rawView.includes("TripForge"));
 
-  // Price fidelity OBSERVATION (spec 010 blesses document-stored sell prices;
-  // whether a Booked badge may sit beside a price that differs from the booked
-  // sell is SPEC-SILENT — measured here, classified in the experience report).
+  // Price fidelity — FORMAL hard assertion on the LICENSED-COPY path
+  // (seed-0033, closing seed-0025's own unchecked AC line: this scenario's
+  // observation was never promoted). Per-item, not just in aggregate: each
+  // booked item on the client view must be priced from ITS OWN booking
+  // record's sell (the realized net×reseller-markup price), never the
+  // document's draft-time net-rate placeholder (the exact BUG-1/seed-0025
+  // class) — confirmed here to generalize to a licensed white-label copy,
+  // not just a self-built original (whiteLabelCopy() preserves item.id
+  // across the copy, packages/marketplace/src/white-label.ts, so the
+  // correlation below is sound).
+  viewItems.forEach((it, idx) => {
+    const docId = orderedDocIds[idx];
+    if (!bookedSellByItemId.has(docId)) return;
+    check(
+      `client: item ${idx + 1} priced at ITS booking's sell ${bookedSellByItemId.get(docId)} minor — NEVER the draft-time net-rate placeholder (asserted on the LICENSED-COPY path)`,
+      it.booked === true && it.sellMinor === bookedSellByItemId.get(docId),
+      `got booked=${it.booked} sellMinor=${it.sellMinor}`,
+    );
+  });
   const ledgerSellSum = Number(
     psql(`SELECT COALESCE(sum(sell_minor), 0) FROM markup_ledger WHERE agency_id = '${reseller.orgId}'`),
   );
   const viewBookedSum = bookedItems.reduce((s, i) => s + (i.sellMinor ?? 0), 0);
-  console.log(
-    `  note price-fidelity observation: client view shows ${viewBookedSum} minor across booked items; the reseller's booked ledger sells sum to ${ledgerSellSum} minor (delta ${viewBookedSum - ledgerSellSum})`,
+  check(
+    `client: booked items' shown prices sum to EXACTLY the reseller's booked ledger sells (${viewBookedSum} = ${ledgerSellSum}, zero delta)`,
+    viewBookedSum === ledgerSellSum,
+    `view sum ${viewBookedSum} vs ledger sum ${ledgerSellSum}, delta ${viewBookedSum - ledgerSellSum}`,
   );
 
   // ── Client (web): the SSR page serves the same trust boundary ────────────
