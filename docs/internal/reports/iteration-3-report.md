@@ -584,3 +584,168 @@ one low-severity content bug; two improvements. 4 previously-untested coverage
 cells exercised (booking × {web,api} × {agent-reseller,client}); the two
 client cells recorded as FAIL on BUG-1 evidence. Stack torn down after the
 pass (`docker compose down -v`) to leave a clean slate for later phases.
+
+---
+
+# Kitchen Loop Report - Iteration 3 — FOURTH IDEATE PASS (2026-07-11)
+
+<!-- Appended as a fourth pass: the 2026-07-11 loop run re-derived "iteration 3"
+     (REGRESS-ARTIFACT-LOSS iteration-counter skew, see OPERATOR-DESK). This pass
+     follows the third pass (reseller-books-copy) whose BUG-1 became seed-0025,
+     fixed and merged via PR #36 before this pass started. -->
+
+## Scenario: Client Reads a Partially-Booked Trip — estimates vs confirmed prices on the share link
+**Date**: 2026-07-11
+**Mode**: strategy
+**Tier**: T2 Composition
+**Features Exercised**: itinerary-builder, booking (platforms: web + api; user type under test: client, arranged by agent-seller)
+**Codex check**: PROCEED — confirmed the booking UI exposes per-row checkboxes
+and `workspace.booking.book` accepts a subset of quoteRowIds; flagged that the
+novel surface is exactly the estimate→mixed transition of ONE share link over
+time, which no existing e2e/UAT journey exercises (they all book the full trip
+in one generation).
+
+## What I Did (as a user)
+
+All against a fresh keyless compose stack (`down -v` then `up --build --wait`,
+empty `ANTHROPIC_API_KEY` → FakeLLM planner), driven in a real browser
+(Playwright MCP) with anonymous curl/API reads playing the traveler. Evidence
+screenshots in `.kitchenloop/evidence/iter-3-ideate-d/` (git-ignored).
+
+1. **Agent** (Dana, "Atlas Peak Travel GP4"): signed up, drafted Barcelona
+   2026-09-10→13, 2 adults, balanced, hardCap 1000 USD → 3-day itinerary,
+   6 items, stored draft prices summing 347.80 USD, budget table all "fits".
+2. **Shared the un-booked draft** and read it as the anonymous client: page
+   says "Trip total 347.80 USD **includes estimates**", every item carries an
+   "estimate" tag, nothing claims confirmed or Booked (spec 013 US3 + US2-AS2),
+   white-labeled title "Barcelona balanced trip — Atlas Peak Travel GP4".
+3. **Quoted at 22%** (non-default): 6 rows with per-row Book checkboxes, net /
+   markup / client price / hold expiry visible to the agent, EUR nets
+   FX-converted to USD sells. **Unchecked 3 rows and booked only the Day-1
+   subset** (transfer 30.50 + stay 152.50 + tour 59.29 = 242.29 USD).
+   Confirmation listed exactly the 3 selected components with supplier refs.
+4. **Re-read the same share link as the client** (curl, no cookies): total is
+   now "391.49 USD includes estimates" — the exact integer fold of 3 booked
+   sells (24229) + 3 stored estimates (14920). Booked items show a "Booked"
+   badge and their booking's client price with NO estimate tag; un-booked items
+   keep "estimate". The stay's 125.00 net appears nowhere; no markup, supplier
+   ref, tenant id, or platform brand anywhere in page or payload.
+5. **"Book the rest later" at a different markup**: reopened the trip from the
+   workspace list, re-quoted at 25%. The three booked items render "Already
+   booked — this item is covered by an existing booking" (no re-hold, spec 005
+   FR-016 exclusivity made visible); the three un-booked items quoted at 25%.
+   Booked ONLY the river cruise (94.50 USD), leaving two items held-but-never-
+   booked.
+6. **Client re-read, two booking generations live on one trip**: cruise shows
+   94.50 (its own generation's recorded sell — not the 92.23 the earlier 22%
+   quote would have produced, not the 75.60 estimate); the first-generation
+   items still show their 22% sells; the two held-but-never-booked items stay
+   plain estimates (holds invisible to travelers); total 410.39 USD, exact.
+7. **API-platform traveler payload** (`clientView.itinerary`, anonymous):
+   structurally clean allowlist — `kind/title/booked/sellMinor` + kind fields
+   only; `totalSellMinor` 41039 exact; no net/markup/supplier/tenant keys.
+8. **State deltas in compose Postgres**: 4 `booking_component` rows (never
+   over-books), 2 confirmed bookings (one per generation), `markup_ledger`
+   conserves net+markup=sell on all 4 rows, and component sells == ledger
+   sells == the client view's booked prices.
+9. **Edge cases**: unknown token → typed "This trip link isn't available"
+   page titled neutrally "Your trip" (no existence oracle, no branding);
+   zero browser-console errors all session; compose-log scan clean (the only
+   ERROR lines were my own mistyped psql probes — the benign class).
+10. Encoded the whole journey as
+    `scenarios/incubating/partially-booked-client-view/scenario.mjs` —
+    **39 checks, ALL GREEN, exit 0** — and ran the in-image suite
+    (`pnpm test`: 321 passed / 40 DB-gated skips) + `eslint .` clean.
+
+## What Worked
+
+- **Spec 013 holds live in its untested quadrant.** PR #36 was only ever
+  live-verified on a FULLY booked trip; this pass proves the partially-booked
+  and two-generation cases: per-item booked sells from the booking records,
+  estimates from the stored document, one honest fold, retroactively on the
+  same link (US1-AS3: no re-share needed — the identical URL transitioned
+  through all three life stages).
+- **Confirmed-vs-estimate distinction (US2/FR-004) is real and readable**:
+  "Booked" badge + unqualified price vs "estimate" tag, and the total is
+  qualified with "includes estimates" whenever any estimate is in the fold.
+- **Mixed-markup fidelity**: each booked item prices at ITS OWN generation's
+  recorded sell (22% and 25% coexisting on one trip) — nothing recomputes,
+  nothing averages.
+- **Item-level exclusivity is user-visible**: the re-quote labels covered
+  items "Already booked" and the confirmation copy says "the platform never
+  books an item twice" — and the DB agrees (4 components for 4 booked items).
+- **Trust boundary held under composition**: net rates visible to the agent in
+  the quote table never reached the traveler in any of the three life stages,
+  structurally (payload key-set check) and visually (page-text scan).
+- Holds that never became bookings stayed invisible to the traveler (spec 010
+  assumption confirmed on the partial path).
+
+## Friction Points
+
+- **[FRICTION-1] The agent can't see WHICH items are booked in their own
+  workspace.** The reopened trip says only "Bookings on this trip: confirmed
+  (11 Jul 2026)" — no per-item Booked marks, no booked-vs-remaining summary.
+  The only way to learn what's left is to run a fresh quote and read the
+  "Already booked" rows. The CLIENT view is currently better-informed about
+  booking state than the agent's own workspace. (Adjacent to seed-0026's
+  price-reconciliation but distinct: this is booked-STATE visibility, not
+  subtotal math.)
+- **[FRICTION-2] Markup resets to the 15% default on every reopen/re-quote.**
+  My first generation booked at 22%; when I reopened the trip the field showed
+  15 again. An agent "booking the rest later" who doesn't remember their
+  earlier markup will silently quote the remainder at a different rate than
+  the client already saw booked — legal, conserved, but a coherence trap. The
+  workspace shows the booked generations' markups nowhere.
+- **[FRICTION-3] (observation, spec-accepted)** Un-booked estimates ARE the
+  pre-markup stored prices (spec 013 FR-003 keeps draft-estimate semantics),
+  so a traveler watching the link over time sees e.g. "25.00 estimate" become
+  "30.50 Booked" — every estimate steps UP by the markup when it confirms.
+  Price-anchoring risk on the client relationship; deliberately out of scope
+  for 013 (the estimate would need the intended markup applied at draft or
+  share time, an operator-relevant product decision, and interacts with
+  seed-0026's same-source rule). Report-only.
+
+## Bugs Found
+
+None. All spec-pinned behaviors held on the previously-unexercised partial and
+two-generation paths, on both platforms, at every life stage. (18 first-run
+scenario-script failures were my own script's wrong guess at the
+`workspace.itinerary.get` response shape — the product responses were correct
+throughout; fixed in the script, not the product.)
+
+## Missing Features
+
+- **[FEAT-1] Booked-state surface for the agent**: per-item booked indicators
+  and a booked/remaining summary in the workspace trip view (FRICTION-1), and
+  the markups already realized per generation (FRICTION-2). Today that
+  information exists only in the client view, the confirmation flash, and the
+  quote table's "Already booked" rows.
+
+## Improvements
+
+- **[IMP-1] Remember or display the trip's last-used/booked markup** in the
+  booking panel instead of always resetting to 15% (FRICTION-2) — cheap
+  guard against unintentionally mixed client pricing.
+
+## Tests Added
+
+- `scenarios/incubating/partially-booked-client-view/scenario.mjs` — 39-check
+  L3-style live scenario (4-layer: real HTTP → parsed → money/trust
+  state-deltas against compose Postgres) covering the three life stages of one
+  share link (all-estimates → partial 22% → two generations 22%+25%), the
+  exclusivity-protected re-quote, holds-invisible-to-travelers, the structural
+  trust-boundary key scan, and unknown-token. Exit 0 green against the built
+  stack.
+
+## Outcome
+
+**SUCCESS** — clean pass, zero product bugs. Spec 013's partially-booked
+quadrant (US2/US3, FR-002/003/004/005) verified live on web + api for the
+client user type, composed with itinerary-builder and two booking generations
+at distinct markups. 4 coverage cells recorded: itinerary-builder ×
+{web,api} × client (first-ever test) and booking × {web,api} × client
+re-recorded PASS post-seed-0025 (they were FAIL-on-BUG-1 at third-pass time).
+One missing-feature finding (agent-side booked-state surface) and one
+improvement (markup continuity) for triage. In-image suite 321/321 non-skipped
+green, lint clean. Stack torn down after the pass (`docker compose down -v`)
+to leave a clean slate for later phases.
