@@ -904,3 +904,178 @@ with its gap pinned mechanically in the scenario; two improvements; zero bugs.
 walk + ledger/PMF verification) and revenue-share × {web,api} × client
 (redaction, first explicit revenue-share client cells). Stack torn down after
 the pass (`docker compose down -v`).
+
+---
+
+# Kitchen Loop Report - Iteration 3 — SIXTH IDEATE PASS (2026-07-11)
+
+## Scenario: Trust From The Demand Side — cross-tenant negative-path probes + anonymous/traveler live checks
+**Date**: 2026-07-11
+**Mode**: strategy
+**Tier**: T2 Composition
+**Features Exercised**: trust (primary) × marketplace + booking (arrangement) — platforms web+api, user_types agent-reseller + client
+**Coverage combos targeted** (the last 3 untested trust cells): trust×web×agent-reseller, trust×api×agent-reseller, trust×api×client
+**Codex check**: REDIRECT — the originally-proposed cross-tenant `itinerary.update`
+probe doesn't exist as a router procedure; redirected to the procedures that DO
+exist (`itinerary.get`, `booking.quote`, `booking.book`, `marketplace.rateListing`,
+`marketplace.deactivateListing`), confirmed new versus the five prior passes
+this iteration (none walked a negative-path/demand-side trust scenario).
+An Explore subagent pass first confirmed the concrete gap: existing L2 unit
+tests (`rbac.test.ts`, `marketplace-rbac.test.ts`, `agency-admin-rbac.test.ts`)
+already cover anonymous→UNAUTHORIZED and traveler→FORBIDDEN on `whoami`, and one
+prior scenario pass proved a single cross-tenant `.quote()` 404 — but nothing
+had proven `.get()`, `.book()`, `.rateListing()`, `.deactivateListing()`
+cross-tenant, nor walked the traveler/anonymous ladder live end-to-end beyond
+`whoami`, nor probed row-level (not just itinerary-level) tenant scoping on the
+money-write path.
+
+## What I Did (as a user)
+
+All against a fresh keyless compose stack (`docker compose down -v` then
+`up --build --wait`, `.env` key commented → FakeLLM planner), API journey
+encoded as `scenarios/incubating/trust-demand-side-live/scenario.mjs` (25
+checks, ALL GREEN, exit 0), reseller seat also walked in a real browser
+(Playwright MCP); screenshot in `.kitchenloop/evidence/iter-3-ideate-f/`
+(git-ignored).
+
+1. **Arranged a real first-sale trade**: seller agency ("Karlin Seller")
+   drafted Prague 2026-10-05→08 with the AI planner, quoted/booked at 15%
+   (capturing one of its own quote-row ids as a "leaked/guessed" id for the
+   IDOR probe below), got vetted (operator-side psql, spec 011 D10 pattern),
+   listed at 400.00 USD / 8% share; a vetted reseller agency ("Vltava
+   Reseller") licensed it.
+2. **Bystander agency ("Nosy Co") that NEVER transacted with the seller**
+   probed every reachable cross-tenant angle on the seller's real (not
+   guessed) ids: `itinerary.get` → NOT_FOUND; `booking.quote` → NOT_FOUND;
+   `booking.book` (bogus quote-row id) → NOT_FOUND (itinerary-level gate
+   fires first); `marketplace.rateListing` on the real, active, unlicensed
+   listing → typed `not_licensee` (a 200 business value, not a thrown error —
+   proven not to leak existence any differently than a genuinely-missing
+   listing would); `marketplace.deactivateListing` → NOT_FOUND (scoped by
+   `sellerAgencyId`, not just `listingId`). State-deltas: the listing's rating
+   count and `active` status were unchanged by both refused writes.
+3. **The legitimate reseller** (has a licensed COPY, is NOT a bystander) still
+   cannot `itinerary.get` the seller's ORIGINAL — NOT_FOUND. (A prior pass in
+   this iteration only proved `.quote()` NOT_FOUND on the original; `.get()`
+   was untested until now.)
+4. **IDOR row-substitution probe** (the scenario's sharpest check): the
+   reseller quoted their own licensed copy (a legitimate quote-row id), then
+   called `booking.book` with `[ownRowId, sellerForeignQuoteRowId]` in the
+   SAME request. Result: `status: "partially_confirmed"`; the own row
+   confirms; the foreign (seller's) row fails with `reason: "unknown_quote"`
+   — the exact same reason a purely bogus UUID gets, proving row-level tenant
+   scoping (not just itinerary-level) with no existence oracle. State-delta:
+   zero new `booking_component` rows landed on the seller's own
+   agency+itinerary — the substitution had no footprint whatsoever on the
+   victim's tenant.
+5. **Anonymous (no session at all)** probed the full agent-gated surface, not
+   just `workspace.whoami`: `itinerary.list`, `marketplace.browseListings`,
+   `booking.quote` all UNAUTHORIZED (401) — the auth gate fires before any
+   input/tenant lookup.
+6. **Traveler (signed up, never created/joined an org)** — same surface, live:
+   `whoami`, `itinerary.list`, `marketplace.browseListings` all FORBIDDEN
+   (403), not UNAUTHORIZED, proven against the real built stack end-to-end
+   (this ladder was previously only unit-mocked in `rbac.test.ts`).
+7. **Browser pass** (Playwright MCP): signed in as the reseller in a real tab
+   → workspace showed exactly ONE trip ("Prague balanced trip", their own
+   copy) — the seller's original never appears. From inside that same
+   authenticated tab, fired a same-origin `fetch()` to
+   `workspace.itinerary.get` on the seller's original id via
+   `browser_evaluate` → **404 NOT_FOUND**, proving the isolation from a real
+   browser session/cookie (not just a node script's manually-managed cookie
+   jar) — the concrete `trust×web×agent-reseller` proof.
+8. In-image verify: `pnpm test` → 361/361 green (35 files), `eslint .` clean,
+   both exit 0. Compose-log scan: the only ERROR line all session was the
+   already-allowlisted benign `booking_component_itinerary_item_idx` duplicate
+   key from the L3 booking race test.
+
+## What Worked
+
+- **Tenant isolation holds on every angle tried, including two forms that
+  had never been tested live before this pass**: row-level substitution on
+  the money-write path, and `.get()`/`.book()`/`.rateListing()`/
+  `.deactivateListing()` cross-tenant (previously only `.quote()` was proven).
+- **No existence oracle anywhere**: a bystander probing a real listing it
+  never licensed gets the exact same `not_licensee` a licensed agency probing
+  a real-but-foreign listing would (never "not_found" for a real object it
+  merely lacks permission on) — reasons are chosen precisely enough to never
+  leak which case applies.
+- **The traveler/anonymous distinction (401 vs 403) holds live, not just in
+  the unit-mocked ladder** — this is meaningfully stronger evidence than the
+  existing L2 tests, which call the tRPC caller in-process and could in
+  principle diverge from real HTTP/session behavior.
+- **The browser session and the node script prove the identical boundary**:
+  the same `itinerary.get` 404 happens whether driven by a managed cookie jar
+  or a real signed-in browser tab — the isolation isn't an artifact of how
+  the test authenticates.
+- Zero product bugs across 25 assertions; zero unexpected compose-log errors.
+
+## Friction Points
+
+- **[FRICTION-1] Better Auth's default production rate limit (discovered
+  while writing this scenario, not part of the trust dimension itself)**:
+  `/sign-up`, `/sign-in`, `/change-password`, `/change-email` are
+  special-cased at `window=10s, max=3`, keyed by `(ip, path-category)` — this
+  is a Better Auth *default*, silently active because
+  `rateLimit.enabled` falls back to `isProduction` and nothing in
+  `apps/web/lib/auth.ts` overrides it. Reproduced directly: 3 back-to-back
+  `sign-up/email` calls from one IP succeed, the 4th within the same 10s
+  window gets a bare `429` with `content-type: text/plain` and only an
+  `x-retry-after: 10` header (no JSON body at all). This scenario's own
+  4th onboarding call (the traveler) hit it and had to wait out the window
+  (documented in the script rather than silently worked around). Impact:
+  TripForge is B2B/agency-first — a realistic burst (an agency office
+  onboarding several team members from one shared network, or any bulk-import
+  tooling) will trip this after the 3rd account within 10 seconds, platform
+  -wide for that IP, across sign-up AND sign-in. The web sign-up/sign-in forms
+  (`apps/web/lib/auth-client.ts`) go through Better Auth's official client,
+  which does surface *some* fallback text (`"Could not create the account."`)
+  rather than crashing on the non-JSON body, so the UX isn't broken — but
+  there's no retry-after countdown or explanation, and nobody has evaluated
+  whether 3/10s fits the product's actual bulk-onboarding pattern. Not
+  filed as a BUG (it's a safe, semi-hidden default, not broken code) but as a
+  product-configuration gap worth an explicit decision.
+
+## Bugs Found
+
+None. Every asserted cross-tenant/anonymous/traveler boundary held — api and
+web, read and write, itinerary-level and row-level.
+
+## Missing Features
+
+None new — this pass targeted trust coverage, not product surface gaps
+(FEAT items from prior passes, e.g. FEAT-1 seller-earnings-surface, still
+stand and are unaffected by this pass).
+
+## Improvements
+
+- **[IMP-1] Tune or explicitly accept the default sign-up/sign-in rate limit**
+  (FRICTION-1) for TripForge's real B2B bulk-onboarding pattern — e.g. raise
+  `rateLimit` for the `/sign-up`/`organization/create` path group, or key it
+  per-organization-invite-flow instead of raw IP, and surface the
+  `x-retry-after` value in the sign-up/sign-in form's error message instead of
+  a generic fallback string.
+
+## Tests Added
+
+- `scenarios/incubating/trust-demand-side-live/scenario.mjs` — 25-check
+  L3-style live scenario (4-layer: real HTTP → parsed → money/tenancy
+  state-deltas against compose Postgres): bystander cross-tenant probes on
+  get/quote/book/rateListing/deactivateListing, the legitimate reseller's
+  `.get()` probe on the seller's original, the IDOR row-substitution book()
+  call, the full anonymous UNAUTHORIZED ladder, and the full traveler
+  FORBIDDEN ladder proven live. Exit 0 green against the built stack.
+
+## Outcome
+
+**SUCCESS** — clean pass, zero product bugs, the last 3 trust-dimension
+coverage cells closed with genuinely new evidence (row-level IDOR
+substitution, 4 previously-untested procedures probed cross-tenant, and the
+traveler/anonymous ladder proven live rather than unit-mocked). One
+configuration-shaped friction finding (Better Auth's default 3-per-10s
+sign-up/sign-in rate limit, undocumented and untuned for this product's
+bulk-onboarding pattern) with one improvement filed. In-image suite 361/361
+green, lint clean, compose logs clean (only the pre-allowlisted benign
+duplicate-key line). 3 coverage cells recorded: trust×web×agent-reseller,
+trust×api×agent-reseller, trust×api×client — trust dimension now fully
+covered (6/6). Stack torn down after the pass (`docker compose down -v`).
