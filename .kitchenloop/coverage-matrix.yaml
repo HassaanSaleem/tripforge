@@ -6,11 +6,16 @@
 #
 # The matrix is derived from kitchenloop.yaml spec.dimensions.
 # Each entry records a tested combination with its iteration and result.
+#
+# NOTE (2026-07-11): the iteration-3 FIRST-pass update (3→13 combos, golden-path
+# scenario) was lost with the iter-3 regress artifacts (REGRESS-ARTIFACT-LOSS
+# class) — backfilled below from the landed iteration-3 report (merged via #32),
+# which is the witness for each cell. Second-pass (2026-07-11) cells appended.
 
-last_updated: "2026-07-07"
+last_updated: "2026-07-11"
 total_combos: 36   # 6 features x 2 platforms x 3 user_types (kitchenloop.yaml spec.dimensions)
-tested_combos: 3
-coverage_pct: 8.3
+tested_combos: 17
+coverage_pct: 47.2
 
 tested:
   - combo: { feature: "trust", platform: "api", user_type: "agent-seller" }
@@ -25,3 +30,67 @@ tested:
     iteration: 2
     result: "fail"   # BUG-2: INV-020 violation live — /view browser tab title is "TripForge" (root layout metadata inherited); body clean
     tier: "T1"
+
+  # ── iteration-3 first pass (golden-path scenario, 2026-07-10) — backfilled
+  #    2026-07-11 from the landed iteration-3 report (witness: scenario
+  #    scenarios/incubating/golden-path-trade-live/, 27/28 checks) ──────────
+  - combo: { feature: "itinerary-builder", platform: "web", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # live browser: sign-up -> Paris 3-day draft, day subtotals + budget table all "fits" (FakeLLM keyless)
+    tier: "T2"
+  - combo: { feature: "itinerary-builder", platform: "api", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # scenario: workspace.itinerary.draft persists a budget-fit draft; document canonical on read
+    tier: "T2"
+  - combo: { feature: "booking", platform: "web", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # live browser: custom 18% markup quote -> 6 holds -> book -> confirmation with supplier refs
+    tier: "T2"
+  - combo: { feature: "booking", platform: "api", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # scenario: quote/book at 1800 bps; markup_ledger conserves net+markup=sell on all rows incl. FX-converted nets
+    tier: "T2"
+  - combo: { feature: "marketplace", platform: "web", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # live browser: unvetted listing refused typed; vetted listing live with verbatim terms + "Your listing"
+    tier: "T2"
+  - combo: { feature: "marketplace", platform: "api", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # scenario: createListing refused not_vetted -> listed once vetted; revenue_share_bps stored verbatim (750)
+    tier: "T2"
+  - combo: { feature: "marketplace", platform: "web", user_type: "agent-reseller" }
+    iteration: 3
+    result: "fail"   # BUG-3: sell panel said "Nothing to list yet" beside the license receipt until reload — fixed same iteration (seed-0016, PR #31)
+    tier: "T2"
+  - combo: { feature: "marketplace", platform: "api", user_type: "agent-reseller" }
+    iteration: 3
+    result: "fail"   # BUG-1: re-listing a licensed copy OVERWRITES its licensed-under provenance (open — desk RESALE-SHARE-SEMANTICS); licensing itself green
+    tier: "T2"
+  - combo: { feature: "revenue-share", platform: "web", user_type: "agent-reseller" }
+    iteration: 3
+    result: "pass"   # live browser: license receipt renders the conserved split 250.00 = 225.00 + 25.00 from the recorded tx
+    tier: "T2"
+  - combo: { feature: "revenue-share", platform: "api", user_type: "agent-reseller" }
+    iteration: 3
+    result: "fail"   # BUG-2: resale split pays the original seller nothing while UI promises "earn a share on every resale" (open — desk RESALE-SHARE-SEMANTICS); both splits conserved two-way
+    tier: "T2"
+
+  # ── iteration-3 second pass (content-library frontier, 2026-07-11) —
+  #    witness: scenarios/incubating/content-library-media-gap/ (20/20 checks)
+  #    + browser evidence .kitchenloop/evidence/iter-3-ideate-b/ ─────────────
+  - combo: { feature: "content-library", platform: "api", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # T3 gap-verify: draft refuses media key typed (strict input); dormant media fields round-trip []; valid gallery readable via get; scraped-web source refused on read (D-006.c) — NO attach affordance exists (the gap)
+    tier: "T3"
+  - combo: { feature: "content-library", platform: "api", user_type: "agent-reseller" }
+    iteration: 3
+    result: "pass"   # T3 pin: licensing a media-bearing listing succeeds; white-label copy carries the gallery VERBATIM incl. original agency's agent-upload attribution (rights model = open frontier question, report FEAT)
+    tier: "T3"
+  - combo: { feature: "content-library", platform: "api", user_type: "client" }
+    iteration: 3
+    result: "pass"   # T3: public clientView.itinerary payload structurally free of media keys/sentinels for a media-bearing document; scraped sentinel never served
+    tier: "T3"
+  - combo: { feature: "content-library", platform: "web", user_type: "client" }
+    iteration: 3
+    result: "pass"   # T3: /view SSR page renders branded, text-only, zero media sentinels even with an arranged valid gallery (allowlist strip confirmed live in browser)
+    tier: "T3"

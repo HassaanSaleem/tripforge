@@ -182,6 +182,12 @@ without this row being answered. Nothing is blocked today: the current regress r
 on the not-yet-merged `kitchen/fix-seed-0009a-planner-ui`, so its artifacts enter
 PR-diff scope; the loss recurs whenever regress runs on a branch whose PR already
 merged.
+Evidence update (2026-07-11 ideate): the loss now also skews the ITERATION COUNTER —
+the 2026-07-11 loop restart re-derived "iteration 3" because the iter-3 regress
+state never reached `loop-state.md` (history stops at iter 2), so the run produced a
+SECOND ideate pass appended to `iteration-3-report.md`; the first pass's
+coverage-matrix update (3→13/36) was lost the same way and was backfilled this pass
+from the landed report's witness (matrix now carries a provenance note).
 
 **RESALE-SHARE-SEMANTICS** — Iteration-3 ideate ran the golden path end-to-end
 live (draft → book at 18% → list at 7.5%/250 USD → license → RE-LIST the

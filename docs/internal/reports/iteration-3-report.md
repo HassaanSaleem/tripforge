@@ -193,3 +193,223 @@ surfaces (workspace itinerary list, licensed-copy distinguishability). The
 resale semantics decision is on the operator desk as RESALE-SHARE-SEMANTICS;
 everything loop-executable is in this report for triage. Coverage 3/36 →
 13/36 (36.1%).
+
+---
+
+# Kitchen Loop Report - Iteration 3 — SECOND IDEATE PASS (2026-07-11)
+
+> **Why a second pass exists in this file**: the loop restarted on 2026-07-11
+> and re-derived iteration = 3 because the iteration-3 regress state never
+> landed in `docs/internal/loop-state.md` (loop-state history stops at iter 2 —
+> the known REGRESS-ARTIFACT-LOSS class; the desk row is already filed). The
+> first pass above is a landed artifact (merged to main via #32) and is NOT
+> overwritten; this section is the 2026-07-11 ideate run. The first pass's
+> coverage-matrix update (3→13/36) was also lost — repaired this pass from the
+> landed report's witness.
+
+## Scenario: Content Library Frontier — attach licensed media, preview the branded client view with a gallery
+**Date**: 2026-07-11
+**Mode**: strategy
+**Tier**: T3 Frontier
+**Features Exercised**: content-library (+ itinerary-builder, marketplace, trust seams) — platforms: web + api; user types: agent-seller, agent-reseller, client
+**Codex check**: REDIRECT — adopted. The scenario as first framed ("attach media via the product") is impossible: `workspace.itinerary` exposes only draft/list/get/share; there is no media attach API, no library UI. Redirected to *licensed-media gap verification*: prove the gap end-to-end as a user, and pin the live behavior of every path that DOES exist for media-bearing canonical documents.
+
+## What I Did (as a user)
+
+All against a fresh live compose stack (`down -v` → `up --build --wait`,
+keyless → FakeLLM), first in a real browser (Playwright MCP), then as an
+API-level scenario script. Evidence screenshots in
+`.kitchenloop/evidence/iter-3-ideate-b/` (git-ignored). Priority-Zero check
+first: the wired L3 smoke oracle ran green against the booted stack.
+
+1. **Signed up in the browser** (Mira, "Aster Atlas MediaGap") and drafted
+   Paris 2026-09-01→04, 2 adults, balanced, 1000 USD hardCap. Got the full
+   3-day draft with budget table. Then hunted for ANYTHING media: the nav has
+   only Workspace and Marketplace; the itinerary card has no photo, no image
+   slot on any stay/activity, no gallery panel, no attach affordance. The PRD
+   Pillar-1 session step ("attach content from the media library") has **zero
+   product surface**.
+2. **Shared with the client** and opened `/view/<token>` as the traveler:
+   a branded, well-typeset, but **entirely text-only** proposal — no imagery
+   at all. Against the operator's premium sell-grade bar, a picture-less
+   travel proposal is the single most visible gap in the product today.
+3. **Probed for hidden affordances via API**: `workspace.itinerary.draft`
+   with a `media` key → typed zod refusal (strict input), nothing persisted.
+   No other workspace procedure accepts media. Confirmed: no attach path,
+   hidden or otherwise.
+4. **Verified the dormant schema**: a fresh draft's canonical document
+   round-trips `media: []` at both gallery and item level through
+   `workspace.itinerary.get` — the `MediaRef` model (closed licensed-only
+   source enum per D-006.c) is live in every persisted document, waiting.
+5. **Arranged a valid gallery operator-side** (psql, same pattern as vetting)
+   — licensed-stock + agent-upload refs with sentinel storage keys and an
+   attribution naming the authoring agency — then walked every existing read
+   path: agent `get` returns the gallery intact (INV-001 re-validation
+   passes); share-link mint works; the public `clientView.itinerary` payload
+   is **structurally free of media** (no key, no sentinel values); the
+   `/view` SSR page renders branded and text-only. The trust boundary
+   allowlist does exactly what its design comment promises.
+6. **Traded the media-bearing itinerary on the marketplace** (vetted seller,
+   listed; vetted second agency "Nomad Media", licensed): the white-label
+   copy carries the gallery **verbatim** — including the agent-upload
+   attribution naming the ORIGINAL agency — with no rights model anywhere in
+   the flow.
+7. **Attacked the closed enum** (D-006.c): arranged a second itinerary whose
+   media `source` is `"scraped-web"` (share link minted before the
+   arrangement). Every surface refused: agent `get` errors, public clientView
+   never serves the scraped sentinel, `/view` never renders it. But all three
+   refusals are **raw 500s** (ZodError → INTERNAL_SERVER_ERROR + stack in
+   compose logs), not typed unavailable states.
+8. Encoded the whole probe as
+   `scenarios/incubating/content-library-media-gap/scenario.mjs` — **20
+   checks, 20 green** on first run.
+
+## What Worked
+
+- **The trust boundary is exemplary.** The client-view allowlist projection
+  (spec 010 FR-007) held against data-level media on payload AND page: a
+  field the projection never named is structurally absent, exactly as the
+  design comment promises ("confidential by default until explicitly
+  allowlisted"). This is the right foundation to build a gallery on.
+- **The closed media-source enum is enforced live** (INV-001 boundary
+  re-validation): scraped/AI-fabricated-class imagery cannot reach a traveler
+  through any surface, even when planted in the store.
+- **Strict inputs everywhere**: the smuggled `media` key was refused typed
+  with nothing persisted — no silent-ignore trap.
+- **Every existing path tolerates media-bearing documents**: get, share,
+  public resolve, SSR page, listing (stamp + re-validate), licensing
+  (white-label copy). Whenever attach lands, the pipes already work.
+- L3 smoke green (Priority Zero), in-image L1/L2 309 passed / 37 skipped,
+  lint clean, compose logs clean except my own arranged-invalid-document
+  probe (self-inflicted, and itself the D-006.c witness).
+
+## Friction Points
+
+1. **Unparseable documents crash instead of degrading** (see BUG-b1): a
+   stored document that fails canonical re-validation turns agent `get`, the
+   public `clientView.itinerary`, and the `/view` page into raw 500s with
+   stack traces in the logs.
+2. The FakeLLM demo plan's day-3 return transfer is titled "Shared shuttle
+   Paris Airport → Paris" while its own detail line reads "Paris → Paris
+   Airport" — the title contradicts the from/to on the return leg. Same
+   demo-realism family as the already-filed seed-0019 (fold into its scope;
+   not a new ticket).
+3. Loop process, not product: this is the SECOND ideate pass numbered
+   "iteration 3" — the loop restarted 2026-07-11 and re-derived iteration 3
+   because the first pass's regress state never landed in `loop-state.md`,
+   and its coverage-matrix update (3→13/36) was lost the same way
+   (REGRESS-ARTIFACT-LOSS class; evidence appended to the existing desk row —
+   matrix repaired this pass from the landed report's witness).
+
+## Bugs Found
+
+**[BUG-b1] A stored document that fails canonical re-validation produces raw
+500s on every read surface — including the traveler-facing share link**
+(medium). Spec 010 promises typed unavailable states ("not_found is a
+payload, never an error … the unavailable state reveals nothing"), and the
+share link is a durable URL in a client's inbox. Any document the current
+schema refuses (future: a legacy document after a schema evolution, a bad
+migration, operator surgery) turns that client-held link into a crash page,
+and `workspace.itinerary.get` gives the agent no way to see WHICH document is
+broken or why. Repro: `UPDATE itinerary SET document = jsonb_set(document,
+'{media}', '[{…"source":"scraped-web"…}]')` → `GET /view/<token>` → 500;
+`workspace.itinerary.get` → 500; `clientView.itinerary` → 500. Witnessed in
+`scenarios/incubating/content-library-media-gap/scenario.mjs` (boundary
+checks green — the refusal is CORRECT, its shape is not) and in the compose
+log (ZodError → INTERNAL_SERVER_ERROR). Suggested shape: catch parse failure
+in `resolveShareLink`/`itineraryOverview` → typed `not_found`/`unavailable`
+for the traveler, a typed diagnostic for the owning agent, and a structured
+warn (not a stack) in the log.
+
+## Missing Features
+
+**[FEAT-b1] Content library v0 — the PRD Pillar-1 surface (attach licensed
+media, branded client view with a gallery)** (high). Nothing exists between
+the canonical schema (complete `MediaRef` model, closed licensed-only source
+enum, gallery + per-item arrays — all dormant) and the premium client view
+that needs imagery to sell. Gap analysis — what v0 needs, in dependency
+order:
+  1. **Media storage port + derived tables** (INV-025: the itinerary carries
+     only refs; binaries live in Postgres-derived tables/CDN via
+     `packages/db`) — a `MediaStorePort` in the supply-adapter port family
+     with a local/compose implementation.
+  2. **Agency media library API** (`workspace.media.*`): upload
+     (`agent-upload`), register licensed stock (`licensed-stock`), list —
+     tenant-scoped (INV-004), source enum enforced at the boundary.
+  3. **Attach/detach mutations** on the itinerary (gallery + per-item). The
+     schema already supports it — **no canonical schema bump needed**, so no
+     ALWAYS-HALT migration; this is buildable inside normal loop autonomy
+     via speckit.
+  4. **Client-view allowlist decision**: projecting alt/kind/serving-URL into
+     `ClientItineraryView` is a deliberate change to the trust-boundary
+     allowlist (spec 010 FR-007) — a spec amendment through the speckit flow
+     with operator review, NOT a silent code change.
+  5. **Rendering**: workspace preview + `/view` gallery + marketplace listing
+     card imagery, to the premium bar (seed-0009s lineage).
+  What it unlocks: sell-grade branded proposals (the operator's stated bar),
+  imagery on marketplace cards (today text-only), and the full PRD typical
+  session. Today a client-facing travel proposal has zero pictures.
+
+**[FEAT-b2] No media rights model on marketplace trades** (medium, design
+needed before FEAT-b1 step 5 reaches the marketplace). Licensing a listing
+copies the gallery verbatim into the white-label copy — including
+`agent-upload` assets whose attribution names the ORIGINAL agency (pinned
+live by the scenario). Once real images exist, a reseller white-labels a trip
+whose photos they may have no right to re-brand, and the attribution line
+contradicts the white-label promise. Needs a product decision: do
+agent-upload assets transfer under the license terms, get stripped from the
+copy, or travel with a mandatory attribution obligation? (Adjacent to the
+open RESALE-SHARE-SEMANTICS desk row but a distinct decision — this is
+content rights, not revenue split. Flagged here for triage as a
+spec/design ticket; no semantics were changed this pass.)
+
+## Improvements
+
+**[IMP-b1] Typed media-source refusal message** (low): when media attach
+lands (FEAT-b1), a source outside the closed enum should refuse with the
+enum's actual member list (the zod error already carries it) — the D-006.c
+policy is user-visible today only as a 500.
+
+## Tests Added
+
+- `scenarios/incubating/content-library-media-gap/scenario.mjs` — L3-style
+  live gap-verification, 20 state-delta checks against the platform's own
+  stored documents and public payloads: strict-input refusal, dormant-schema
+  round-trip, valid-gallery flow through all four read paths, trust-boundary
+  structural absence (key + sentinel values), verbatim media propagation into
+  a white-label copy (pins the FEAT-b2 rights question), closed-enum refusal
+  on every surface. 20/20 green — this scenario asserts today's correct
+  behavior and will catch regressions when FEAT-b1 lands.
+- `scenarios/incubating/content-library-media-gap/README.md` — run
+  instructions + what each pin means (the FEAT-b2 green check is a pin, not
+  an endorsement).
+
+## Verification Results
+
+- **L3 smoke** (`node tests/integration/smoke.mjs` vs the live stack): PASS —
+  Priority-Zero confirmation of the wired oracle.
+- **Scenario**: 20/20 green (exit 0), first run.
+- **L1/L2** (`pnpm test` in the built image): PASS — 309 passed, 37 skipped
+  (the L3 DB suites, exercised under the regress boot), 28 files.
+- **Lint** (`pnpm run lint` in the built image): PASS, no findings.
+- **Compose log scan**: clean except one self-inflicted ZodError/500 from the
+  arranged invalid-media probe (the D-006.c witness; classified benign for
+  this run — its EXISTENCE as a raw 500 is BUG-b1).
+- Host `pnpm` untouched per desk row ENV-PNPM-DENY; all verification
+  in-image per the established recipe. Stack torn down (`down -v`) after.
+
+## Outcome
+
+**SUCCESS** — the frontier gap is now precisely mapped and pinned by a green
+20-check live scenario: the content-library feature is exactly one layer of
+missing product surface (storage port → library API → attach → allowlist →
+render) on top of foundations that all already work — dormant schema, strict
+inputs, live closed-enum enforcement, and a trust boundary that held
+everything I threw at it. Two real deliverables for triage: the v0 gap
+analysis (FEAT-b1, high — the text-only client proposal is the most visible
+premium-bar gap in the product) and the media-rights design question
+(FEAT-b2) that must be answered before imagery reaches the marketplace, plus
+one genuine bug (BUG-b1: unparseable documents brick the traveler's share
+link with raw 500s). Coverage repaired + extended: 3/36 recorded → 17/36
+(47.2%) — 10 first-pass cells backfilled from the landed report, 4
+content-library cells newly exercised this pass.

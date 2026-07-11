@@ -17,6 +17,9 @@ coverage/
 .vercel/
 playwright-report/
 test-results/
+# Playwright MCP session snapshots (browser-driven QA/UAT) — stray .yml/.png
+# session artifacts contaminated PR #18; never committed.
+.playwright-mcp/
 
 # KitchenLoop runtime byproducts — machine-local state, never committed.
 # The loop's self-tidy step: future iterations leave a clean tree automatically.
