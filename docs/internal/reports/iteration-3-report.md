@@ -749,3 +749,158 @@ One missing-feature finding (agent-side booked-state surface) and one
 improvement (markup continuity) for triage. In-image suite 321/321 non-skipped
 green, lint clean. Stack torn down after the pass (`docker compose down -v`)
 to leave a clean slate for later phases.
+
+---
+
+# Kitchen Loop Report - Iteration 3 — FIFTH IDEATE PASS (2026-07-11)
+
+## Scenario: The Seller Gets Paid — But Is Never Told (seller-side revenue-share visibility)
+**Date**: 2026-07-11
+**Mode**: strategy
+**Tier**: T3 Frontier (reframed from T2 after Codex REJECT — the seller-earnings surface does not exist; the gap IS the deliverable)
+**Features Exercised**: revenue-share (primary) × marketplace (arrangement) — platforms web+api, user_types agent-seller + client
+**Coverage combos targeted** (all untested): revenue-share×web×agent-seller, revenue-share×api×agent-seller, revenue-share×web×client, revenue-share×api×client
+**Scope guard**: first-sale split only — resale-split semantics are desk-pending (RESALE-SHARE-SEMANTICS) and NOT asserted here.
+**Codex check**: REJECT on the T2 framing ("acting as the seller cannot produce
+surface evidence — no seller-side earnings surface exists"), which is itself the
+finding; reframed per its salvage analysis as a T3 gap-analysis pass and re-run:
+PROCEED ("pivots from proving the first-sale money path works to proving the
+seller cannot discover they were paid — directly tied to marketplace liquidity
+and revenue-share integrity"). Candidate note: the only exploration ticket in
+the queue (seed-0029, estimate-vs-booked price anchoring) was passed over — it
+was already observed live in the fourth pass and pends an operator product
+decision, not more testing.
+
+## What I Did (as a user)
+
+All against a fresh keyless compose stack (`docker compose up --build --wait`,
+`.env` key commented → FakeLLM planner), API journey encoded as
+`scenarios/incubating/revenue-share-seller-visibility/scenario.mjs` (26 checks,
+ALL GREEN, exit 0), seller seat walked in a real browser (Playwright MCP);
+screenshots in `.kitchenloop/evidence/iter-3-ideate-e/` (git-ignored).
+
+1. **Arranged a real first-sale trade**: seller agency ("Meridian Seller")
+   drafted Paris 2026-09-01→04 with the AI planner, got vetted (operator-side
+   psql, spec 011 D10 pattern), listed at **331.00 USD / 7.5% share** with
+   distinctive terms; a vetted reseller agency licensed it.
+2. **Verified everything that EXISTS about the split** (state-deltas against
+   compose Postgres): buyer-side receipt 33100 = 3310 + 29790 at the fixed 10%
+   take; `revenue_share_ledger` holds exactly one conserved row crediting the
+   seller (INV-012, price = take + credit, USD); PMF `take_rate_accrued` for
+   the seller agency carries the full split (seed-0006b FR-014).
+3. **Walked the SELLER's every read surface hunting for "you earned 297.90"**:
+   - Browser: workspace (planner + trips list), the opened trip view, and the
+     marketplace panel — no earnings figure, no "licensed N times" count, not
+     even a "listed on marketplace" mark on the trip itself (e-01…e-03).
+   - API: `browseListings` is the seller's only marketplace read; a deep
+     key-scan of its payload finds zero earnings-semantics keys (GAP PIN);
+     probed `workspace.marketplace.earnings` / `.licenses` → 404, no such
+     procedures (GAP PIN).
+4. **User re-submit probe**: the sell form still offers the already-listed
+   itinerary in its picker; filled and submitted it → typed refusal "This
+   itinerary already has an active marketplace listing." (`already_listed` +
+   the EXISTING listing id), state conserved (1 listing row, 750 bps verbatim)
+   (e-04).
+5. **Traveler side of the same trade, both platforms** (revenue-share×client):
+   reseller shared the licensed copy, seller shared the listed original —
+   anonymous `clientView.itinerary` payloads and SSR `/view/<token>` pages
+   structurally free of revenue-share data: forbidden-key scan (provenance,
+   revenueShareBps, platformTake/sellerCredit, priceMinor, licenseTerms,
+   net/markup, agencyId) empty; text scan for the trade's distinctive amounts
+   ("331.00", "33.10", "297.90"), "revenue", "platform take", and the terms
+   string all clean; copy page white-labeled to the reseller (original seller
+   agency name absent, tab title reseller-branded) and the original's page
+   never mentions its own listing title (e-05).
+6. Zero browser-console errors all session; compose-log scan clean (zero
+   ERROR/FATAL/Unhandled lines — first pass this iteration with a fully silent
+   log); in-image verify green: `pnpm test` 321 passed / 40 DB-gated skips
+   (consistent with prior runs), `eslint .` clean, both exit 0.
+
+## What Worked
+
+- **Revenue-share integrity is real at the money layer.** The split is
+  conserved three ways (receipt, ledger row, PMF event) and immutable — the
+  platform's books are exactly right on the first sale.
+- **Double-listing is refused typed and idempotent-shaped** (`already_listed`
+  with the existing listing id), and the refusal conserves state — a genuinely
+  correct money-adjacent guard hit by a plausible user re-submit.
+- **The trust boundary holds from BOTH ends of the trade**: neither the
+  traveler of the licensed copy nor the traveler of the listed original can
+  see fee, split, share bps, terms, or lineage — structurally (key scan) and
+  textually — on api and web alike. White-label identity held everywhere.
+- **The listing card's declared terms render faithfully** (7.5% share, terms
+  verbatim, "Your listing" ownership badge, currency-labeled fee after pick —
+  seed-0020's fix visible).
+- Clean-log first: an entire multi-agency trade + browser session produced
+  zero error lines in compose logs.
+
+## Friction Points
+
+- **[FRICTION-1] The seller cannot discover they were paid — anywhere.** The
+  marketplace hero copy PROMISES "list your own and earn a share on every
+  resale. Provenance and revenue share are enforced by the platform on every
+  trade," and the platform did enforce it (297.90 USD credited in its ledger) —
+  but no surface ever tells the seller: the listing card shows only
+  rating/terms (identical whether licensed 0 or 50 times), the trip view
+  doesn't even mark the trip as listed, and no API procedure projects
+  `revenue_share_ledger` seller-side. The buyer got a receipt; the payee got
+  silence. (THE frontier gap — FEAT-1.)
+- **[FRICTION-2] Offer-then-refuse in the sell form**: the itinerary picker
+  still offers an already-listed trip; the user fills the entire form before
+  the typed refusal arrives. The picker knows the listings (same page renders
+  the card) — it could mark/omit already-listed options.
+- **[FRICTION-3] The seller's trip view carries no marketplace state at all**
+  (no "Listed · 331.00 USD" chip on the workspace trip) — the agent's own
+  workspace is again less informed than the platform's records, rhyming with
+  seed-0027's booked-state gap.
+
+## Bugs Found
+
+None. Every asserted behavior held: split conservation (three surfaces),
+double-list refusal + conservation, client-side redaction on both platforms,
+white-label identity, typed refusals throughout.
+
+## Missing Features
+
+- **[FEAT-1] Seller earnings surface — "you earned X" (P0-shaped, Constitution
+  I/VI).** A seller-scoped projection over `revenue_share_ledger` (+ PMF
+  events): license count + seller-credit total per listing (card chip), a
+  simple earnings list/panel, and a "Listed" mark on the workspace trip. All
+  data already exists conserved in the ledger; this is read-side projection +
+  UI only — no schema change, no money-semantics change (display of recorded
+  splits, so NOT an ALWAYS-HALT item; the fixed-10%-take and split semantics
+  stay untouched). What it unlocks: the marketplace-first flywheel — sellers
+  list because they SEE income; today the platform's own North-Star behavior
+  (GBV through trades) is invisible to the supply side that feeds it. The
+  scenario's GAP PINs are written to flip when this lands.
+
+## Improvements
+
+- **[IMP-1] Mark or omit already-listed itineraries in the sell-form picker**
+  (FRICTION-2) — the refusal is correct; the offer is the friction.
+- **[IMP-2] "Listed on marketplace" state on the workspace trip view**
+  (FRICTION-3) — natural sibling of seed-0027's booked-state surface; likely
+  the same projection PR as FEAT-1.
+
+## Tests Added
+
+- `scenarios/incubating/revenue-share-seller-visibility/scenario.mjs` — 26-check
+  L3-style live scenario (4-layer: real HTTP → parsed → money state-deltas
+  against compose Postgres): first-sale split conservation on all three
+  recording surfaces, double-list refusal + state conservation, the seller-side
+  GAP PINs (no earnings key on the browse payload, no earnings/licenses
+  procedure — machine-readable form of FEAT-1, to be flipped when the surface
+  lands), and the client redaction matrix (copy + original × api + web).
+  Exit 0 green against the built stack.
+
+## Outcome
+
+**SUCCESS** — frontier gap analysis delivered with all 26 checks green on what
+exists. The first-sale revenue-share money path is provably conserved and
+provably invisible to its payee: TripForge pays sellers correctly and never
+tells them. One P0-shaped missing feature (seller earnings surface, FEAT-1)
+with its gap pinned mechanically in the scenario; two improvements; zero bugs.
+4 coverage cells recorded: revenue-share × {web,api} × agent-seller (the gap
+walk + ledger/PMF verification) and revenue-share × {web,api} × client
+(redaction, first explicit revenue-share client cells). Stack torn down after
+the pass (`docker compose down -v`).
