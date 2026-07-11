@@ -11,6 +11,7 @@
 import { useState, type FormEvent } from "react";
 import { trpc, type DraftOutput } from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
+import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
 import {
   draftErrorMessage,
@@ -40,7 +41,7 @@ const INITIAL_VALUES: PlannerFormValues = {
   currency: "EUR",
 };
 
-export function Planner() {
+export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
   const [values, setValues] = useState<PlannerFormValues>(INITIAL_VALUES);
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
   const drafting = view.phase === "drafting";
@@ -62,6 +63,10 @@ export function Planner() {
       const outcome = await trpc.workspace.itinerary.draft.mutate(mapped.request);
       if (outcome.status === "drafted") {
         setView({ phase: "drafted", outcome });
+        // The workspace trips panel refreshes off this signal (spec 012 D2) —
+        // fired only for a persisted draft, so the list never learns of
+        // refusals or failures it cannot show.
+        onDrafted?.();
       } else {
         setView({ phase: "failed", message: draftFailureMessage(outcome) });
       }
@@ -228,41 +233,7 @@ function DraftResult({ outcome }: { outcome: DraftedOutcome }) {
         </p>
       </header>
 
-      {itinerary.days.map((day) => (
-        <article key={day.dayNumber} className="tf-card tf-day">
-          <div className="tf-day-head">
-            <h3>
-              Day {day.dayNumber}
-              {day.date ? ` — ${day.date}` : ""}
-            </h3>
-            {day.subtotal ? (
-              <span className="tf-day-subtotal tf-price">
-                Day subtotal: {formatMinorAmount(day.subtotal.amountMinor, day.subtotal.currency)}
-              </span>
-            ) : null}
-          </div>
-          {day.items.length === 0 ? (
-            <p className="tf-empty-day">No items planned.</p>
-          ) : (
-            <ul className="tf-items">
-              {day.items.map((item) => (
-                <li key={item.id}>
-                  <span className={`d d--${item.kind}`} aria-hidden="true" />
-                  <span>
-                    <span className="tf-item-kind">{item.kind}</span>: {item.title}
-                    {item.pricing ? (
-                      <span className="tf-price">
-                        {" "}
-                        — {formatMinorAmount(item.pricing.sellPrice.amountMinor, item.pricing.sellPrice.currency)}
-                      </span>
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      ))}
+      <ItineraryDays days={itinerary.days} />
 
       <h3>Budget summary</h3>
       <table data-testid="budget-fit" className="tf-fit-table">

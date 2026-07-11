@@ -39,3 +39,10 @@ export type CreateListingInput = inferRouterInputs<AppRouter>["workspace"]["mark
 export type CreateListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["createListing"];
 export type LicenseListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["licenseListing"];
 export type MyItinerariesOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["list"];
+
+/**
+ * Itinerary overview via the same inference (spec 012 research D4): the
+ * workspace list's open/continue view renders the canonical document and
+ * booking summaries exactly as the deployed contract returns them.
+ */
+export type GetItineraryOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["get"];

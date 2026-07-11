@@ -8,7 +8,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { getWorkspaceIdentity } from "../../../lib/auth.js";
 import { SignOutButton } from "./sign-out-button.js";
-import { Planner } from "./planner.js";
+import { WorkspacePanels } from "./workspace-panels.js";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +63,7 @@ export default async function WorkspacePage() {
             book, and share under your brand.
           </p>
         </header>
-        <Planner />
+        <WorkspacePanels />
       </main>
     </>
   );

@@ -10,7 +10,7 @@
 // live Postgres (compose stack); skipping without the env is loud, not green.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createDb, organization, user as userTable, type DbHandle } from "@tripforge/db";
+import { agencyVetting, createDb, organization, user as userTable, type DbHandle } from "@tripforge/db";
 import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
@@ -98,6 +98,47 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
         expect(row.currency).toBe("USD");
         expect(row.title.length).toBeGreaterThan(0);
       }
+    },
+    LONG,
+  );
+
+  it(
+    "a licensed white-label copy appears in the BUYER's list; the seller's list is unchanged by the trade (spec 012 D10)",
+    async () => {
+      const seller = await makeAgency("Gamma Journeys");
+      const buyer = await makeAgency("Delta Escapes");
+      // Both sides vetted — the trade path refuses otherwise (seed-0006/0006a).
+      await handle.db.insert(agencyVetting).values({ agencyId: seller.agencyId, vettedBy: "l3il-test-operator" });
+      await handle.db.insert(agencyVetting).values({ agencyId: buyer.agencyId, vettedBy: "l3il-test-operator" });
+
+      const sourceId = await draft(seller, "Barcelona");
+      const buyerBefore = await callerFor(buyer).workspace.itinerary.list();
+      expect(buyerBefore.itineraries).toEqual([]);
+
+      const listed = await callerFor(seller).workspace.marketplace.createListing({
+        itineraryId: sourceId,
+        title: "Barcelona weekender — proven route",
+        priceMinor: 25_000,
+        licenseTerms: "White-label permitted; keep attribution lineage.",
+        revenueShareBps: 750,
+      });
+      expect(listed.status).toBe("listed");
+      if (listed.status !== "listed") throw new Error("listing failed");
+
+      const licensed = await callerFor(buyer).workspace.marketplace.licenseListing({
+        listingId: listed.listingId,
+      });
+      expect(licensed.status).toBe("licensed");
+      if (licensed.status !== "licensed") throw new Error("license failed");
+
+      // The workspace list's core promise (spec 012 FR-007): the receipt's
+      // copy id is exactly what the buyer's tenant-scoped list now serves.
+      const buyerAfter = await callerFor(buyer).workspace.itinerary.list();
+      expect(buyerAfter.itineraries.map((i) => i.id)).toEqual([licensed.copyItineraryId]);
+
+      // The trade never grows (or leaks into) the seller's own list.
+      const sellerAfter = await callerFor(seller).workspace.itinerary.list();
+      expect(sellerAfter.itineraries.map((i) => i.id)).toEqual([sourceId]);
     },
     LONG,
   );

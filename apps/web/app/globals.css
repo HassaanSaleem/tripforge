@@ -286,6 +286,17 @@ label > input, label > select, label > textarea {
 .tf-market-form button[type="submit"] { justify-self: start; min-width: 230px; margin-top: 4px; }
 .tf-market-listed { color: var(--ok); font-weight: 600; background: var(--ok-tint); border: 1px solid color-mix(in srgb, var(--ok) 25%, var(--line)); border-radius: var(--r-sm); padding: 10px 13px; }
 
+/* ---- workspace trips list (spec 012): the agency's itineraries ---- */
+.tf-triplist { display: grid; gap: 12px; }
+.tf-triplist > ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; }
+.tf-trip-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 12px 16px; box-shadow: var(--shadow-sm); animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }
+.tf-trip-row b { font-size: 15.5px; }
+.tf-trip-row time { color: var(--muted); font-size: 13.5px; }
+.tf-trip-row button { margin-left: auto; }
+.tf-trip-note { color: var(--muted); font-style: italic; margin: 0; }
+.tf-trip-openhead { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tf-trip-openhead .tf-eyebrow { margin: 0; }
+
 /* ---- client view (spec 010): white-label shared itinerary ----
    Rides the [data-plain] opt-out — clean white ground, the AGENCY is the only
    brand on the page (INV-020). Presentation only; platform naming forbidden. */
