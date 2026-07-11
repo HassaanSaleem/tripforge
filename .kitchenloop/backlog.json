@@ -726,5 +726,29 @@
     "state": "backlog",
     "created": "2026-07-11T12:35:27Z",
     "pr_url": ""
+  },
+  {
+    "id": "17837868188793101812",
+    "title": "quality-sweep delta (iter-3, seed-0030): 2 new knip-flagged unused exported types",
+    "body": "[QS3-iter3-worktree delta, quality-sweep-iter-3.md re-run] Found by an in-image knip run against the seed-0030 (seller-earnings-surface, spec 014, commit 00fa165) tree on branch kitchen/fix-seed-0030-seller-earnings. Both types were introduced by that commit and are new since the last recorded delta sweep (2026-07-10, ticket 17835855958084613060) \u2014 not a duplicate of it or of QS3-1/QS3-8.\n\n(1) packages/api/src/services/itineraries.ts:9 exports 'interface MyItineraryListing' (the shape of MyItinerary.listing). It is used internally in the same file (MyItinerary.listing: MyItineraryListing | null) and MyItinerary itself IS re-exported from packages/api/src/index.ts:18, but MyItineraryListing is not re-exported \u2014 so a consumer of the public surface cannot name the nested type directly, only rely on structural inference. No cross-file/cross-package consumer imports MyItineraryListing by name.\n\n(2) packages/marketplace/src/earnings.ts:11 exports 'interface EarningsAggregate' (return-type element of earningsAggregates(), consumed only within packages/marketplace/src/listings.ts via the function, never the type name itself). Not re-exported from packages/marketplace/src/index.ts. Mirrors the exact pattern already ticketed for RatingAggregate in packages/marketplace/src/ratings.ts (ticket 17835855958084613060) \u2014 same file (ratings.ts) explicitly cited in earnings.ts's own header comment as the pattern it mirrors 'byte-for-byte'.\n\nPolicy: typescript-clean-architecture SKILL.md premature-export / Deletion discipline rule (exported-but-unconsumed-outside-file is a premature export; either un-export the interface \u2014 keep it file-local since it's only used as an inline type annotation \u2014 or add it to the owning package's public index.ts export list if it is meant to be part of the public surface, matching how MyItinerary and RatingAggregate's sibling public types are exported). No behavior change; keep tests green (l3-marketplace.test.ts, l3-itinerary-list.test.ts already cover the underlying functions).\n\nSuggested fix: un-export both interfaces (drop the 'export' keyword) since neither is consumed outside its own file today \u2014 the cheapest correct fix per the pattern QS3-1 already established for the llm/tools pairs. If a future consumer needs to name MyItineraryListing or EarningsAggregate directly, re-export it from the owning package's index.ts at that point instead of speculatively exporting now.\n\nDedupe note: distinct from ticket 17835855958084613060 (covers @tripforge/shared unused dep + RatingAggregate only) and ticket 17836940014232506646 (covers AgencySignUp in tests/e2e/support.ts only). Fold into either of those PRs if convenient, or land standalone \u2014 trivial, single-line-per-file change.",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-11T16:20:18Z",
+    "pr_url": ""
+  },
+  {
+    "id": "seed-0030",
+    "title": "Marketplace seller earnings surface \u2014 license count + revenue-share income",
+    "body": "Surfaces to a marketplace seller how many times their listings were licensed and their revenue-share income, plus a \"Listed\" mark on the workspace trip list. Read-side projection over the recorded revenue_share_ledger; no schema/money-semantics change. Ideated + executed same cycle (spec 014-seller-earnings-surface).",
+    "type": "feature",
+    "priority": "medium",
+    "state": "done",
+    "created": "2026-07-11T00:00:00Z",
+    "merged": "2026-07-11T16:20:00Z",
+    "merge_commit": "dad6869",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/40",
+    "blockedBy": [],
+    "notes": "Operator-added for provenance (loop ideated+executed seed-0030 same cycle; root backlog lacked the ticket \u2014 REGRESS-ARTIFACT-LOSS class). Sealed hand-merge PRM-SEAL-40. pr-auditor APPROVE: earnings == sum(seller_credit_minor) over own ledger rows (L3-proven == conserved ledger), tenant scoping double-scoped server-side (cross-tenant leak impossible), no money/schema change. UAT PASS (durable, 8 screenshots), 368/368 in-image, e2e 25/25."
   }
 ]
