@@ -5,6 +5,7 @@ import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
   SandboxHotelAdapter,
+  SandboxMediaStoreAdapter,
   SandboxTransferAdapter,
 } from "@tripforge/supply-adapter";
 import { FakeLLM, type LLMPort } from "@tripforge/llm";
@@ -31,6 +32,7 @@ export function buildContainer(options: BuildContainerOptions = {}): Container {
     activity: new SandboxActivityAdapter(),
     transfer: new SandboxTransferAdapter(),
     carRental: new SandboxCarRentalAdapter(),
+    mediaStore: new SandboxMediaStoreAdapter(options.db),
     llm: options.llm ?? new FakeLLM(),
     rates: options.rates ?? STATIC_RATES,
     db: options.db,

@@ -222,6 +222,9 @@ importers:
 
   packages/supply-adapter:
     dependencies:
+      '@tripforge/db':
+        specifier: workspace:*
+        version: link:../db
       '@tripforge/domain':
         specifier: workspace:*
         version: link:../domain

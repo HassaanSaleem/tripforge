@@ -9,7 +9,7 @@
 // be cached or serve stale booked-state (INV-028 — the DB row is the state).
 import { cache } from "react";
 import type { Metadata } from "next";
-import type { ClientViewItem } from "@tripforge/api";
+import type { ClientViewItem, ClientViewMedia } from "@tripforge/api";
 import { getAnonymousCaller } from "../../../../lib/trpc/server.js";
 import { formatMinorAmount } from "../../../../lib/planner-form.js";
 import {
@@ -99,6 +99,16 @@ export default async function SharedItineraryPage({ params }: PageProps) {
           ) : null}
         </header>
 
+        {view.media.length > 0 ? (
+          <ul className="tf-media-gallery tf-client-gallery" data-testid="client-gallery">
+            {view.media.map((ref, index) => (
+              <li key={index} className="tf-media-gallery-item">
+                <MediaThumb media={ref} />
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {view.days.length === 0 ? (
           <section className="tf-card">
             <p className="tf-empty-day">Your agent is still planning this trip.</p>
@@ -145,6 +155,13 @@ function ItemRow({ item, currency }: { item: ClientViewItem; currency: string })
           {item.booked ? <span className="tf-badge tf-client-booked">Booked</span> : null}
         </span>
         {schedule ? <small>{schedule}</small> : null}
+        {item.media.length > 0 ? (
+          <span className="tf-item-media" data-testid="client-item-media">
+            {item.media.map((ref, index) => (
+              <MediaThumb key={index} media={ref} />
+            ))}
+          </span>
+        ) : null}
       </span>
       {item.sellMinor !== null ? (
         <span className={item.booked ? "tf-price tf-price--booked" : "tf-price"}>
@@ -155,5 +172,19 @@ function ItemRow({ item, currency }: { item: ClientViewItem; currency: string })
         <span aria-hidden="true" />
       )}
     </li>
+  );
+}
+
+/** Image for `kind: "image"`; a labeled link for video/embed (research D6 —
+ * v0 does not build a full player). Alt text is the only description that
+ * ever reaches a client (FR-010: no id/source/attribution here). */
+function MediaThumb({ media }: { media: ClientViewMedia }) {
+  if (media.kind === "image") {
+    return <img src={media.url} alt={media.alt} className="tf-media-thumb" />;
+  }
+  return (
+    <a href={media.url} target="_blank" rel="noreferrer" className="tf-media-thumb tf-media-thumb--link">
+      ▶ Watch {media.kind}
+    </a>
   );
 }

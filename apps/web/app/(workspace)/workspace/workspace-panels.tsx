@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { ItineraryList } from "./itinerary-list.js";
+import { MediaLibraryPanel } from "./media-library-panel.js";
 import { Planner } from "./planner.js";
 
 export function WorkspacePanels() {
@@ -16,6 +17,7 @@ export function WorkspacePanels() {
     <>
       <Planner onDrafted={() => setRefreshToken((token) => token + 1)} />
       <ItineraryList refreshToken={refreshToken} />
+      <MediaLibraryPanel />
     </>
   );
 }

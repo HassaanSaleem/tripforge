@@ -34,8 +34,17 @@ export type {
   CarRentalOffer,
   CarRentalQuote,
 } from "./ports/car-rental.js";
+export type {
+  MediaAsset,
+  MediaKind,
+  MediaSource,
+  MediaStorePort,
+  RegisterMediaInput,
+  RegisterMediaOutcome,
+} from "./ports/media-store.js";
 export { SandboxHotelAdapter } from "./sandbox/hotel.js";
 export { SandboxActivityAdapter } from "./sandbox/activity.js";
 export { SandboxTransferAdapter } from "./sandbox/transfer.js";
 export { SandboxCarRentalAdapter } from "./sandbox/car-rental.js";
+export { SandboxMediaStoreAdapter } from "./sandbox/media-store.js";
 export { SANDBOX_FAIL_BOOK_OFFER_ID } from "./sandbox/engine.js";

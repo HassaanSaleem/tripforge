@@ -37,6 +37,7 @@ import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
   SandboxHotelAdapter,
+  SandboxMediaStoreAdapter,
   SandboxTransferAdapter,
 } from "@tripforge/supply-adapter";
 import { FakeLLM } from "@tripforge/llm";
@@ -64,6 +65,7 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
       activity: new SandboxActivityAdapter(),
       transfer: new SandboxTransferAdapter(),
       carRental: new SandboxCarRentalAdapter(),
+      mediaStore: new SandboxMediaStoreAdapter(db ?? handle.db),
       llm: new FakeLLM(),
       rates: STATIC_RATES,
       db: db ?? handle.db,

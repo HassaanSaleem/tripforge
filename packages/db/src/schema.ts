@@ -413,6 +413,31 @@ export const itineraryShareLink = pgTable("itinerary_share_link", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ─── Content library (spec 015: content library v0) ───────────────────────
+//
+// Agency-owned media asset metadata — v0 is URL-registration only (research
+// D2): no binary ever lands here or anywhere else (INV-025). Referenced by
+// `id` from `MediaRef`s inside itinerary documents (a plain string reference,
+// not an FK — the document is jsonb, same pattern as `supplyRef.externalId`).
+// `source` mirrors @tripforge/itinerary-schema's closed MediaSource enum,
+// enforced at the tRPC boundary (Zod) and defense-in-depth in the adapter.
+export const mediaAsset = pgTable(
+  "media_asset",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    agencyId: agencyFk(),
+    source: text("source").notNull(),
+    kind: text("kind").notNull(),
+    url: text("url").notNull(),
+    alt: text("alt").notNull(),
+    attribution: text("attribution"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    agencyIdx: index("media_asset_agency_idx").on(table.agencyId),
+  }),
+);
+
 export const schema = {
   user,
   session,
@@ -433,6 +458,7 @@ export const schema = {
   revenueShareLedger,
   listingRating,
   itineraryShareLink,
+  mediaAsset,
 };
 
 export type Schema = typeof schema;

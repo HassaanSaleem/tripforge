@@ -60,12 +60,31 @@ function fullDocumentInput(): Record<string, unknown> {
             title: "Fado evening",
             startsAt: "2026-09-01T20:00:00Z",
             durationMinutes: 120,
+            media: [
+              {
+                id: "media-item-id-sentinel",
+                kind: "image",
+                url: "https://images.example.test/fado-evening.jpg",
+                source: "licensed-stock",
+                alt: "Fado evening alt sentinel",
+                attribution: "media-attribution-sentinel",
+              },
+            ],
           },
         ],
       },
       { dayNumber: 3, items: [] },
     ],
-    media: [],
+    media: [
+      {
+        id: "media-gallery-id-sentinel",
+        kind: "image",
+        url: "https://images.example.test/lisbon-cover.jpg",
+        source: "agent-upload",
+        alt: "Lisbon cover alt sentinel",
+        attribution: "media-gallery-attribution-sentinel",
+      },
+    ],
     pricing: {
       budgetMode: "hardCap",
       total: { amountMinor: 300111, currency: "USD" },
@@ -109,7 +128,11 @@ describe("toClientItineraryView — allowlist projection (FR-007)", () => {
       "tripRequest",
       "agencyId",
       "schemaVersion",
-      "media",
+      // `media` itself is now a DELIBERATE allowlisted key (spec 015 FR-009) —
+      // the media SENTINEL VALUES below (id/source/attribution) are what must
+      // never cross, not the key name.
+      "source",
+      "attribution",
     ]) {
       expect(payload).not.toContain(forbiddenKey);
     }
@@ -128,9 +151,31 @@ describe("toClientItineraryView — allowlist projection (FR-007)", () => {
       "agency-tenant-sentinel",
       "itin-doc-sentinel",
       "item-stay-sentinel", // item ids are server-side join keys, never payload
+      // spec 015 FR-010: media crosses as {kind,url,alt} ONLY — never the
+      // internal media-asset id, source label, or attribution string.
+      "media-gallery-id-sentinel",
+      "media-item-id-sentinel",
+      "licensed-stock",
+      "agent-upload",
+      "media-gallery-attribution-sentinel",
+      "media-attribution-sentinel",
     ]) {
       expect(payload).not.toContain(forbiddenValue);
     }
+  });
+
+  it("projects attached media as EXACTLY {kind,url,alt} — gallery and per-item (spec 015 FR-009)", () => {
+    const view = project();
+    expect(view.media).toEqual([
+      { kind: "image", url: "https://images.example.test/lisbon-cover.jpg", alt: "Lisbon cover alt sentinel" },
+    ]);
+    const activity = view.days[0]!.items[1]!;
+    expect(activity.media).toEqual([
+      { kind: "image", url: "https://images.example.test/fado-evening.jpg", alt: "Fado evening alt sentinel" },
+    ]);
+    // Items with no attached media project an empty array, never undefined.
+    const stay = view.days[0]!.items[0]!;
+    expect(stay.media).toEqual([]);
   });
 
   it("carries the allowlisted view: title, agency brand, currency, days in order", () => {

@@ -15,6 +15,7 @@ import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
   SandboxHotelAdapter,
+  SandboxMediaStoreAdapter,
   SandboxTransferAdapter,
 } from "@tripforge/supply-adapter";
 import type {
@@ -102,6 +103,7 @@ describe.skipIf(!DATABASE_URL)("L3 planner draft verification alignment (real Po
       activity: new SandboxActivityAdapter(),
       transfer: new SandboxTransferAdapter(),
       carRental: new SandboxCarRentalAdapter(),
+      mediaStore: new SandboxMediaStoreAdapter(handle.db),
       llm: new SloppyCriteriaLLM(),
       rates: STATIC_RATES,
       db: handle.db,

@@ -5,6 +5,7 @@ import type {
   ActivityPort,
   CarRentalPort,
   HotelPort,
+  MediaStorePort,
   TransferPort,
 } from "@tripforge/supply-adapter";
 import type { LLMPort } from "@tripforge/llm";
@@ -42,6 +43,7 @@ export interface Container {
   activity: ActivityPort;
   transfer: TransferPort;
   carRental: CarRentalPort;
+  mediaStore: MediaStorePort;
   llm: LLMPort;
   /** Fixed deterministic table at P0 (spec 005 research D8); conversions are
    * explicit, recorded operations (INV-009). */

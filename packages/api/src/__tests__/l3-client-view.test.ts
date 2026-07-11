@@ -27,6 +27,7 @@ import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
   SandboxHotelAdapter,
+  SandboxMediaStoreAdapter,
   SandboxTransferAdapter,
 } from "@tripforge/supply-adapter";
 import { FakeLLM } from "@tripforge/llm";
@@ -54,6 +55,7 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
       activity: new SandboxActivityAdapter(),
       transfer: new SandboxTransferAdapter(),
       carRental: new SandboxCarRentalAdapter(),
+      mediaStore: new SandboxMediaStoreAdapter(db ?? handle.db),
       llm: new FakeLLM(),
       rates: STATIC_RATES,
       db: db ?? handle.db,
@@ -223,6 +225,89 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
       confidential.push(document.pricing.total.amountMinor);
       for (const secret of confidential) {
         expect(viewLeaves.has(secret), `confidential value leaked: ${String(secret)}`).toBe(false);
+      }
+    },
+    LONG,
+  );
+
+  it(
+    "spec 015: attached media crosses the allowlist as {kind,url,alt} ONLY — no internal id/source/attribution leak",
+    async () => {
+      const agent = await makeAgency("Picture Perfect Travel");
+      const itineraryId = await draftItinerary(agent);
+      const registered = await callerFor(agent).workspace.media.register({
+        source: "agent-upload",
+        kind: "image",
+        url: "https://images.example.test/lisbon-view.jpg",
+        alt: "View over the Tagus river",
+        attribution: "Photo by Jane Agent — internal-only, must never reach the client",
+      });
+      expect(registered.status).toBe("registered");
+      if (registered.status !== "registered") return;
+
+      const before = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      const firstItemId = before.itinerary.days.flatMap((d) => d.items)[0]?.id;
+      expect(firstItemId).toBeTruthy();
+      if (!firstItemId) return;
+
+      await callerFor(agent).workspace.itinerary.attachMedia({
+        itineraryId,
+        mediaAssetId: registered.asset.id,
+        target: { scope: "gallery" },
+      });
+      await callerFor(agent).workspace.itinerary.attachMedia({
+        itineraryId,
+        mediaAssetId: registered.asset.id,
+        target: { scope: "item", itemId: firstItemId },
+      });
+
+      const shared = await callerFor(agent).workspace.itinerary.share({ itineraryId });
+      expect(shared.status).toBe("shared");
+      if (shared.status !== "shared") return;
+      const resolved = await callerFor(null).clientView.itinerary({ token: shared.token });
+      expect(resolved.status).toBe("found");
+      if (resolved.status !== "found") return;
+
+      // Positive: the projected media is exactly {kind,url,alt}.
+      expect(resolved.view.media).toEqual([
+        { kind: "image", url: registered.asset.url, alt: registered.asset.alt },
+      ]);
+      // Views preserve day+item order (no ids carried) — index positionally
+      // to find the view item matching the attached document item.
+      const docItems = before.itinerary.days.flatMap((d) => d.items);
+      const viewItems = resolved.view.days.flatMap((d) => d.items);
+      const matchingViewItem = viewItems[docItems.findIndex((i) => i.id === firstItemId)];
+      expect(matchingViewItem?.media).toEqual([
+        { kind: "image", url: registered.asset.url, alt: registered.asset.alt },
+      ]);
+
+      // Negative: the internal media-asset id, its `source`, and its
+      // `attribution` string appear NOWHERE in the serialized payload
+      // (FR-010, SC-004) — a stronger check than a shape assertion, since it
+      // catches a leak through any field, not just the expected one.
+      const payload = JSON.stringify(resolved);
+      expect(payload).not.toContain(registered.asset.id);
+      expect(payload).not.toContain("agent-upload");
+      expect(payload).not.toContain("internal-only");
+    },
+    LONG,
+  );
+
+  it(
+    "spec 015: an itinerary with no attached media renders media: [] everywhere (SC-005, no regression)",
+    async () => {
+      const agent = await makeAgency("Text Only Travel");
+      const itineraryId = await draftItinerary(agent);
+      const shared = await callerFor(agent).workspace.itinerary.share({ itineraryId });
+      expect(shared.status).toBe("shared");
+      if (shared.status !== "shared") return;
+      const resolved = await callerFor(null).clientView.itinerary({ token: shared.token });
+      expect(resolved.status).toBe("found");
+      if (resolved.status !== "found") return;
+
+      expect(resolved.view.media).toEqual([]);
+      for (const item of resolved.view.days.flatMap((d) => d.items)) {
+        expect(item.media).toEqual([]);
       }
     },
     LONG,

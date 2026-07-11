@@ -17,7 +17,7 @@
 // Resolution is anonymous by design (link-bearer access, spec Assumptions) and
 // reads fresh per request (INV-028 — the row is the only state).
 import { addMoney, money, MoneyError, type Money } from "@tripforge/domain";
-import { parseItinerary, type Itinerary } from "@tripforge/itinerary-schema";
+import { parseItinerary, type Itinerary, type MediaRef } from "@tripforge/itinerary-schema";
 import {
   eq,
   bookingComponent as bookingComponentTable,
@@ -33,6 +33,15 @@ export const shareInputSchema = z.strictObject({ itineraryId: z.uuid() });
 
 // ─── The redacted traveler-facing view (data-model §2) ───────────────────────
 
+/** A media ref, reduced to exactly what a client is meant to see (spec 015
+ * FR-010, research D5): never the library asset id, `source`, or
+ * `attribution` — those are agent-facing trust/compliance metadata. */
+export interface ClientViewMedia {
+  kind: "image" | "video" | "embed";
+  url: string;
+  alt: string;
+}
+
 /** Per-kind schedule facts + sell price only — never netRate/supplyRef/ids. */
 export type ClientViewItem =
   | {
@@ -44,6 +53,7 @@ export type ClientViewItem =
       checkOut: string;
       adults: number;
       children: number;
+      media: ClientViewMedia[];
     }
   | {
       kind: "activity";
@@ -52,6 +62,7 @@ export type ClientViewItem =
       sellMinor: number | null;
       startsAt?: string;
       durationMinutes?: number;
+      media: ClientViewMedia[];
     }
   | {
       kind: "transfer";
@@ -61,6 +72,7 @@ export type ClientViewItem =
       from: string;
       to: string;
       mode: string;
+      media: ClientViewMedia[];
     };
 
 export interface ClientViewDay {
@@ -76,7 +88,20 @@ export interface ClientItineraryView {
   /** Server-side addMoney fold over priced items (research D8); null when
    * nothing is priced — an unpriced proposal states no total. */
   totalSellMinor: number | null;
+  /** Itinerary-level gallery, allowlist-projected (spec 015 FR-009/FR-010). */
+  media: ClientViewMedia[];
   days: ClientViewDay[];
+}
+
+/** MediaRef → ClientViewMedia: the allowlist boundary itself (research D5) —
+ * only `kind`/`url`/`alt` cross, never `id`/`source`/`attribution`. A ref
+ * with no `url` (storageKey-only, unreachable in v0's URL-registration model
+ * but structurally legal per MediaRefSchema) is dropped — nothing servable
+ * to render. */
+function toClientViewMedia(refs: readonly MediaRef[]): ClientViewMedia[] {
+  return refs
+    .filter((ref): ref is MediaRef & { url: string } => Boolean(ref.url))
+    .map((ref) => ({ kind: ref.kind, url: ref.url, alt: ref.alt }));
 }
 
 /**
@@ -121,6 +146,7 @@ export function toClientItineraryView(
           title: item.title,
           booked: bookedPrice !== undefined,
           sellMinor: sellPrice ? sellPrice.amountMinor : null,
+          media: toClientViewMedia(item.media),
         };
         switch (item.kind) {
           case "stay":
@@ -156,6 +182,7 @@ export function toClientItineraryView(
     agencyName,
     currency: document.currency,
     totalSellMinor: total ? total.amountMinor : null,
+    media: toClientViewMedia(document.media),
     days,
   };
 }

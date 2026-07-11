@@ -22,6 +22,7 @@ export {
   revenueShareLedger,
   listingRating,
   itineraryShareLink,
+  mediaAsset,
 } from "./schema.js";
 export type { Schema } from "./schema.js";
 export { tenantScope, scopedWhere } from "./tenant.js";

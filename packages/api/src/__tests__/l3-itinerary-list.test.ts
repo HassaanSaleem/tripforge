@@ -15,6 +15,7 @@ import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
   SandboxHotelAdapter,
+  SandboxMediaStoreAdapter,
   SandboxTransferAdapter,
 } from "@tripforge/supply-adapter";
 import { FakeLLM } from "@tripforge/llm";
@@ -41,6 +42,7 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
       activity: new SandboxActivityAdapter(),
       transfer: new SandboxTransferAdapter(),
       carRental: new SandboxCarRentalAdapter(),
+      mediaStore: new SandboxMediaStoreAdapter(handle.db),
       llm: new FakeLLM(),
       rates: STATIC_RATES,
       db: handle.db,

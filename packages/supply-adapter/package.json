@@ -13,6 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@tripforge/db": "workspace:*",
     "@tripforge/domain": "workspace:*"
   },
   "devDependencies": {

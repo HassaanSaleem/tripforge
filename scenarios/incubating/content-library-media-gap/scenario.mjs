@@ -1,29 +1,33 @@
-// Kitchen Loop iteration-3 SECOND-PASS scenario (T3 Frontier; feature
-// content-library; platforms web+api; user_types agent-seller + agent-reseller
-// + client): the PRD Pillar-1 "content/media library" promise — attach licensed
-// media to an itinerary, preview the branded client view with a gallery — does
-// not exist as a product surface yet. This scenario VERIFIES THE GAP and pins
-// the behavior of every path that DOES exist for media-bearing canonical
-// documents:
+// Kitchen Loop scenario (feature content-library; platforms web+api;
+// user_types agent-seller + agent-reseller + client). ORIGIN: iteration-3
+// second pass verified the PRD Pillar-1 "content/media library" promise had
+// NO product surface — this scenario pinned the gap. Seed-0022 (spec 015)
+// LANDED v0: a media library (register/list), itinerary attach/detach, and a
+// deliberate client-view allowlist amendment. This revision flips the
+// gap-verification checks to AFFORDANCE checks proving v0 works end-to-end,
+// while STRENGTHENING (never weakening) the trust-boundary checks: the client
+// view now legitimately carries `{kind,url,alt}` for url-bearing media, but
+// internal ids, `source`, `attribution`, and storageKey-only refs (v0 has no
+// CDN resolution — URL-registration only, research D2) still never cross.
 //
-//   1. No API affordance: the draft input refuses a `media` key typed (strict
-//      schema), and nothing else on workspace.itinerary accepts media.
-//   2. Dormant schema: a fresh draft's canonical document round-trips with
-//      media fields defaulted ([]), agent-readable via workspace.itinerary.get.
-//   3. Valid media-bearing documents (arranged operator-side, the same psql
-//      pattern as vetting) flow through every existing read path without
-//      breaking: agent get, share-link mint, public clientView.itinerary,
-//      /view SSR page.
-//   4. The traveler trust boundary HOLDS: the client-view payload and page are
-//      structurally free of media keys and sentinel values (allowlist
-//      projection, spec 010 FR-007) — meaning a client-facing gallery needs a
-//      deliberate allowlist decision, not just an attach UI.
-//   5. Marketplace propagation: licensing a media-bearing listing carries the
+//   1. Scoping (unchanged from the original pin): `workspace.itinerary.draft`
+//      still refuses a `media` key — attach is its OWN dedicated mutation,
+//      never smuggled through draft input.
+//   2. Dormant-no-longer: a fresh draft's canonical document still defaults
+//      media to [] (nothing attached yet) but the real product path (register
+//      → attachMedia) now populates it — proven end-to-end, not arranged.
+//   3. Trust boundary (STRENGTHENED): the client-view payload and /view page
+//      DELIBERATELY carry the attached media's `kind`/`url`/`alt` (spec 015
+//      FR-009/FR-010) — but never the internal media-asset id, `source`
+//      label, `attribution` string, or a storageKey-only ref (no url = no
+//      CDN resolution in v0 = correctly absent, not a gap anymore, a scoped
+//      boundary).
+//   4. Marketplace propagation: licensing a media-bearing listing carries the
 //      gallery VERBATIM into the white-label copy — including agent-upload
 //      attribution naming the ORIGINAL agency. Pins today's factual behavior;
 //      whether copies SHOULD inherit media (rights model) is a frontier
-//      question for the report, not an assertion here.
-//   6. Provenance enforcement at the read boundary (INV-001, D-006.c): an
+//      question for the report, not an assertion here (seed-0023, unresolved).
+//   5. Provenance enforcement at the read boundary (INV-001, D-006.c): an
 //      arranged document whose media `source` is outside the closed licensed
 //      enum ("scraped-web") is REFUSED on read — the agent surface errors and
 //      the traveler surface never serves the scraped sentinel.
@@ -146,16 +150,24 @@ const TRIP = {
 // Sentinel-bearing VALID gallery: both refs are inside the closed licensed enum
 // (D-006.c); the agent-upload attribution names the authoring agency — the
 // value whose verbatim travel into a white-label copy is the rights question.
+// The stock entry ALSO carries a `url` (v0's URL-registration model, research
+// D2) so the trust-boundary section below can prove the client-view now
+// legitimately renders it — the upload entry stays storageKey-ONLY to prove
+// v0 still correctly has no CDN resolution for that path (a scoped boundary,
+// not a gap).
 const STOCK_SENTINEL = "eiffel-dusk-sentinel.jpg";
+const STOCK_URL = `https://images.example.test/${STOCK_SENTINEL}`;
 const UPLOAD_SENTINEL = "meridian-walking-tour-sentinel.jpg";
 const UPLOAD_ATTRIBUTION = "© Meridian media desk (author agency)";
+const STOCK_ALT = "Eiffel Tower at dusk";
 const VALID_GALLERY = [
   {
     id: "media-stock-1",
     kind: "image",
     storageKey: `agency-media/${STOCK_SENTINEL}`,
+    url: STOCK_URL,
     source: "licensed-stock",
-    alt: "Eiffel Tower at dusk",
+    alt: STOCK_ALT,
     attribution: "Licensed stock / A. Photographe",
   },
   {
@@ -180,9 +192,10 @@ const INVALID_GALLERY = [
 ];
 
 async function main() {
-  console.log(`Content-library media-gap scenario against ${BASE} (run ${runId})`);
+  console.log(`Content-library v0 affordance + trust-boundary scenario against ${BASE} (run ${runId})`);
 
-  // ── 1. No API affordance: strict input refuses a media key ───────────────
+  // ── 1. Scoping: draft refuses media; attach is its OWN mutation (unchanged
+  //      pin from the original gap scenario — still correct after seed-0022)
   const seller = await onboardAgent("seller", `Meridian Media ${runId}`);
 
   const smuggled = await trpcMutate(seller.jar, "workspace.itinerary.draft", {
@@ -190,7 +203,7 @@ async function main() {
     media: VALID_GALLERY,
   });
   check(
-    "gap: draft input REFUSES a media key typed (strict schema — no hidden attach affordance)",
+    "scoping: draft input REFUSES a media key (strict schema — attach is workspace.itinerary.attachMedia, not draft)",
     smuggled.data === null && smuggled.res.status !== 200,
     `status ${smuggled.res.status}: ${smuggled.text.slice(0, 200)}`,
   );
@@ -236,18 +249,104 @@ async function main() {
     publicView.text.slice(0, 200),
   );
   check(
-    'trust boundary: clientView payload is structurally free of media ("media" key + all sentinel values absent)',
-    !payload.includes('"media"') && !payload.includes(STOCK_SENTINEL) && !payload.includes(UPLOAD_SENTINEL) &&
-      !payload.includes(UPLOAD_ATTRIBUTION),
+    "affordance (spec 015 FR-009): clientView payload carries the url-bearing gallery item — kind/url/alt allowlist-projected",
+    payload.includes(STOCK_URL) && payload.includes(STOCK_ALT),
+    payload.slice(0, 300),
+  );
+  check(
+    "trust boundary (STRENGTHENED, FR-010): clientView never leaks internal media ids, source labels, attribution, or a storageKey-only ref (no url = no CDN resolution in v0)",
+    !payload.includes("media-stock-1") &&
+      !payload.includes("media-upload-2") &&
+      !payload.includes("licensed-stock") &&
+      !payload.includes("agent-upload") &&
+      !payload.includes(UPLOAD_ATTRIBUTION) &&
+      !payload.includes(STOCK_SENTINEL) && // the storageKey path, not the url — never crosses
+      !payload.includes(UPLOAD_SENTINEL), // storageKey-only entry — no url, correctly absent entirely
     payload.slice(0, 300),
   );
 
   const viewPage = await api(new Map(), "GET", `/view/${token}`);
   check(
-    "trust boundary: /view SSR page renders (200) and carries no media sentinels",
+    "affordance: /view SSR page renders (200) and shows the url-bearing gallery image + its alt text",
     viewPage.res.status === 200 && viewPage.text.includes(freshDoc.title) &&
-      !viewPage.text.includes(STOCK_SENTINEL) && !viewPage.text.includes(UPLOAD_SENTINEL),
+      viewPage.text.includes(STOCK_URL) && viewPage.text.includes(STOCK_ALT),
     `status ${viewPage.res.status}`,
+  );
+  check(
+    "trust boundary (STRENGTHENED): /view page never renders internal ids, source labels, attribution, or the storageKey-only entry's sentinel",
+    !viewPage.text.includes("media-stock-1") &&
+      !viewPage.text.includes("licensed-stock") &&
+      !viewPage.text.includes("agent-upload") &&
+      !viewPage.text.includes(UPLOAD_ATTRIBUTION) &&
+      !viewPage.text.includes(STOCK_SENTINEL) &&
+      !viewPage.text.includes(UPLOAD_SENTINEL),
+    `status ${viewPage.res.status}`,
+  );
+
+  // ── 3b. The REAL product path (spec 015), not psql arrangement: register →
+  //       attachMedia → get → share → client render, end to end.
+  const REAL_URL = `https://images.example.test/real-path-${runId}.jpg`;
+  const REAL_ALT = `Real product-path photo ${runId}`;
+  const registered = await trpcMutate(seller.jar, "workspace.media.register", {
+    source: "agent-upload",
+    kind: "image",
+    url: REAL_URL,
+    alt: REAL_ALT,
+  });
+  const mediaAssetId = registered.data?.asset?.id;
+  check(
+    "affordance: workspace.media.register persists a library asset",
+    registered.data?.status === "registered" && !!mediaAssetId,
+    registered.text.slice(0, 200),
+  );
+
+  const draft3 = await trpcMutate(seller.jar, "workspace.itinerary.draft", TRIP);
+  const realItineraryId = draft3.data?.itinerary?.id;
+  const attached = await trpcMutate(seller.jar, "workspace.itinerary.attachMedia", {
+    itineraryId: realItineraryId,
+    mediaAssetId,
+    target: { scope: "gallery" },
+  });
+  check(
+    "affordance: workspace.itinerary.attachMedia attaches the registered asset to the gallery",
+    attached.data?.status === "attached",
+    attached.text.slice(0, 200),
+  );
+
+  const realGet = await trpcQuery(seller.jar, "workspace.itinerary.get", { itineraryId: realItineraryId });
+  const realGallery = realGet.data?.itinerary?.media ?? [];
+  check(
+    "affordance: the attachment round-trips through workspace.itinerary.get",
+    realGallery.some((m) => m.id === mediaAssetId && m.url === REAL_URL),
+    JSON.stringify(realGallery).slice(0, 200),
+  );
+
+  const realShare = await trpcMutate(seller.jar, "workspace.itinerary.share", { itineraryId: realItineraryId });
+  const realToken = realShare.data?.token;
+  const realPublic = await trpcQuery(new Map(), "clientView.itinerary", { token: realToken });
+  const realPayload = JSON.stringify(realPublic.json ?? {});
+  check(
+    "affordance: the client sees the real-product-path photo (kind/url/alt) with no internal id",
+    realPayload.includes(REAL_URL) && realPayload.includes(REAL_ALT) && !realPayload.includes(mediaAssetId),
+    realPayload.slice(0, 300),
+  );
+
+  const detached = await trpcMutate(seller.jar, "workspace.itinerary.detachMedia", {
+    itineraryId: realItineraryId,
+    mediaRefId: mediaAssetId,
+    target: { scope: "gallery" },
+  });
+  const afterDetachGet = await trpcQuery(seller.jar, "workspace.itinerary.get", { itineraryId: realItineraryId });
+  check(
+    "affordance: detachMedia removes the attachment — the library asset itself survives (workspace.media.list still has it)",
+    detached.data?.status === "detached" && (afterDetachGet.data?.itinerary?.media ?? []).length === 0,
+    JSON.stringify(afterDetachGet.data?.itinerary?.media).slice(0, 200),
+  );
+  const libraryAfterDetach = await trpcQuery(seller.jar, "workspace.media.list", undefined);
+  check(
+    "affordance: the library asset is not deleted by detach",
+    (libraryAfterDetach.data?.assets ?? []).some((a) => a.id === mediaAssetId),
+    JSON.stringify(libraryAfterDetach.data?.assets).slice(0, 200),
   );
 
   // ── 4. Marketplace: the gallery travels VERBATIM into the licensed copy ──
@@ -318,7 +417,7 @@ async function main() {
   );
 
   // ── Summary ───────────────────────────────────────────────────────────────
-  console.log(failures === 0 ? "\nContent-library media-gap scenario PASSED." : `\n${failures} check(s) FAILED.`);
+  console.log(failures === 0 ? "\nContent-library v0 scenario PASSED." : `\n${failures} check(s) FAILED.`);
   process.exit(failures === 0 ? 0 : 1);
 }
 

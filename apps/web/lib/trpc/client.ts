@@ -46,3 +46,15 @@ export type MyItinerariesOutput = inferRouterOutputs<AppRouter>["workspace"]["it
  * booking summaries exactly as the deployed contract returns them.
  */
 export type GetItineraryOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["get"];
+
+/**
+ * Content library types via the same inference (spec 015 contracts §1-5):
+ * the media asset shape and attach/detach outcomes stay un-exported
+ * server-side; inference keeps the browser exactly in sync.
+ */
+export type MediaListOutput = inferRouterOutputs<AppRouter>["workspace"]["media"]["list"];
+export type MediaAsset = MediaListOutput["assets"][number];
+export type RegisterMediaInput = inferRouterInputs<AppRouter>["workspace"]["media"]["register"];
+export type RegisterMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["media"]["register"];
+export type AttachMediaInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["attachMedia"];
+export type AttachMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["attachMedia"];

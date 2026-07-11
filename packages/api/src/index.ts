@@ -14,8 +14,12 @@ export type {
 // declaration emit must be able to NAME them (TS4023), so they are public
 // surface here, not incidental service exports (QS3-1).
 export type { BookOutcome, HeldQuote } from "./services/booking.js";
-// Marketplace-picker projection surfaced the same way (spec 011).
-export type { MyItinerary } from "./services/itineraries.js";
+// Marketplace-picker projection surfaced the same way (spec 011). Attach/
+// detach outcome types surfaced the same way (spec 015).
+export type { MyItinerary, MediaTarget, AttachMediaOutcome, DetachMediaOutcome } from "./services/itineraries.js";
+// Media library outcome types surfaced the same way (spec 015, TS4023).
+export type { RegisterMediaServiceInput, GetMediaOutcome } from "./services/media.js";
+export type { RegisterMediaOutcome } from "@tripforge/supply-adapter";
 // Client-view types surfaced the same way (spec 010): the share/resolve outcome
 // unions ride the inferred AppRouter type, and ClientItineraryView is what the
 // server-component page renders.
@@ -23,6 +27,7 @@ export type {
   ClientItineraryView,
   ClientViewDay,
   ClientViewItem,
+  ClientViewMedia,
   CreateShareLinkOutcome,
   ResolveShareLinkOutcome,
 } from "./services/client-view.js";

@@ -4,6 +4,7 @@ import { router, agentProcedure } from "../trpc.js";
 import { itineraryRouter } from "./itinerary.js";
 import { bookingRouter } from "./booking.js";
 import { marketplaceRouter } from "./marketplace.js";
+import { workspaceMediaRouter } from "./workspace-media.js";
 
 export const workspaceRouter = router({
   /**
@@ -27,4 +28,7 @@ export const workspaceRouter = router({
 
   /** Trade: list / license-white-label / rate (spec 006). */
   marketplace: marketplaceRouter,
+
+  /** Content: agency media library — register/list/get (spec 015). */
+  media: workspaceMediaRouter,
 });

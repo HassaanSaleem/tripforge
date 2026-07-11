@@ -12,10 +12,11 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { trpc, type GetItineraryOutput, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
+import { trpc, type GetItineraryOutput, type MediaAsset, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
 import { formatCreatedDate, formatListedBadge, listErrorMessage, openErrorMessage } from "../../../lib/itinerary-list.js";
+import { attachMediaErrorMessage } from "../../../lib/media-library.js";
 import { BookingFlow } from "./booking-flow.js";
-import { ItineraryDays } from "./itinerary-days.js";
+import { ItineraryDays, type ItemMediaControls } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
 
 type MyItinerary = MyItinerariesOutput["itineraries"][number];
@@ -139,7 +140,72 @@ function OpenedTrip({
   itineraryId: string;
   onBack: () => void;
 }) {
-  const { itinerary, bookings } = overview;
+  const [itinerary, setItinerary] = useState(overview.itinerary);
+  const { bookings } = overview;
+  const [libraryAssets, setLibraryAssets] = useState<MediaAsset[]>([]);
+  const [attachingKey, setAttachingKey] = useState<string | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItinerary(overview.itinerary);
+  }, [overview.itinerary]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLibrary() {
+      try {
+        const outcome = await trpc.workspace.media.list.query();
+        if (!cancelled) setLibraryAssets(outcome.assets);
+      } catch {
+        // Non-fatal: the attach pickers just show nothing to add; the rest
+        // of the trip view (days, booking, share) is unaffected.
+      }
+    }
+    void loadLibrary();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function refreshItinerary() {
+    const fresh = await trpc.workspace.itinerary.get.query({ itineraryId });
+    setItinerary(fresh.itinerary);
+  }
+
+  async function handleAttach(target: { scope: "gallery" } | { scope: "item"; itemId: string }, mediaAssetId: string) {
+    const key = target.scope === "gallery" ? "gallery" : `item:${target.itemId}`;
+    setAttachingKey(key);
+    setMediaError(null);
+    try {
+      await trpc.workspace.itinerary.attachMedia.mutate({ itineraryId, mediaAssetId, target });
+      await refreshItinerary();
+    } catch (error) {
+      setMediaError(attachMediaErrorMessage(error));
+    } finally {
+      setAttachingKey(null);
+    }
+  }
+
+  async function handleDetach(target: { scope: "gallery" } | { scope: "item"; itemId: string }, mediaRefId: string) {
+    setMediaError(null);
+    try {
+      await trpc.workspace.itinerary.detachMedia.mutate({ itineraryId, mediaRefId, target });
+      await refreshItinerary();
+    } catch (error) {
+      setMediaError(attachMediaErrorMessage(error));
+    }
+  }
+
+  const itemMediaControls: ItemMediaControls = {
+    assets: libraryAssets,
+    attachingKey,
+    onAttach: (itemId, mediaAssetId) => void handleAttach({ scope: "item", itemId }, mediaAssetId),
+    onDetach: (itemId, mediaRefId) => void handleDetach({ scope: "item", itemId }, mediaRefId),
+  };
+
+  const galleryAttached = new Set(itinerary.media.map((ref) => ref.id));
+  const galleryAvailable = libraryAssets.filter((asset) => !galleryAttached.has(asset.id));
+
   return (
     <section className="tf-card tf-triplist" data-testid="opened-trip">
       <div className="tf-trip-openhead">
@@ -157,7 +223,62 @@ function OpenedTrip({
           {bookings.map((b) => `${b.status} (${formatCreatedDate(b.createdAt)})`).join(", ")}
         </p>
       ) : null}
-      <ItineraryDays days={itinerary.days} />
+
+      {mediaError ? <p role="alert">{mediaError}</p> : null}
+      <div data-testid="trip-gallery">
+        <p className="tf-eyebrow">Gallery</p>
+        {itinerary.media.length > 0 ? (
+          <ul className="tf-media-gallery" data-testid="trip-gallery-list">
+            {itinerary.media.map((ref) => (
+              <li key={ref.id} className="tf-media-gallery-item">
+                {ref.kind === "image" ? (
+                  <img src={ref.url} alt={ref.alt} className="tf-media-thumb" />
+                ) : (
+                  <a href={ref.url} target="_blank" rel="noreferrer" className="tf-media-thumb tf-media-thumb--link">
+                    ▶
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="tf-btn--ghost tf-media-remove"
+                  aria-label={`Remove ${ref.alt} from the gallery`}
+                  data-testid="trip-gallery-detach"
+                  onClick={() => void handleDetach({ scope: "gallery" }, ref.id)}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="tf-empty-day">No gallery photos yet.</p>
+        )}
+        {galleryAvailable.length > 0 ? (
+          <label className="tf-media-attach" aria-label="Attach a photo to the gallery">
+            <select
+              defaultValue=""
+              disabled={attachingKey === "gallery"}
+              data-testid="trip-gallery-picker"
+              onChange={(event) => {
+                const mediaAssetId = event.target.value;
+                if (mediaAssetId) void handleAttach({ scope: "gallery" }, mediaAssetId);
+                event.target.value = "";
+              }}
+            >
+              <option value="" disabled>
+                {attachingKey === "gallery" ? "Attaching…" : "+ Add to gallery"}
+              </option>
+              {galleryAvailable.map((asset) => (
+                <option key={asset.id} value={asset.id}>
+                  {asset.alt}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+
+      <ItineraryDays days={itinerary.days} mediaControls={itemMediaControls} />
       {/* Same composition rule as the planner's drafted state (spec 009 D2,
           extended by spec 012 D4): booking + share render only inside a
           verified agent's workspace surface; keyed so opening another trip
