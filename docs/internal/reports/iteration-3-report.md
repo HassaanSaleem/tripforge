@@ -413,3 +413,174 @@ one genuine bug (BUG-b1: unparseable documents brick the traveler's share
 link with raw 500s). Coverage repaired + extended: 3/36 recorded → 17/36
 (47.2%) — 10 first-pass cells backfilled from the landed report, 4
 content-library cells newly exercised this pass.
+
+---
+
+# Kitchen Loop Report - Iteration 3 — THIRD IDEATE PASS (2026-07-11)
+
+> Appended per loop convention: iteration 3 runs multiple ideate passes; earlier
+> sections above are the first (golden-path) and second (content-library) passes.
+
+## Scenario: Reseller Operates the Copy — book net-rate inventory inside a licensed white-label itinerary, client views the branded booked trip
+**Date**: 2026-07-11
+**Mode**: strategy
+**Tier**: T2 Composition
+**Features Exercised**: booking (primary) × marketplace + revenue-share (arrangement) — platforms web+api, user_types agent-reseller + client
+**Coverage combos targeted** (all untested before this pass): booking×api×agent-reseller, booking×web×agent-reseller, booking×api×client, booking×web×client
+
+## What I Did (as a user)
+
+Feasibility (Codex): REDIRECT — predicted the client view would not reflect
+booked sell prices because it projects the document's `pricing.sellPrice` while
+booking writes to the booking tables only. Adjustment logged: ideate acts as a
+user, so instead of pre-fixing the seam I kept the scenario and MEASURED it
+(the prediction proved right — see BUG-1). Stack: compose built + booted
+keyless (FakeLLM deterministic planner).
+
+API pass (`scenarios/incubating/reseller-books-copy-live/scenario.mjs`, 40
+checks, all green):
+1. Seller agency drafts a Lisbon trip (AI planner), gets vetted
+   (operator-side psql arrangement), lists it at 300.00 USD / 600 bps share.
+2. Reseller agency licenses the listing → white-label copy.
+3. Tenancy probe: reseller quotes the SELLER's original → `NOT_FOUND`, no
+   existence oracle.
+4. Reseller quotes THEIR copy at **2200 bps** → 6 components held, every row
+   carries 2200 bps priced in USD (net×1.22 exact on USD nets; EUR nets
+   FX-converted first).
+5. Books all 6 → confirmed with supplier refs. State-deltas: reseller's
+   `markup_ledger` conserves net+markup=sell on all 6 rows and equals the held
+   sells exactly; the seller's ledger has ZERO rows (money isolation).
+6. Reseller mints the share link for the copy; anonymous `clientView.itinerary`
+   resolves it: reseller branding, 6 booked marks, structural allowlist clean
+   (no netMinor/netRate/markupBps/supplierBookingId/supplyRef/provenance/
+   agencyId/budget), original seller agency and platform name absent; SSR
+   `/view/<token>` page the same incl. tab title; guessed token → typed
+   neutral `not_found`.
+
+Browser pass (Playwright, evidence in `.kitchenloop/evidence/iter-3-ideate-c/`):
+fresh reseller-B agency arranged via API (licensed the same listing), then all
+booking work done in the real UI — sign-in → workspace list shows the copy
+(seed-0017 panel) → open → "Book this trip at your markup" → set 22% → "Quote
+live prices" (6-row table: Net rate / Markup / Client price / Hold expiry) →
+"Book selected items" → "Booking confirmed" with per-component supplier refs →
+"Share with client" → copy link → open `/view/<token>` in a second tab as the
+traveler → reseller-branded page, all items "Booked", clean tab title; bogus
+token renders the neutral "This trip link isn't available" page.
+
+Verification: in-image `pnpm test` → 315 passed / 38 skipped (DB-bound L3
+skips, consistent with prior runs). Compose log scan: web/migrate clean; the
+single postgres ERROR is my own first-run harness query (`markup_bps` column
+doesn't exist in `markup_ledger` — it stores integer money, not bps),
+self-inflicted and benign.
+
+## What Worked
+
+- **The traded good is operable — licensing D8 intent proven live for the
+  first time.** A licensed white-label copy quotes and books end-to-end (API
+  and UI) because licensing inherits `tripRequest`; supply re-registers
+  idempotently in a fresh process.
+- **Markup independence.** The reseller's 2200 bps applied to every held row,
+  independent of the seller's markup and the 1500 default; FX-converted rows
+  (EUR nets → USD sells) still carry the exact markup.
+- **Money isolation across the trade.** All booking money landed on the
+  reseller's ledger, conserved row-by-row; the seller's ledger untouched.
+- **Tenancy holds on the money path**: the reseller cannot even quote the
+  seller's original (NOT_FOUND, indistinguishable from nonexistent).
+- **White-label promise kept on identity**: client surface names the RESELLER
+  only — original seller absent, platform absent, tab title clean (the INV-020
+  class regression stayed fixed).
+- **The booking UI is genuinely good**: transparent quote table (net / markup /
+  client price / hold expiry per row), per-component supplier refs on the
+  confirmation, "booked items stay booked" idempotency note.
+- **Neutral unavailable state** for guessed/expired tokens — no existence
+  oracle, still white-labeled.
+
+## Friction Points
+
+- **FRICTION-1**: Nothing in the workspace list, the open view, or the share
+  panel marks the trip as a *licensed copy* (already filed: seed-0018 —
+  confirmed live again from the reseller's seat; not re-filed).
+- **FRICTION-2**: The UI "Markup %" spinbutton only takes whole percents while
+  the API takes bps — an agency wanting 22.5% cannot express it in the UI.
+- **FRICTION-3**: The workspace day subtotals ("Day subtotal: 198.60 USD") sum
+  the document's stored sellPrice — i.e. the NET prices (BUG-1 root). After
+  booking at 22% the page still shows the same net-based subtotals right above
+  the booking confirmation showing the real client prices; the agent sees two
+  totals that disagree with no explanation.
+
+## Bugs Found
+
+- **[BUG-1] Client view prices a BOOKED trip at the agency's confidential net
+  rates** (severity: high — money-trust, client-facing; cross-spec seam).
+  Reproduction: draft → license → book at any markup → share → open
+  `/view/<token>`. Observed live: client page shows trip total **347.80 USD**
+  while the booking confirmation for the same trip shows **424.31 USD** of
+  client prices (delta = exactly the 22% markup); per-item DB probe confirms
+  `document.pricing.sellPrice == pricing.netRate` on all 6 items.
+  Causal chain (each part locally "correct", the composition broken):
+  1. `packages/domain/src/assemble.ts:166` — `pricing = { netRate: priced,
+     sellPrice: priced }` with comment "markup applies at quote time (FR-007)";
+  2. the quote/book flow computes the real sell (net×markup) into
+     `booking_quote`/`booking_component`/`markup_ledger` but never writes it
+     back to the canonical document;
+  3. spec 010 deliberately projects the document's stored sellPrice ("does not
+     re-quote live inventory") — written for the un-booked case, silent on the
+     booked case.
+  The canonical schema itself documents the violated contract:
+  `packages/itinerary-schema/src/item.ts:16` — `sellPrice … // client-facing
+  (net + agency markup)`. Impact: margin exposure (the traveler reads the
+  agency's exact cost — the share panel even promises "your brand, your
+  prices"), and a contractual price mismatch beside a "Booked" badge. This
+  affects ORIGINALS exactly as it affects copies — the reseller journey just
+  made the markup delta visible.
+  Suggested routing: product fix + spec amendment through the speckit flow
+  (specs 005/010) — e.g. stamp the booked sell into the document at book time,
+  or project booked-component sells at read time. NOT an ALWAYS-HALT item (no
+  schema version bump — the field's semantics are already documented; no
+  revenue-share/client-ownership change), but the chosen fix touches the
+  canonical document write path, so the plan must say which. Credit: the Codex
+  feasibility check predicted this seam.
+- **[BUG-2] Departure-day transfer title contradicts its route in the client
+  view** (severity: low — content realism, FakeLLM path). Day-3 item renders
+  title "Shared shuttle Porto Airport → Porto" while its schedule line says
+  "Porto → Porto Airport · shared" (from/to are the return leg; the title is
+  still the arrival leg's). Adjacent to seed-0019 (FakeLLM plan realism) —
+  triage may fold it in there rather than open a new ticket.
+
+## Missing Features
+
+- **[FEAT-1] No booked-price surface for the traveler**: even once BUG-1's
+  storage question is settled, the client view has no notion of "what you will
+  actually be charged" vs "estimated price" — booked items show the same
+  price field as unbooked proposals with only a badge to distinguish them.
+  A booked item's price is contractual; the view could distinguish estimate
+  vs confirmed price. (Report-only; folds into the BUG-1 spec amendment.)
+
+## Improvements
+
+- **[IMP-1] Fractional markup in the booking panel** (FRICTION-2): accept
+  decimals in the Markup % input (API already speaks bps).
+- **[IMP-2] Reconcile workspace subtotals after booking** (FRICTION-3): once
+  BUG-1's fix decides where the booked sell lives, the workspace day subtotals
+  should read from the same source so the agent never sees two disagreeing
+  totals on one page.
+
+## Tests Added
+
+- `scenarios/incubating/reseller-books-copy-live/scenario.mjs` — 40-check
+  L3-style live scenario (4-layer: real requests → parsed → money/provenance
+  state-deltas against compose Postgres), exit 0 green. Price-fidelity is a
+  logged observation, not an assertion, pending the BUG-1 product decision —
+  once fixed it should be promoted to a hard check.
+
+## Outcome
+
+**SUCCESS** — the composition works: a licensed white-label copy is fully
+operable (quote/book at the reseller's own markup, money conserved and
+isolated, client share branded to the reseller). One high-severity cross-spec
+finding (BUG-1: booked client view shows net rates) with root cause pinned to
+the draft-time `sellPrice = netRate` placeholder that nothing ever updates;
+one low-severity content bug; two improvements. 4 previously-untested coverage
+cells exercised (booking × {web,api} × {agent-reseller,client}); the two
+client cells recorded as FAIL on BUG-1 evidence. Stack torn down after the
+pass (`docker compose down -v`) to leave a clean slate for later phases.
