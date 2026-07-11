@@ -2,10 +2,10 @@
 
 ## Current Status
 
-**Iteration**: 3
+**Iteration**: 4
 **Mode**: strategy
-**Status**: CONTINUE (all gates green — lint, L1/L2+L3 vitest 368/368, L3 smoke 41/41 against the live built stack)
-**Last Updated**: 2026-07-11 16:12 PKT
+**Status**: CONTINUE (all gates green — lint, L1/L2+L3 vitest 392/392, L3 smoke 41/41 against the live built stack)
+**Last Updated**: 2026-07-12 02:49 PKT
 
 ## Blocked Combos
 
@@ -26,6 +26,39 @@
 | 1 | 2026-07-06 | strategy | regress | CONTINUE | Lint PASS; L1/L2 17/17 (100%); L3 smoke NOT-RUN (no live stack, docker down) → desk REG-L3-STACK; quality sweep skipped (not 3rd iter) |
 | 2 | 2026-07-07 | strategy | ideate→triage→execute→regress | CONTINUE | Lint PASS; L1/L2 51/51 (100%); L3 smoke 5/5 vs live compose stack (first exercisable run — REG-L3-STACK Option 2); PRs #6 (seed-0010 hermetic Docker build) and #7 (seed-0011/0012 INV-020 /view title fix + title-negative e2e) merged; seed-0013 (favicon) in_review; coverage 3/36; quality sweep skipped (not 3rd iter) |
 | 3 | 2026-07-11 | strategy | 6x(ideate→triage)→many execute cycles→regress→quality-sweep | CONTINUE | Lint PASS; L1/L2 326/326 (100%, 42 env-gated L3 skipped without DB) — same suite 368/368 (100%) against the live Postgres network; L3 smoke 41/41 vs live compose stack; PRs #10–#40 merged/landed (supply-adapter, L3 harness, budget allocator + AI planner + booking money path, marketplace trade layer v0, premium UI, workspace itinerary list, booked-price fidelity, seller earnings surface); coverage 30/36 (83.3%, pending commit); quality sweep ran — 1 new ticket filed (2 knip-flagged unexported types), deduped against 10 pre-existing open QS3-series tickets from an earlier squash-merged sweep lineage; depcruise clean, no TODO/stub debt, specs 012-014 (28 FRs) fully implemented+tested |
+| 4 | 2026-07-12 | strategy | ideate→execute cycles→regress | CONTINUE | Lint PASS; L1/L2+L3 vitest 392/392 (100%, DB-inclusive run, 39 files); L3 smoke 41/41 vs live compose stack; PRs #42 (seed-0022 content-library v0) and #44 (marketplace-copy/picker/typed-errors/demo-plan polish bundle) merged; PR #46 (coverage-matrix derivation tool, scenario hardening, markup prefill, auth-form dedup bundle) open/in-review; coverage 17/36 (47.2%) per `coverage-matrix.yaml` on disk — this iteration's ideate scenario (reseller-builds-fresh, itinerary-builder × web/api × agent-reseller) not yet reflected in the matrix, a known drift tracked by seed-0031 (fix pending in PR #46); quality sweep skipped (iter 4 not a multiple of 3) |
+
+## Regression — Iteration 4
+
+- **Date**: 2026-07-12 02:49 PKT
+- **Branch**: kitchen/iter-4 (iteration worktree tip; carries merged PRs #42/#44 plus in-flight PR #46)
+- **Lint**: PASS (`eslint .` inside the build-stage verify image, no findings, exit 0)
+- **Pass rate**: 100% (392/392, DB-inclusive run)
+- **Previous pass rate**: 100% (368/368)
+- **Delta**: ±0%
+- **Skip rate**: 0% (0 skipped)
+- **Test count**: 392 (previous: 368) — 39 test files (up from 35); growth driven by seed-0022 (content-library v0) and the marketplace-polish bundle (#44)
+- **Duration**: 2.67s (vitest run, DB-inclusive, `--network tripforge_default -e DATABASE_URL=...`)
+- **L3 smoke (`node tests/integration/smoke.mjs`)**: PASS 41/41 — health/auth/PMF-view/build→book/client-view checks all green against the freshly booted compose stack (postgres/mailpit/web Healthy, migrate exited 0)
+- **Consecutive failures**: 0
+- **Status**: CONTINUE
+
+### Failing Tests
+None.
+
+### New Patterns
+See `memory/codebase-patterns.md` (reviewed this iteration — no new pattern met the 2+-iteration confirmation bar; existing patterns still hold).
+
+### Warnings
+- Host `pnpm` remained denied in this loop session (consistent with iter 1–3 — desk row ENV-PNPM-DENY); lint + tests ran inside the built image (`docker build -f apps/web/Dockerfile --target build` → `docker run --rm tripforge-verify pnpm test`/`pnpm run lint`), DB-inclusive run added `--network tripforge_default -e DATABASE_URL=...` per the verified in-image recipe.
+- Compose-log scan found exactly one `ERROR`-level line: `duplicate key value violates unique constraint "booking_component_itinerary_item_idx"` — the same documented-benign concurrent-booking-race line seen every iteration (`l3-booking.test.ts`'s losing racer), not a product defect. No `deadlock detected` line this run.
+- **Coverage-matrix drift (known, ticketed).** `.kitchenloop/coverage-matrix.yaml` on disk still shows 17/36 (47.2%) — the iteration-3 claim of 30/36 in this file's prior entry was itself never committed to the matrix (a recurrence of the matrix's self-documented artifact-loss pattern). This iteration's ideate scenario (`reseller-builds-fresh`) exercised itinerary-builder × {web, api} × agent-reseller live but that isn't reflected in the matrix either. Root-caused and ticketed this iteration as seed-0031 ("coverage matrix and loop-state.md silently disagree"); a fix (structured coverage-claim + derivation tool) is bundled in open PR #46, not yet merged. Regress reports the matrix's on-disk number as-is rather than reconciling it by hand, per the ticket's own recommendation to stop hand-authoring both sides.
+- `.kitchenloop/backlog.json` carries uncommitted working-tree changes (three tickets — seed-0031, seed-0032, seed-0033 — moved to `in_review` under PR #46, plus new ticket seed-0034 filed `todo`) from earlier phases this iteration — left as-is for the orchestrator's post-phase auto-commit per prior-iteration convention; regress did not commit them.
+- Untracked evidence files at the worktree root (`form-with-dates.png`, `workspace-form.png`) and `.kitchenloop/uat-cards/seed-0028.md` predate this regress run (execute/UAT phase artifacts) — left untouched; not a regress concern.
+- No new blocked combos (`.kitchenloop/blocked-combos.yaml` is empty).
+
+### Coverage
+17/36 combos tested (47.2%) per `.kitchenloop/coverage-matrix.yaml` on disk — see the Coverage-matrix drift warning above for why this likely undercounts actual iteration-3/4 scenario coverage. No new combo entries were appended to the matrix file itself this iteration.
 
 ## Regression — Iteration 3
 
