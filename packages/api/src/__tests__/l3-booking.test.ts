@@ -289,6 +289,8 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       // Expired unconsumed rows are never served (spec 005 quote lifecycle;
       // contract §2 serves active + consumed only) — expiry only re-quotes.
       const expiredView = await staleCaller.workspace.itinerary.get({ itineraryId });
+      expect(expiredView.status).toBe("found");
+      if (expiredView.status !== "found") return;
       expect(expiredView.quotes).toHaveLength(0);
 
       // Re-quote with a FRESH container (fresh process simulation — research
@@ -304,6 +306,8 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       // Consumed rows stay served after their hold window would lapse; the
       // expired unconsumed originals stay excluded (contract §2).
       const consumedView = await freshCaller.workspace.itinerary.get({ itineraryId });
+      expect(consumedView.status).toBe("found");
+      if (consumedView.status !== "found") return;
       expect(consumedView.quotes.map((q) => q.quoteRowId).sort()).toEqual([...freshIds].sort());
       expect(consumedView.quotes.every((q) => q.consumed)).toBe(true);
     },
@@ -812,6 +816,47 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       await expect(
         intruderCaller.workspace.booking.book({ itineraryId, quoteRowIds: [randomUUID()] }),
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    },
+    LONG,
+  );
+
+  it(
+    "a stored document that fails canonical re-validation returns a TYPED diagnostic, never a raw 500 (seed-0021)",
+    async () => {
+      const owner = await makeAgency();
+      const ownerCaller = appRouter.createCaller({ session: owner, container: makeContainer() });
+      const drafted = await ownerCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+
+      // Arrange exactly the ticket's repro: a media source outside the closed
+      // licensed enum (INV-001 boundary re-validation correctly refuses it —
+      // this test pins the SHAPE of the refusal, not whether it refuses).
+      await handle.db
+        .update(itineraryTable)
+        .set({
+          document: {
+            ...drafted.itinerary,
+            media: [{ id: "m1", kind: "image", url: "https://example.test/x.jpg", alt: "x", source: "scraped-web" }],
+          },
+        })
+        .where(eq(itineraryTable.id, itineraryId));
+
+      const overview = await ownerCaller.workspace.itinerary.get({ itineraryId });
+      expect(overview.status).toBe("invalid");
+      if (overview.status !== "invalid") return;
+      expect(overview.itineraryId).toBe(itineraryId);
+      expect(overview.diagnostic.length).toBeGreaterThan(0);
+      // The diagnostic is a SAFE summary, never the raw zod stack/document.
+      expect(overview.diagnostic).not.toMatch(/ZodError|scraped-web/);
+
+      // Cross-tenant probe of the SAME broken document still gets the plain
+      // not_found — the diagnostic is only for the owning agent.
+      const intruder = await makeAgency();
+      const intruderCaller = appRouter.createCaller({ session: intruder, container: makeContainer() });
+      await expect(intruderCaller.workspace.itinerary.get({ itineraryId })).rejects.toMatchObject({
+        code: "NOT_FOUND",
+      });
     },
     LONG,
   );

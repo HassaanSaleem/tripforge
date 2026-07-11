@@ -26,8 +26,16 @@ const activities: ActivityOffer[] = [
   { offerId: "act-1", content: { title: "Louvre" }, netRate: eur(3_300), durationMinutes: 180 },
   { offerId: "act-2", content: { title: "Seine cruise" }, netRate: eur(4_500) },
 ];
+// The planner tool boundary PINS search criteria to the trip's own canonical
+// direction (spec 008 FR-011) — the executor ignores whatever the caller
+// passes and always searches the SAME fixed criteria (see
+// packages/api/src/services/planner.ts plannerToolDeps), so a genuine
+// second, reverse-direction call is impossible. The real sandbox adapter
+// mirrors this by surfacing the return leg in the SAME search response,
+// offerId-suffixed `-return` (seed-0019) — this fixture matches that shape.
 const transfers: TransferOffer[] = [
-  { offerId: "tx-1", content: { title: "Private car" }, netRate: usd(1_900), mode: "private" },
+  { offerId: "tx-1", content: { title: "Private car Paris Airport → Paris" }, netRate: usd(1_900), mode: "private" },
+  { offerId: "tx-1-return", content: { title: "Private car Paris → Paris Airport" }, netRate: usd(1_900), mode: "private" },
 ];
 const cars: CarRentalOffer[] = [
   { offerId: "car-1", content: { title: "Compact" }, netRate: eur(8_800), vehicleClass: "compact" },
@@ -70,12 +78,18 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
     const result = await fake.draftItinerary({ purpose: "test", request: REQUEST, tools: deps(calls) });
     expect(result.status).toBe("drafted");
     if (result.status !== "drafted") return;
-    // All four tools exercised (car rental is context only — D-006).
+    // All four tools exercised exactly once (car rental is context only —
+    // D-006); the transfer search's ONE response already carries both
+    // directions (the tool boundary pins criteria — no second call).
     expect([...calls].sort()).toEqual(["activity", "car", "hotel", "transfer"]);
     // 2-night trip → 2 days; day 1 carries transfer + cheapest stay.
     expect(result.draft.days).toHaveLength(2);
     expect(result.draft.days[0]?.items).toContainEqual({ port: "hotel", offerId: "paris-002" });
     expect(result.draft.days[0]?.items).toContainEqual({ port: "transfer", offerId: "tx-1" });
+    // Final day's transfer is the DISTINCT return-direction offer, never the
+    // arrival offerId verbatim (seed-0019 — title/route mismatch fix).
+    expect(result.draft.days[1]?.items).toContainEqual({ port: "transfer", offerId: "tx-1-return" });
+    expect(result.draft.days[1]?.items.some((i) => i.port === "transfer" && i.offerId === "tx-1")).toBe(false);
     // No car-rental proposals possible: the vocabulary has no such port.
     const validated = PlannerDraftSchema.parse(result.draft);
     expect(validated.days.every((d) => d.items.every((i) => ["hotel", "activity", "transfer"].includes(i.port)))).toBe(
@@ -98,6 +112,18 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
     const fake = new FakeLLM({ plannerScripts: [scripted] });
     const result = await fake.draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) });
     expect(result).toEqual(scripted);
+  });
+
+  it("a single-day trip never proposes a return leg (only one night, nothing to distinguish)", async () => {
+    const oneNight = { ...REQUEST, checkOut: "2026-09-02" };
+    const calls: string[] = [];
+    const result = await new FakeLLM().draftItinerary({ purpose: "t", request: oneNight, tools: deps(calls) });
+    expect(result.status).toBe("drafted");
+    if (result.status !== "drafted") return;
+    expect(result.draft.days).toHaveLength(1);
+    expect(calls.filter((c) => c === "transfer")).toHaveLength(1);
+    expect(result.draft.days[0]?.items).toContainEqual({ port: "transfer", offerId: "tx-1" });
+    expect(result.draft.days[0]?.items.some((i) => i.port === "transfer" && i.offerId === "tx-1-return")).toBe(false);
   });
 
   it("fails typed with no_proposals when supply is empty", async () => {

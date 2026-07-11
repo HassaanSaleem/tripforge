@@ -36,7 +36,16 @@ export class SandboxTransferAdapter implements TransferPort {
     if (criteria.from.trim() === "" || criteria.to.trim() === "") {
       return [];
     }
-    const base = `${criteria.from}-${criteria.to}`.toLowerCase().replace(/\s+/g, "-");
+    const slug = (from: string, to: string) => `${from}-${to}`.toLowerCase().replace(/\s+/g, "-");
+    const base = slug(criteria.from, criteria.to);
+    // The planner tool boundary PINS search criteria to the trip's own
+    // canonical direction (spec 008 FR-011) — a caller can never re-query
+    // with swapped from/to. A round-trip transfer product naturally offers
+    // the return leg too, so it rides the SAME search response, distinctly
+    // offerId/titled (seed-0019 — lets a multi-day plan use a genuinely
+    // different, correctly-directed offer for the departure leg instead of
+    // reusing the arrival offer's id/title verbatim).
+    const returnBase = slug(criteria.to, criteria.from);
     return this.engine.register([
       {
         offerId: `${base}-xfer-001`,
@@ -47,6 +56,18 @@ export class SandboxTransferAdapter implements TransferPort {
       {
         offerId: `${base}-xfer-002`,
         content: { title: `Shared shuttle ${criteria.from} → ${criteria.to}` },
+        netRate: money(2_500, "USD"),
+        mode: "shared",
+      },
+      {
+        offerId: `${returnBase}-xfer-001-return`,
+        content: { title: `Private transfer ${criteria.to} → ${criteria.from}` },
+        netRate: money(6_500, "USD"),
+        mode: "private",
+      },
+      {
+        offerId: `${returnBase}-xfer-002-return`,
+        content: { title: `Shared shuttle ${criteria.to} → ${criteria.from}` },
         netRate: money(2_500, "USD"),
         mode: "shared",
       },

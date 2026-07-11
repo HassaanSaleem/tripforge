@@ -80,6 +80,20 @@ test("a seller lists a drafted trip — refused unvetted, live once vetted (US1+
   // Seller earnings surface (spec 014 US1): explicit zero before any license.
   await expect(card.getByTestId("listing-earnings")).toHaveText("0 licenses · 0.00 USD earned");
 
+  // Sell-form picker friction fix (ticket 1783795719335319923): the
+  // just-listed itinerary drops out of its OWN picker in place (no reload),
+  // marked and disabled rather than offered again as if listable. Structural
+  // assertion only (option count + suffix, not the model-authored itinerary
+  // title the option renders) — same planner-agnostic convention as the
+  // picker-refresh assertion below.
+  const itineraryOptions = page.getByLabel("Itinerary").locator("option:not([value=''])");
+  await expect(itineraryOptions).toHaveCount(1);
+  await expect(itineraryOptions.first()).toHaveText(/already listed$/);
+  // toBeDisabled() doesn't reliably read <option>'s own disabled attribute
+  // (it evaluates against the ancestor <select>, which stays enabled) — the
+  // HTML attribute itself is the ground truth.
+  await expect(itineraryOptions.first()).toHaveAttribute("disabled", "");
+
   // Workspace trip list (spec 014 US2): the "Listed" mark carries the fee.
   await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Workspace" }).click();
   await expect(page.getByTestId("trip-listed")).toHaveText("Listed · 250.00 USD");
@@ -141,6 +155,13 @@ test("the seller's own card now shows the license and the exact seller credit (s
   // 250.00 USD at the fixed 10% platform take → 225.00 seller credit (same
   // split the L3 suite pins), now visible on the seller's own card.
   await expect(card.getByTestId("listing-earnings")).toHaveText("1 license · 225.00 USD earned");
+  // Copy fix (ticket 17837888449248712164): the declared-share badge sits
+  // beside the earnings figure, but a caption now makes clear the two are
+  // NOT cause-and-effect — the badge governs only a not-yet-wired resale,
+  // never this first sale.
+  await expect(card.getByTestId("listing-share-note")).toHaveText(
+    /applies to future resales.*platform.*fixed take rate, not this share/,
+  );
 });
 
 test("a signed-out visitor gets the membership prompt, never marketplace data (INV-024)", async ({

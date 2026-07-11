@@ -136,6 +136,8 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
       if (registered.status !== "registered") return;
 
       const before = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      expect(before.status).toBe("found");
+      if (before.status !== "found") return;
       const firstItemId = before.itinerary.days.flatMap((d) => d.items)[0]?.id;
       expect(firstItemId).toBeTruthy();
       if (!firstItemId) return;
@@ -155,6 +157,8 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
       expect(itemAttach.status).toBe("attached");
 
       const after = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      expect(after.status).toBe("found");
+      if (after.status !== "found") return;
       expect(after.itinerary.media.map((m) => m.id)).toContain(registered.asset.id);
       const afterItem = after.itinerary.days.flatMap((d) => d.items).find((i) => i.id === firstItemId);
       expect(afterItem?.media.map((m) => m.id)).toContain(registered.asset.id);
@@ -166,6 +170,8 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
         target: { scope: "gallery" },
       });
       const afterDupe = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      expect(afterDupe.status).toBe("found");
+      if (afterDupe.status !== "found") return;
       expect(afterDupe.itinerary.media.filter((m) => m.id === registered.asset.id)).toHaveLength(1);
 
       // Detach from the gallery only — the item attachment is untouched.
@@ -176,6 +182,8 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
       });
       expect(detached).toEqual({ status: "detached" });
       const afterDetach = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      expect(afterDetach.status).toBe("found");
+      if (afterDetach.status !== "found") return;
       expect(afterDetach.itinerary.media.map((m) => m.id)).not.toContain(registered.asset.id);
       const afterDetachItem = afterDetach.itinerary.days.flatMap((d) => d.items).find((i) => i.id === firstItemId);
       expect(afterDetachItem?.media.map((m) => m.id)).toContain(registered.asset.id);
@@ -215,6 +223,8 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
       ).rejects.toMatchObject({ code: "NOT_FOUND" });
 
       const after = await callerFor(owner).workspace.itinerary.get({ itineraryId });
+      expect(after.status).toBe("found");
+      if (after.status !== "found") return;
       expect(after.itinerary.media).toHaveLength(0);
     },
     LONG,

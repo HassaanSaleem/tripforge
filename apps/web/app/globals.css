@@ -210,6 +210,8 @@ label > input, label > select, label > textarea {
 .tf-items .d--transfer { background: var(--coral); box-shadow: 0 0 0 4px color-mix(in srgb, var(--coral) 16%, transparent); }
 .tf-item-kind { font-weight: 640; color: var(--ink); }
 .tf-empty-day { color: var(--muted); font-style: italic; margin: 6px 0 0; }
+.tf-item-continuing { opacity: 0.75; }
+.tf-item-note { color: var(--muted); font-style: italic; font-weight: 400; }
 
 /* ---- content library (spec 015): media register/list + gallery ---- */
 .tf-medialib h2 { margin-top: 4px; }
@@ -292,6 +294,7 @@ label > input, label > select, label > textarea {
 .tf-market-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .tf-market-mine { background: color-mix(in srgb, var(--gold) 16%, transparent); color: #8a6a24; border-color: color-mix(in srgb, var(--gold) 40%, var(--line)); }
 .tf-market-earnings { color: var(--ink); font-size: 13.5px; font-weight: 600; margin: 0; }
+.tf-market-share-note { color: var(--ink-soft); font-size: 12px; margin: 0; }
 .tf-market-terms { color: var(--ink-soft); font-size: 13.5px; margin: 0; border-top: 1px solid var(--line); padding-top: 10px; }
 .tf-market-empty { color: var(--muted); font-style: italic; }
 

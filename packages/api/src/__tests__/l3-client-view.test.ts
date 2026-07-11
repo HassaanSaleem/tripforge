@@ -246,6 +246,8 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
       if (registered.status !== "registered") return;
 
       const before = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      expect(before.status).toBe("found");
+      if (before.status !== "found") return;
       const firstItemId = before.itinerary.days.flatMap((d) => d.items)[0]?.id;
       expect(firstItemId).toBeTruthy();
       if (!firstItemId) return;
@@ -329,6 +331,41 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
       await handle.db.delete(itineraryTable).where(eq(itineraryTable.id, itineraryId));
       const gone = await anon.clientView.itinerary({ token: shared.token });
       expect(gone).toEqual({ status: "not_found" });
+    },
+    LONG,
+  );
+
+  it(
+    "a stored document that fails canonical re-validation resolves the SAME not_found — no crash, no existence oracle (seed-0021)",
+    async () => {
+      const anon = callerFor(null);
+      const agent = await makeAgency("Brittle Document Co");
+      const itineraryId = await draftItinerary(agent);
+      const shared = await callerFor(agent).workspace.itinerary.share({ itineraryId });
+      expect(shared.status).toBe("shared");
+      if (shared.status !== "shared") return;
+
+      const before = await handle.db
+        .select({ document: itineraryTable.document })
+        .from(itineraryTable)
+        .where(eq(itineraryTable.id, itineraryId));
+      const validDocument = before[0]?.document as Record<string, unknown>;
+
+      // Same repro the ticket describes: a media source outside the closed
+      // licensed enum — INV-001 correctly refuses it; this test pins that the
+      // refusal is the typed not_found payload, never a thrown 500.
+      await handle.db
+        .update(itineraryTable)
+        .set({
+          document: {
+            ...validDocument,
+            media: [{ id: "m1", kind: "image", url: "https://example.test/x.jpg", alt: "x", source: "scraped-web" }],
+          },
+        })
+        .where(eq(itineraryTable.id, itineraryId));
+
+      const resolved = await anon.clientView.itinerary({ token: shared.token });
+      expect(resolved).toEqual({ status: "not_found" }); // indistinguishable from an unknown/deleted token
     },
     LONG,
   );

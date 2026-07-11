@@ -26,8 +26,12 @@ import {
   itineraryShareLink as itineraryShareLinkTable,
   scopedWhere,
 } from "@tripforge/db";
+import { createLogger } from "@tripforge/shared";
 import { z } from "zod";
 import type { AgentSessionContext, Container } from "../context.js";
+import { isItineraryValidationError, summarizeItineraryValidationError } from "./itinerary-read-guard.js";
+
+const logger = createLogger({ bindings: { component: "client-view" } });
 
 export const shareInputSchema = z.strictObject({ itineraryId: z.uuid() });
 
@@ -269,7 +273,21 @@ export async function resolveShareLink(
   if (!row) return { status: "not_found" };
 
   // Boundary re-validation (INV-001): the document is canonical on read too.
-  const document = parseItinerary(row.document);
+  // A document that fails re-validation (legacy shape, bad migration, operator
+  // surgery) shares the SAME not_found surface as an unknown/deleted itinerary
+  // (spec 010 — "reveals nothing", no existence oracle; seed-0021) instead of
+  // crashing the traveler's durable share link.
+  let document: Itinerary;
+  try {
+    document = parseItinerary(row.document);
+  } catch (err) {
+    if (!isItineraryValidationError(err)) throw err;
+    logger.warn("client_view.resolve.itinerary_invalid", {
+      itineraryId: link.itineraryId,
+      issue: summarizeItineraryValidationError(err),
+    });
+    return { status: "not_found" };
+  }
 
   // Booked items are priced from the booking record (spec 013): the component
   // sell is the realized client price, recorded in the itinerary currency at

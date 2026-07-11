@@ -97,7 +97,21 @@ export class FakeLLM implements LLMPort {
       Math.round((Date.parse(`${request.checkOut}T00:00:00Z`) - Date.parse(`${request.checkIn}T00:00:00Z`)) / 86_400_000),
     );
     const hotel = cheapest(hotels)[0];
-    const transfer = cheapest(transfers)[0];
+    // The transfer search's single response carries BOTH directions (the
+    // planner tool boundary pins criteria to the trip's own canonical
+    // direction — spec 008 FR-011 — so a second, reverse-direction call is
+    // not possible; the sandbox surfaces the return leg in the same
+    // response instead, offerId-suffixed `-return`). Reusing the arrival
+    // offer verbatim on the departure day gave it the ARRIVAL direction's
+    // own title ("X Airport → X") while assembleItinerary correctly flips
+    // from/to for the second leg ("X → X Airport") — a title/route
+    // mismatch (seed-0019). Picking the genuinely distinct return offer
+    // fixes it; falls back to the arrival offer if none exists (e.g. a
+    // real/live adapter that only ever returns one direction).
+    const outboundTransfers = transfers.filter((t) => !t.offerId.endsWith("-return"));
+    const returnTransfers = transfers.filter((t) => t.offerId.endsWith("-return"));
+    const transfer = cheapest(outboundTransfers)[0] ?? cheapest(transfers)[0];
+    const returnTransfer = cheapest(returnTransfers)[0] ?? transfer;
     const rankedActivities = cheapest(activities);
 
     if (!hotel && rankedActivities.length === 0 && !transfer) {
@@ -114,7 +128,9 @@ export class FakeLLM implements LLMPort {
       const activity = rankedActivities[(day - 1) % Math.max(1, rankedActivities.length)];
       if (activity) items.push({ port: "activity", offerId: activity.offerId });
       if (day === dayCount && dayCount > 1 && transfer) {
-        items.push({ port: "transfer", offerId: transfer.offerId });
+        // transfer is narrowed truthy here; returnTransfer already falls
+        // back to it when no distinct return offer exists.
+        items.push({ port: "transfer", offerId: (returnTransfer ?? transfer).offerId });
       }
       days.push({ items });
     }

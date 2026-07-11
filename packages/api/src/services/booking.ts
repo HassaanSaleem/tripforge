@@ -54,6 +54,7 @@ import { createLogger } from "@tripforge/shared";
 import { z } from "zod";
 import type { AgentSessionContext, Container } from "../context.js";
 import { findRate } from "../rates.js";
+import { isItineraryValidationError, summarizeItineraryValidationError } from "./itinerary-read-guard.js";
 import { verifiedSupplyCatalog, type TripRequest } from "./planner.js";
 
 const logger = createLogger({ bindings: { component: "booking" } });
@@ -705,6 +706,7 @@ export async function itineraryOverview(
   itineraryId: string,
 ): Promise<
   | { status: "not_found" }
+  | { status: "invalid"; itineraryId: string; diagnostic: string }
   | {
       status: "found";
       itinerary: Itinerary;
@@ -722,7 +724,27 @@ export async function itineraryOverview(
 > {
   const db = container.db;
   if (!db) throw new Error("database not configured");
-  const row = await loadItinerary(container, session, itineraryId);
+  // Tenant ownership is confirmed inside loadItinerary before parseItinerary
+  // runs, so a validation failure here means the CALLER'S OWN document fails
+  // current-schema re-validation (spec 010 seed-0021) — safe to diagnose back
+  // to them, unlike the anonymous share-link path (client-view.ts), which
+  // must reveal nothing.
+  let row: ItineraryRow | undefined;
+  try {
+    row = await loadItinerary(container, session, itineraryId);
+  } catch (err) {
+    if (!isItineraryValidationError(err)) throw err;
+    logger.warn("booking.overview.itinerary_invalid", {
+      agencyId: session.agencyId,
+      itineraryId,
+      issue: summarizeItineraryValidationError(err),
+    });
+    return {
+      status: "invalid",
+      itineraryId,
+      diagnostic: "This trip's stored document no longer matches the current schema and can't be opened.",
+    };
+  }
   if (!row) return { status: "not_found" };
   const quotes = await db
     .select()

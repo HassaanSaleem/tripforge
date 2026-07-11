@@ -91,8 +91,23 @@ ticket_create() {
       _ensure_local_backlog
       local f
       f=$(_local_backlog_file)
-      local id
-      id=$(printf '%s%s%05d' "$(date +%s)" "$$" "$RANDOM")
+      # $RANDOM is a per-shell PRNG: subshells forked from one parent in the
+      # same second inherit the same seed state and draw the SAME value,
+      # colliding on id. /dev/urandom is a kernel source (no inherited seed),
+      # plus a collision re-roll loop against the current backlog as a
+      # defense-in-depth backstop.
+      local id attempts=0
+      while :; do
+        id=$(printf '%s%s%05d' "$(date +%s)" "$$" "$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')")
+        local exists
+        exists=$(jq --arg i "$id" '[.[] | select(.id == $i)] | length' "$f")
+        [ "$exists" -eq 0 ] && break
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 10 ]; then
+          echo "ERROR: ticket_create could not generate a unique id after 10 attempts" >&2
+          return 1
+        fi
+      done
       local entry
       entry=$(jq -n \
         --arg id "$id" \

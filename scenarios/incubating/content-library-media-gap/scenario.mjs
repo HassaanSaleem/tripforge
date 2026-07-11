@@ -391,29 +391,39 @@ async function main() {
 
   setDocumentMedia(badItineraryId, INVALID_GALLERY);
 
+  // seed-0021: the refusal is TYPED payload data (HTTP 200), never a raw 500 —
+  // this scenario used to pin `badGet.data === null` (the crash: tRPC error
+  // responses carry no `result.data`). That was the false-confidence class
+  // itself pinned as "correct" behavior; it is now REPLACED (not weakened)
+  // with a stricter assertion on the typed diagnostic shape.
   const badGet = await trpcQuery(seller.jar, "workspace.itinerary.get", { itineraryId: badItineraryId });
   check(
-    "boundary: agent get REFUSES a document whose media source is outside the closed licensed enum",
-    badGet.data === null,
+    "boundary: agent get returns a TYPED diagnostic for a document outside the closed licensed enum (no raw 500)",
+    badGet.res.status === 200 &&
+      badGet.data?.status === "invalid" &&
+      typeof badGet.data?.diagnostic === "string" &&
+      badGet.data.diagnostic.length > 0,
     `status ${badGet.res.status}: ${badGet.text.slice(0, 200)}`,
   );
 
   const badPublic = await trpcQuery(new Map(), "clientView.itinerary", { token: badToken });
   const badPayload = JSON.stringify(badPublic.json ?? {});
   check(
-    "boundary: public clientView never serves the scraped sentinel (refusal, not a found view)",
-    badPublic.data?.status !== "found" && !badPayload.includes(SCRAPED_SENTINEL),
+    "boundary: public clientView returns the SAME typed not_found as an unknown token (no raw 500, no existence oracle)",
+    badPublic.res.status === 200 && badPublic.data?.status === "not_found" && !badPayload.includes(SCRAPED_SENTINEL),
     `status ${badPublic.res.status}: ${badPayload.slice(0, 200)}`,
   );
 
   const badPage = await api(new Map(), "GET", `/view/${badToken}`);
   check(
-    "boundary: /view page never renders the scraped sentinel",
-    !badPage.text.includes(SCRAPED_SENTINEL),
+    "boundary: /view page renders the branded unavailable state (HTTP 200, not a crash page) and never the scraped sentinel",
+    badPage.res.status === 200 &&
+      badPage.text.includes("Ask your travel agent for a fresh") && // apostrophe-free substring of the unavailable copy
+      !badPage.text.includes(SCRAPED_SENTINEL),
     `status ${badPage.res.status}`,
   );
   console.log(
-    `  note refusal failure modes (report material): get=${badGet.res.status}, clientView=${badPublic.res.status}, /view=${badPage.res.status}`,
+    `  note refusal shapes (report material): get=${badGet.res.status} ${badGet.data?.status}, clientView=${badPublic.res.status} ${badPublic.data?.status}, /view=${badPage.res.status}`,
   );
 
   // ── Summary ───────────────────────────────────────────────────────────────

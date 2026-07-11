@@ -12,6 +12,7 @@
 // regression).
 import { formatMinorAmount } from "../../../lib/planner-form.js";
 import type { DraftedItinerary } from "../../../lib/booking-flow.js";
+import { stayCoveringDay } from "../../../lib/itinerary-days.js";
 import type { MediaAsset } from "../../../lib/trpc/client.js";
 
 export interface ItemMediaControls {
@@ -30,44 +31,56 @@ export function ItineraryDays({
 }) {
   return (
     <>
-      {days.map((day) => (
-        <article key={day.dayNumber} className="tf-card tf-day">
-          <div className="tf-day-head">
-            <h3>
-              Day {day.dayNumber}
-              {day.date ? ` — ${day.date}` : ""}
-            </h3>
-            {day.subtotal ? (
-              <span className="tf-day-subtotal tf-price">
-                Day subtotal: {formatMinorAmount(day.subtotal.amountMinor, day.subtotal.currency)}
-              </span>
-            ) : null}
-          </div>
-          {day.items.length === 0 ? (
-            <p className="tf-empty-day">No items planned.</p>
-          ) : (
-            <ul className="tf-items">
-              {day.items.map((item) => (
-                <li key={item.id}>
-                  <span className={`d d--${item.kind}`} aria-hidden="true" />
-                  <span>
-                    <span className="tf-item-kind">{item.kind}</span>: {item.title}
-                    {item.pricing ? (
-                      <span className="tf-price">
-                        {" "}
-                        — {formatMinorAmount(item.pricing.sellPrice.amountMinor, item.pricing.sellPrice.currency)}
-                      </span>
-                    ) : null}
-                    {mediaControls ? (
-                      <ItemMedia item={item} controls={mediaControls} />
-                    ) : null}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </article>
-      ))}
+      {days.map((day) => {
+        const covering = stayCoveringDay(days, day);
+        return (
+          <article key={day.dayNumber} className="tf-card tf-day">
+            <div className="tf-day-head">
+              <h3>
+                Day {day.dayNumber}
+                {day.date ? ` — ${day.date}` : ""}
+              </h3>
+              {day.subtotal ? (
+                <span className="tf-day-subtotal tf-price">
+                  Day subtotal: {formatMinorAmount(day.subtotal.amountMinor, day.subtotal.currency)}
+                </span>
+              ) : null}
+            </div>
+            {day.items.length === 0 && !covering ? (
+              <p className="tf-empty-day">No items planned.</p>
+            ) : (
+              <ul className="tf-items">
+                {covering ? (
+                  <li className="tf-item-continuing" data-testid="stay-continuing">
+                    <span className="d d--stay" aria-hidden="true" />
+                    <span>
+                      <span className="tf-item-kind">stay</span>: {covering.title}{" "}
+                      <em className="tf-item-note">(continuing — check-out {covering.checkOut})</em>
+                    </span>
+                  </li>
+                ) : null}
+                {day.items.map((item) => (
+                  <li key={item.id}>
+                    <span className={`d d--${item.kind}`} aria-hidden="true" />
+                    <span>
+                      <span className="tf-item-kind">{item.kind}</span>: {item.title}
+                      {item.pricing ? (
+                        <span className="tf-price">
+                          {" "}
+                          — {formatMinorAmount(item.pricing.sellPrice.amountMinor, item.pricing.sellPrice.currency)}
+                        </span>
+                      ) : null}
+                      {mediaControls ? (
+                        <ItemMedia item={item} controls={mediaControls} />
+                      ) : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </article>
+        );
+      })}
     </>
   );
 }

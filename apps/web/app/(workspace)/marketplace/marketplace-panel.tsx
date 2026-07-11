@@ -148,7 +148,11 @@ export function MarketplacePanel() {
       if (outcome.status === "listed") {
         setForm({ phase: "listed" });
         setValues(INITIAL_FORM);
-        await loadListings();
+        // The just-listed itinerary must drop out of its OWN picker too
+        // (seed-0016-class staleness) — else re-opening the form offers it
+        // again as if listable, the exact friction this picker filter exists
+        // to remove.
+        await Promise.all([loadListings(), loadItineraries()]);
       } else {
         setForm({ phase: "refused", message: createListingFailureMessage(outcome) });
       }
@@ -228,7 +232,8 @@ export function MarketplacePanel() {
         <h2>List a finished itinerary</h2>
         <p>
           Declare the terms once — the platform stamps them into the itinerary&apos;s
-          provenance and enforces your revenue share on every license.
+          provenance for future resales. First-sale earnings always use the
+          platform&apos;s fixed take rate, not this declared share.
         </p>
         <ListingForm
           picker={picker}
@@ -266,9 +271,15 @@ function ListingCard({
         {listing.mine ? <span className="tf-badge tf-market-mine">Your listing</span> : null}
       </div>
       {listing.mine && listing.licenseCount !== null && listing.sellerCreditTotalMinor !== null ? (
-        <p className="tf-market-earnings" data-testid="listing-earnings">
-          {formatEarnings(listing.licenseCount, listing.sellerCreditTotalMinor, listing.currency)}
-        </p>
+        <>
+          <p className="tf-market-earnings" data-testid="listing-earnings">
+            {formatEarnings(listing.licenseCount, listing.sellerCreditTotalMinor, listing.currency)}
+          </p>
+          <p className="tf-market-share-note" data-testid="listing-share-note">
+            Declared share applies to future resales — first-sale earnings above
+            use the platform&apos;s fixed take rate, not this share.
+          </p>
+        </>
       ) : null}
       <p className="tf-market-terms">{listing.licenseTerms}</p>
       {listing.mine ? null : (
@@ -370,8 +381,9 @@ function ListingForm({
           >
             <option value="">Pick an itinerary…</option>
             {picker.itineraries.map((itinerary) => (
-              <option key={itinerary.id} value={itinerary.id}>
+              <option key={itinerary.id} value={itinerary.id} disabled={itinerary.listing !== null}>
                 {itinerary.title} ({itinerary.currency})
+                {itinerary.listing !== null ? " — already listed" : ""}
               </option>
             ))}
           </select>

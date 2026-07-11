@@ -21,6 +21,12 @@ import { ShareControl } from "./share-control.js";
 
 type MyItinerary = MyItinerariesOutput["itineraries"][number];
 
+// The "found" branch only — a corrupted document (status "invalid",
+// seed-0021, a typed data value) or a vanished row (status "not_found",
+// still a THROWN TRPCError — router-unchanged) never reaches the opened
+// view; both resolve to the same "failed" panel state below.
+type FoundItineraryOverview = Extract<GetItineraryOutput, { status: "found" }>;
+
 type ListState =
   | { phase: "loading" }
   | { phase: "loaded"; itineraries: MyItinerary[] }
@@ -29,7 +35,7 @@ type ListState =
 type OpenState =
   | null
   | { itineraryId: string; kind: "loading" }
-  | { itineraryId: string; kind: "opened"; overview: GetItineraryOutput }
+  | { itineraryId: string; kind: "opened"; overview: FoundItineraryOverview }
   | { itineraryId: string; kind: "failed"; message: string };
 
 /**
@@ -63,6 +69,13 @@ export function ItineraryList({ refreshToken }: { refreshToken: number }) {
     setOpen({ itineraryId, kind: "loading" });
     try {
       const overview = await trpc.workspace.itinerary.get.query({ itineraryId });
+      // not_found stays a THROWN TRPCError (router-unchanged, unreachable
+      // here as data) — the catch block below + openErrorMessage already
+      // cover it. Only "invalid" (seed-0021) is a new typed data branch.
+      if (overview.status === "invalid") {
+        setOpen({ itineraryId, kind: "failed", message: overview.diagnostic });
+        return;
+      }
       setOpen({ itineraryId, kind: "opened", overview });
     } catch (error) {
       setOpen({ itineraryId, kind: "failed", message: openErrorMessage(error) });
@@ -136,7 +149,7 @@ function OpenedTrip({
   itineraryId,
   onBack,
 }: {
-  overview: GetItineraryOutput;
+  overview: FoundItineraryOverview;
   itineraryId: string;
   onBack: () => void;
 }) {
@@ -169,7 +182,10 @@ function OpenedTrip({
 
   async function refreshItinerary() {
     const fresh = await trpc.workspace.itinerary.get.query({ itineraryId });
-    setItinerary(fresh.itinerary);
+    // A mid-session invalid/not_found is an extremely rare race (the document
+    // was valid when this trip was opened); leave the last-known-good view
+    // in place rather than crash the panel.
+    if (fresh.status === "found") setItinerary(fresh.itinerary);
   }
 
   async function handleAttach(target: { scope: "gallery" } | { scope: "item"; itemId: string }, mediaAssetId: string) {
