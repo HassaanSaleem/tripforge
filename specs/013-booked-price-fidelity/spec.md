@@ -195,5 +195,37 @@ document exactly.
 - **The agent-facing workspace day subtotals** showing the same stale draft figures are OUT
   of scope — tracked as seed-0026, deliberately blocked on this feature's storage decision,
   and must read from the same source once implemented.
+
+### Design note: draft-estimate pricing is systematically below the booked price (seed-0029)
+
+Filed as an exploration (iteration-3 fourth ideate pass, low severity/frequency) once this
+spec's FR-001 shipped: an un-booked item's client-facing estimate equals the document's
+stored `sellPrice`, which `packages/domain/src/assemble.ts` sets equal to `netRate` at draft
+time (no markup baked in — markup is only realized at quote/book time). Since FR-001 now
+projects the BOOKED price as `net × markup`, every item a traveler watches pre-booking is
+systematically below what it will show the moment it is confirmed — a share link read over
+time always steps UP by the agent's markup at exactly the confirmation moment. This is a
+product-semantics question, not a defect (FR-003 deliberately keeps the draft-time placeholder
+un-touched), so no code change is proposed here. Three options, none recommended yet:
+
+- **(a) Apply an intended markup at draft/assembly time** — stamp `sellPrice` using a
+  not-yet-realized default markup so the estimate already looks close to the eventual booked
+  price. Closest to "no surprises," but invents a markup number before the agent has chosen
+  one, and must interact with seed-0026's "read from the same source" rule (the workspace day
+  subtotal and the client view cannot silently diverge on which markup they assume).
+- **(b) Share-time projection** — leave the draft document's net-rate placeholder alone;
+  apply the agency's default/most-recent markup only in the read path that builds the
+  traveler payload (mirroring how FR-001 already projects the booked case from booking
+  records, purely for display, no document write).
+- **(c) Status quo, softened copy** — keep pre-markup estimates as-is; make the "estimate"
+  label state explicitly that the eventual price may be higher once booked, so the traveler's
+  expectation is set without changing any numbers.
+
+No default is recommended here (unlike D-0006.a–c in spec 006): this bears directly on
+client-facing pricing trust, and (b)'s effort (touching the same read-time projection FR-001
+just added) needs to be weighed by the operator against how much this not-yet-reported
+friction point actually matters. If a change is chosen, it MUST land as a spec amendment
+through the speckit flow with operator review (DIRECTIVE #3) — no silent code change — and
+MUST state its interaction with seed-0026 before implementation.
 - **Booked marks continue to derive from confirmed booking records only** (spec 010
   assumption, unchanged); quote/hold states remain invisible to travelers.

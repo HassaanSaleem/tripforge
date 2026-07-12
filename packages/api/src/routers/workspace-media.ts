@@ -4,6 +4,7 @@
 // trust one layer alone for a set this consequential (Compliance & Content
 // Sourcing).
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { router, agentProcedure } from "../trpc.js";
 import { registerMedia, listMedia, getMedia } from "../services/media.js";
 
@@ -20,10 +21,27 @@ const registerInputSchema = z.strictObject({
 
 const getInputSchema = z.strictObject({ mediaAssetId: z.uuid() });
 
+/**
+ * Named-member refusal for the closed MediaSource enum (D-006.c). Checked
+ * ahead of the full schema parse so a caller outside the closed set gets a
+ * typed message naming every allowed value, not a generic zod issue dump.
+ */
+function parseRegisterInput(value: unknown): z.infer<typeof registerInputSchema> {
+  const candidate = (value ?? {}) as { source?: unknown };
+  const sourceCheck = mediaSourceSchema.safeParse(candidate.source);
+  if (!sourceCheck.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Media source must be one of: ${mediaSourceSchema.options.join(", ")}.`,
+    });
+  }
+  return registerInputSchema.parse(value);
+}
+
 export const workspaceMediaRouter = router({
   /** Register a media item into the caller's own agency library (US1). */
   register: agentProcedure
-    .input((value) => registerInputSchema.parse(value))
+    .input((value) => parseRegisterInput(value))
     .mutation(({ ctx, input }) => registerMedia(ctx.container, ctx.session, input)),
 
   /** The agency's own media library, newest first (tenant-scoped, INV-004). */
