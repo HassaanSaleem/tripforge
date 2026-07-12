@@ -89,9 +89,22 @@ export type DraftItineraryResult =
   | { status: "drafted"; draft: PlannerDraft; usage: LlmUsage }
   | { status: "failed"; reason: "malformed_output" | "no_proposals" };
 
+// ─── Draft progress streaming (INV-028, spec 016) ────────────────────────────
+// Any request handler that calls the LLM tool loop MUST stream so it stays
+// within the platform function timeout. draftItinerary() therefore yields
+// step-level progress as each supply lookup runs, then a single terminal
+// result event — never raw tool-call payloads (Constitution V: no
+// supplier-shaped data crosses a package boundary).
+export type DraftStep = "searchingHotels" | "searchingActivities" | "quotingTransfer" | "quotingCarRental" | "assembling";
+
+export type DraftProgressEvent =
+  | { type: "progress"; step: DraftStep }
+  | { type: "result"; result: DraftItineraryResult };
+
 export interface LLMPort {
   complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse>;
   /** Draft a trip through tool-driven supply lookups. Proposals only — every
-   * price in the final itinerary is re-read from supply by the caller. */
-  draftItinerary(req: DraftItineraryRequest): Promise<DraftItineraryResult>;
+   * price in the final itinerary is re-read from supply by the caller. Yields
+   * zero or more progress events followed by exactly one terminal result event. */
+  draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent>;
 }

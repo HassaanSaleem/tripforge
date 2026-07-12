@@ -20,7 +20,7 @@ import {
 } from "@tripforge/supply-adapter";
 import type {
   DraftItineraryRequest,
-  DraftItineraryResult,
+  DraftProgressEvent,
   LlmCompleteRequest,
   LlmCompleteResponse,
   LLMPort,
@@ -28,6 +28,7 @@ import type {
 import { appRouter } from "../routers/root.js";
 import { STATIC_RATES } from "../rates.js";
 import type { Container, SessionContext } from "../context.js";
+import { draftViaCaller } from "./draft-helper.js";
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const LONG = 30_000;
@@ -44,9 +45,10 @@ class SloppyCriteriaLLM implements LLMPort {
     throw new Error("not used by the planner draft path");
   }
 
-  async draftItinerary(req: DraftItineraryRequest): Promise<DraftItineraryResult> {
+  async *draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent> {
     const { request, tools } = req;
     const guests = request.party.adults + request.party.children;
+    yield { type: "progress", step: "searchingHotels" };
     const [hotels, activities, transfers] = await Promise.all([
       tools.searchHotelRates({
         destination: `${request.destination}, France`,
@@ -62,27 +64,32 @@ class SloppyCriteriaLLM implements LLMPort {
         passengers: guests,
       }),
     ]);
+    yield { type: "progress", step: "assembling" };
     const hotel = hotels[0];
     const activity = activities[0];
     const transfer = transfers[0];
     if (!hotel || !activity || !transfer) {
-      return { status: "failed", reason: "no_proposals" };
+      yield { type: "result", result: { status: "failed", reason: "no_proposals" } };
+      return;
     }
-    return {
-      status: "drafted",
-      draft: {
-        title: `${request.destination} weekender`,
-        days: [
-          {
-            items: [
-              { port: "transfer", offerId: transfer.offerId },
-              { port: "hotel", offerId: hotel.offerId },
-              { port: "activity", offerId: activity.offerId },
-            ],
-          },
-        ],
+    yield {
+      type: "result",
+      result: {
+        status: "drafted",
+        draft: {
+          title: `${request.destination} weekender`,
+          days: [
+            {
+              items: [
+                { port: "transfer", offerId: transfer.offerId },
+                { port: "hotel", offerId: hotel.offerId },
+                { port: "activity", offerId: activity.offerId },
+              ],
+            },
+          ],
+        },
+        usage: { inputTokens: 0, outputTokens: 0 },
       },
-      usage: { inputTokens: 0, outputTokens: 0 },
     };
   }
 }
@@ -124,7 +131,7 @@ describe.skipIf(!DATABASE_URL)("L3 planner draft verification alignment (real Po
       const session = await makeAgency("Sloppy Criteria Travel");
       const caller = appRouter.createCaller({ session, container: makeContainer() });
 
-      const drafted = await caller.workspace.itinerary.draft({
+      const drafted = await draftViaCaller(caller, {
         destination: "Paris",
         checkIn: "2026-09-01",
         checkOut: "2026-09-03",
@@ -156,6 +163,61 @@ describe.skipIf(!DATABASE_URL)("L3 planner draft verification alignment (real Po
         .where(eq(itineraryTable.agencyId, session.agencyId));
       expect(rows).toHaveLength(1);
       expect(rows[0]?.id).toBe(drafted.itinerary.id);
+    },
+    LONG,
+  );
+
+  // ─── Streaming contract (spec 016, INV-028) ────────────────────────────
+  it(
+    "streams progress events before the terminal result, over the real subscription (contracts/itinerary-draft-subscription.md)",
+    async () => {
+      const session = await makeAgency("Streamed Draft Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+
+      const stream = await caller.workspace.itinerary.draft({
+        destination: "Lisbon",
+        checkIn: "2026-10-01",
+        checkOut: "2026-10-03",
+        party: { adults: 2, children: 0 },
+        budget: { mode: "hardCap", amountMinor: 100_000, currency: "USD" },
+      });
+      const events: Array<{ type: string }> = [];
+      for await (const event of stream) events.push(event);
+
+      // At least one progress event, and it precedes the single terminal
+      // result event (FR-001/FR-002; SloppyCriteriaLLM yields two: before the
+      // lookups and before assembling).
+      const progressCount = events.filter((e) => e.type === "progress").length;
+      const resultIndex = events.findIndex((e) => e.type === "result");
+      expect(progressCount).toBeGreaterThan(0);
+      expect(resultIndex).toBe(events.length - 1);
+      expect(events.filter((e) => e.type === "result")).toHaveLength(1);
+    },
+    LONG,
+  );
+
+  it(
+    "an infeasible budget short-circuits to the terminal result with ZERO progress events (never reaches the LLM)",
+    async () => {
+      const session = await makeAgency("Infeasible Budget Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+
+      // Budget below the implied flights reserve — allocateBudget rejects
+      // before draftItinerary ever calls container.llm.draftItinerary.
+      const stream = await caller.workspace.itinerary.draft({
+        destination: "Lisbon",
+        checkIn: "2026-10-01",
+        checkOut: "2026-10-03",
+        party: { adults: 2, children: 0 },
+        budget: { mode: "hardCap", amountMinor: 100, currency: "USD" },
+        flightsReserveMinor: 100_000,
+      });
+      const events: Array<{ type: string; outcome?: { status: string } }> = [];
+      for await (const event of stream) events.push(event);
+
+      expect(events).toHaveLength(1);
+      expect(events[0]?.type).toBe("result");
+      expect(events[0]?.outcome?.status).toBe("infeasible");
     },
     LONG,
   );

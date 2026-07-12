@@ -418,11 +418,13 @@ business action; the existing plan→book metric view counts them.
   itinerary item kind exists at v0, so drafted itineraries contain
   stay/activity/transfer items; the car-rental port/tool remains available to
   the planner's lookup loop for price context but produces no itinerary item.
-- **Streaming deferral (INV-028)**: with the deterministic fake (local stack)
-  and a bounded tool loop on the economy model, the draft operation completes
-  well within serverless timeouts; response streaming for long AI drafts is
-  deferred with a note in the plan (a follow-up ticket) rather than built
-  speculatively now.
+- **Streaming deferral (INV-028) — RESOLVED by spec 016 (2026-07-12)**: with
+  the deterministic fake (local stack) and a bounded tool loop on the economy
+  model, the draft operation completes well within serverless timeouts, so
+  streaming was deferred here rather than built speculatively. The follow-up
+  ticket this note promised (seed-0014) landed: `workspace.itinerary.draft` is
+  now a streamed tRPC v11 SSE subscription — see
+  `specs/016-stream-draft-response/spec.md`.
 - **Where the realized (booked) sell price lives — amended by spec 013
   (2026-07-11, seed-0025)**: the draft-time document sets `sellPrice = netRate`
   as a placeholder ("markup applies at quote time") — that equality is

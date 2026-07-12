@@ -134,6 +134,30 @@ export function assertConserved(before, after) {
 }
 
 /**
+ * Parse a raw SSE response body (tRPC v11 subscription wire format, spec 016
+ * — INV-028): frames are separated by a blank line, each frame has optional
+ * `event:`/`id:` lines and a `data:` line. Returns every frame in order —
+ * `{ event: null, data }` for a plain (untracked) event, per
+ * `@trpc/server`'s `sseStreamProducer` (no `event:` line unless the server
+ * used `tracked()`, which this repo's draft subscription does not).
+ */
+export function parseSSE(text) {
+  return text
+    .split("\n\n")
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => {
+      let event = null;
+      const dataLines = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice("event:".length).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice("data:".length).trim());
+      }
+      return { event, data: dataLines.join("\n") };
+    });
+}
+
+/**
  * Cookie-carrying HTTP session against the live stack — the "perform an action
  * via API" half of the L3 harness (spec 004 FR-003). Mirrors a real browser:
  * folds every Set-Cookie into a jar and sends the base Origin (Better Auth
@@ -177,6 +201,46 @@ export function createHttpSession(base) {
         /* HTML or empty — caller inspects text */
       }
       return { res, json, text };
+    },
+
+    /**
+     * SSE subscription request (spec 016, INV-028) — GET with the input as a
+     * `?input=` query param (the same unbatched-GET input encoding tRPC uses
+     * for queries), `Accept: text/event-stream`. Reads the WHOLE response
+     * (the subscription completes and the server closes the stream after its
+     * one terminal result event, so this does not hang) and returns every
+     * parsed frame plus `outcome` — the terminal `{type:"result"}` event's
+     * `.outcome`, or `undefined` if the stream ended without one (treated as
+     * a failure by the real client too — spec 016 FR-007).
+     * `timeoutMs` override exists for the one legitimately slow call: a draft
+     * against a stack wired with a real ANTHROPIC_API_KEY runs a live Haiku
+     * tool loop (INV-013). Deterministic-fake stacks answer in milliseconds.
+     */
+    async apiSubscribe(path, input, { timeoutMs = 15_000 } = {}) {
+      const url = `${base}${path}?input=${encodeURIComponent(JSON.stringify(input))}`;
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          accept: "text/event-stream",
+          origin: base,
+          ...(jar.size ? { cookie: cookieHeader() } : {}),
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      absorb(res);
+      const text = await res.text();
+      const frames = parseSSE(text);
+      const events = frames.filter((f) => f.event === null).map((f) => JSON.parse(f.data));
+      const errorFrame = frames.find((f) => f.event === "serialized-error");
+      const terminal = events.find((e) => e?.type === "result");
+      return {
+        res,
+        text,
+        frames,
+        events,
+        outcome: terminal?.outcome,
+        error: errorFrame ? JSON.parse(errorFrame.data) : null,
+      };
     },
   };
 }

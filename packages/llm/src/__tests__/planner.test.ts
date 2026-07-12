@@ -11,12 +11,31 @@ const usd = (amountMinor: number) => ({ amountMinor, currency: "USD" });
 const eur = (amountMinor: number) => ({ amountMinor, currency: "EUR" });
 import { FakeLLM } from "../fake.js";
 import { PlannerDraftSchema } from "../planner-draft.js";
-import type { PlannerToolDeps } from "../port.js";
+import type { DraftItineraryResult, DraftProgressEvent, DraftStep, PlannerToolDeps } from "../port.js";
 import { searchHotelRatesTool } from "../tools/search-hotel-rates.js";
 import { searchActivitiesTool } from "../tools/search-activities.js";
 import { quoteTransferTool } from "../tools/quote-transfer.js";
 import { quoteCarRentalTool } from "../tools/quote-car-rental.js";
 import { submitItineraryDraftTool } from "../tools/submit-itinerary-draft.js";
+
+/**
+ * Drains draftItinerary's progress-then-result stream (spec 016, INV-028) to
+ * the same { steps, result } shape every existing assertion below wants —
+ * the terminal DraftItineraryResult is byte-for-byte what the pre-streaming
+ * Promise-returning draftItinerary() used to resolve to.
+ */
+async function drainDraft(
+  gen: AsyncGenerator<DraftProgressEvent>,
+): Promise<{ steps: DraftStep[]; result: DraftItineraryResult }> {
+  const steps: DraftStep[] = [];
+  let result: DraftItineraryResult | undefined;
+  for await (const event of gen) {
+    if (event.type === "progress") steps.push(event.step);
+    else result = event.result;
+  }
+  if (!result) throw new Error("draftItinerary ended without a terminal result event");
+  return { steps, result };
+}
 
 const hotels: HotelOffer[] = [
   { offerId: "paris-001", content: { title: "Paris Grand" }, netRate: usd(18_000) },
@@ -75,7 +94,7 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
   it("drives all four lookup tools and proposes only returned offerIds", async () => {
     const calls: string[] = [];
     const fake = new FakeLLM();
-    const result = await fake.draftItinerary({ purpose: "test", request: REQUEST, tools: deps(calls) });
+    const { result } = await drainDraft(fake.draftItinerary({ purpose: "test", request: REQUEST, tools: deps(calls) }));
     expect(result.status).toBe("drafted");
     if (result.status !== "drafted") return;
     // All four tools exercised exactly once (car rental is context only —
@@ -98,8 +117,8 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
   });
 
   it("is deterministic — same request, same draft", async () => {
-    const a = await new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) });
-    const b = await new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) });
+    const a = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
+    const b = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
     expect(a).toEqual(b);
   });
 
@@ -110,14 +129,17 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
       usage: { inputTokens: 0, outputTokens: 0 },
     };
     const fake = new FakeLLM({ plannerScripts: [scripted] });
-    const result = await fake.draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) });
+    const { result, steps } = await drainDraft(fake.draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
     expect(result).toEqual(scripted);
+    // A scripted result short-circuits straight to the terminal event — no
+    // tool-driven progress steps (nothing was actually looked up).
+    expect(steps).toEqual([]);
   });
 
   it("a single-day trip never proposes a return leg (only one night, nothing to distinguish)", async () => {
     const oneNight = { ...REQUEST, checkOut: "2026-09-02" };
     const calls: string[] = [];
-    const result = await new FakeLLM().draftItinerary({ purpose: "t", request: oneNight, tools: deps(calls) });
+    const { result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: oneNight, tools: deps(calls) }));
     expect(result.status).toBe("drafted");
     if (result.status !== "drafted") return;
     expect(result.draft.days).toHaveLength(1);
@@ -133,7 +155,28 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
       quoteTransfer: async () => [],
       quoteCarRental: async () => [],
     };
-    const result = await new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: empty });
+    const { result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: empty }));
+    expect(result).toEqual({ status: "failed", reason: "no_proposals" });
+  });
+
+  // ─── Streaming progress (spec 016, INV-028) ────────────────────────────
+  it("yields one progress event per lookup, in order, before the terminal result", async () => {
+    const { steps, result } = await drainDraft(
+      new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }),
+    );
+    expect(steps).toEqual(["searchingHotels", "searchingActivities", "quotingTransfer", "quotingCarRental", "assembling"]);
+    expect(result.status).toBe("drafted");
+  });
+
+  it("still yields progress steps on a no_proposals failure (steps happen before the outcome is known)", async () => {
+    const empty: PlannerToolDeps = {
+      searchHotelRates: async () => [],
+      searchActivities: async () => [],
+      quoteTransfer: async () => [],
+      quoteCarRental: async () => [],
+    };
+    const { steps, result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: empty }));
+    expect(steps).toEqual(["searchingHotels", "searchingActivities", "quotingTransfer", "quotingCarRental", "assembling"]);
     expect(result).toEqual({ status: "failed", reason: "no_proposals" });
   });
 });

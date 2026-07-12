@@ -20,6 +20,7 @@ import {
 } from "@tripforge/supply-adapter";
 import { FakeLLM } from "@tripforge/llm";
 import { appRouter } from "../routers/root.js";
+import { draftViaCaller } from "./draft-helper.js";
 import { STATIC_RATES } from "../rates.js";
 import type { Container, SessionContext } from "../context.js";
 
@@ -62,7 +63,7 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
   }
 
   async function draft(session: SessionContext, destination: string): Promise<string> {
-    const drafted = await callerFor(session).workspace.itinerary.draft({
+    const drafted = await draftViaCaller(callerFor(session), {
       destination,
       checkIn: "2026-09-01",
       checkOut: "2026-09-03",

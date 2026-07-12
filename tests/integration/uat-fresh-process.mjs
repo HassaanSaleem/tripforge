@@ -50,8 +50,8 @@ if (mode === "quote") {
   const active = await agent.api("POST", "/api/auth/organization/set-active", { organizationId });
   if (active.res.status !== 200) fail(`set-active (${active.res.status})`, active.text.slice(0, 200));
 
-  const draft = await agent.api(
-    "POST",
+  // Streamed (spec 016, INV-028) — SSE subscription, not a POST mutation.
+  const draft = await agent.apiSubscribe(
     "/api/trpc/workspace.itinerary.draft",
     {
       destination: "Paris",
@@ -62,7 +62,7 @@ if (mode === "quote") {
     },
     { timeoutMs: 45_000 },
   );
-  const drafted = draft.json?.result?.data;
+  const drafted = draft.outcome;
   if (drafted?.status !== "drafted") fail("draft", draft.text.slice(0, 300));
   const itineraryId = drafted.itinerary.id;
 

@@ -95,6 +95,45 @@ async function trpcMutate(jar, proc, input) {
   const r = await api(jar, "POST", `/api/trpc/${proc}`, input);
   return { ...r, data: r.json?.result?.data ?? null };
 }
+/** tRPC SUBSCRIPTION over HTTP (spec 016, INV-028) — workspace.itinerary.draft
+ * streams (SSE) rather than a single JSON mutation response; this drains the
+ * stream to its terminal result event, in the SAME { data } shape trpcMutate
+ * returns, so every downstream `.data...` read below needs no further change. */
+async function trpcSubscribe(jar, proc, input) {
+  const url = `${BASE}/api/trpc/${proc}?input=${encodeURIComponent(JSON.stringify(input))}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      accept: "text/event-stream",
+      origin: BASE,
+      ...(jar.size ? { cookie: cookieHeader(jar) } : {}),
+    },
+  });
+  absorbCookies(jar, res);
+  const text = await res.text();
+  const frames = text
+    .split("\n\n")
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((block) => {
+      let event = null;
+      const dataLines = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice("event:".length).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice("data:".length).trim());
+      }
+      return { event, data: dataLines.join("\n") };
+    });
+  const events = frames.filter((f) => f.event === null).map((f) => JSON.parse(f.data));
+  const terminal = events.find((e) => e?.type === "result");
+  const errorFrame = frames.find((f) => f.event === "serialized-error");
+  return {
+    res,
+    text,
+    data: terminal?.outcome ?? null,
+    error: errorFrame ? JSON.parse(errorFrame.data) : null,
+  };
+}
 /** tRPC query over HTTP (GET, ?input= JSON). */
 async function trpcQuery(jar, proc, input) {
   const qs = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`;
@@ -153,7 +192,7 @@ async function main() {
 
   // ── Arrange a real first-sale trade: seller lists, reseller licenses ─────
   const seller = await onboardAgent("seller", `Karlin Seller ${runId}`);
-  const draft = await trpcMutate(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
   const itineraryId = draft.data?.itinerary?.id;
   check(
     "seller: AI draft persists an itinerary",

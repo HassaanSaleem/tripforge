@@ -43,6 +43,7 @@ import {
 import { FakeLLM } from "@tripforge/llm";
 import { parseItinerary } from "@tripforge/itinerary-schema";
 import { appRouter } from "../routers/root.js";
+import { draftViaCaller } from "./draft-helper.js";
 import { STATIC_RATES } from "../rates.js";
 import type { Container, SessionContext } from "../context.js";
 
@@ -101,7 +102,7 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
   /** Draft a real itinerary through the product path (document + tripRequest
    * persisted exactly as production writes them). */
   async function draftItinerary(session: SessionContext): Promise<string> {
-    const drafted = await callerFor(session).workspace.itinerary.draft(DRAFT_INPUT);
+    const drafted = await draftViaCaller(callerFor(session), DRAFT_INPUT);
     expect(drafted.status).toBe("drafted");
     if (drafted.status !== "drafted") throw new Error("draft failed");
     return drafted.itinerary.id;

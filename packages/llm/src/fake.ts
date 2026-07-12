@@ -12,6 +12,7 @@ import {
   LLM_MODEL,
   type DraftItineraryRequest,
   type DraftItineraryResult,
+  type DraftProgressEvent,
   type LLMPort,
   type LlmCompleteRequest,
   type LlmCompleteResponse,
@@ -55,39 +56,46 @@ export class FakeLLM implements LLMPort {
     };
   }
 
-  async draftItinerary(req: DraftItineraryRequest): Promise<DraftItineraryResult> {
+  async *draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent> {
     this.draftCalls.push(req);
     const scripted = this.plannerScripts.shift();
     if (scripted) {
-      return scripted;
+      yield { type: "result", result: scripted };
+      return;
     }
 
     const { request, tools } = req;
     const guests = request.party.adults + request.party.children;
     const airport = `${request.destination} Airport`;
 
-    // The same lookups the real planner performs, deterministically.
-    const [hotels, activities, transfers] = await Promise.all([
-      tools.searchHotelRates({
-        destination: request.destination,
-        checkIn: request.checkIn,
-        checkOut: request.checkOut,
-        guests,
-      }),
-      tools.searchActivities({ destination: request.destination, participants: guests }),
-      tools.quoteTransfer({
-        from: airport,
-        to: request.destination,
-        at: `${request.checkIn}T10:00:00Z`,
-        passengers: guests,
-      }),
-    ]);
+    // The same lookups the real planner performs, deterministically — run
+    // SEQUENTIALLY (not Promise.all) so progress events have a stable,
+    // observable order; this fake has no real network latency, so the change
+    // has no cost. Final proposals/output are unaffected by the ordering.
+    yield { type: "progress", step: "searchingHotels" };
+    const hotels = await tools.searchHotelRates({
+      destination: request.destination,
+      checkIn: request.checkIn,
+      checkOut: request.checkOut,
+      guests,
+    });
+    yield { type: "progress", step: "searchingActivities" };
+    const activities = await tools.searchActivities({ destination: request.destination, participants: guests });
+    yield { type: "progress", step: "quotingTransfer" };
+    const transfers = await tools.quoteTransfer({
+      from: airport,
+      to: request.destination,
+      at: `${request.checkIn}T10:00:00Z`,
+      passengers: guests,
+    });
     // Car rental is price CONTEXT only (D-006): looked up, never proposed.
+    yield { type: "progress", step: "quotingCarRental" };
     await tools.quoteCarRental({
       pickupLocation: airport,
       pickupAt: `${request.checkIn}T10:00:00Z`,
       dropoffAt: `${request.checkOut}T10:00:00Z`,
     });
+    yield { type: "progress", step: "assembling" };
 
     const cheapest = <T extends { netRate: { amountMinor: number }; offerId: string }>(offers: T[]): T[] =>
       [...offers].sort((a, b) => a.netRate.amountMinor - b.netRate.amountMinor || a.offerId.localeCompare(b.offerId));
@@ -115,7 +123,8 @@ export class FakeLLM implements LLMPort {
     const rankedActivities = cheapest(activities);
 
     if (!hotel && rankedActivities.length === 0 && !transfer) {
-      return { status: "failed", reason: "no_proposals" };
+      yield { type: "result", result: { status: "failed", reason: "no_proposals" } };
+      return;
     }
 
     const days: PlannerDraft["days"] = [];
@@ -135,13 +144,16 @@ export class FakeLLM implements LLMPort {
       days.push({ items });
     }
 
-    return {
-      status: "drafted",
-      draft: {
-        title: `${request.destination} ${request.tripStyle ?? "balanced"} trip`,
-        days,
+    yield {
+      type: "result",
+      result: {
+        status: "drafted",
+        draft: {
+          title: `${request.destination} ${request.tripStyle ?? "balanced"} trip`,
+          days,
+        },
+        usage: { inputTokens: 0, outputTokens: 0 },
       },
-      usage: { inputTokens: 0, outputTokens: 0 },
     };
   }
 }

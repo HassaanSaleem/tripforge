@@ -11,6 +11,8 @@ export type {
   PlannerTripRequest,
   DraftItineraryRequest,
   DraftItineraryResult,
+  DraftStep,
+  DraftProgressEvent,
 } from "./port.js";
 export { PlannerDraftSchema, PlannerDraftItemSchema } from "./planner-draft.js";
 export type { PlannerDraft, PlannerDraftItem } from "./planner-draft.js";

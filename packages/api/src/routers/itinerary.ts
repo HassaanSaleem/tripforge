@@ -32,10 +32,13 @@ const detachMediaInputSchema = z.strictObject({
 });
 
 export const itineraryRouter = router({
-  /** Describe a trip, get a persisted, budget-fit, live-priced draft (US1). */
+  /** Describe a trip, get a persisted, budget-fit, live-priced draft (US1).
+   * Streamed (INV-028, spec 016): the LLM tool loop can take several
+   * round trips, so this is an SSE subscription — progress events followed
+   * by exactly one terminal result event — rather than a blocking mutation. */
   draft: agentProcedure
     .input((value) => tripRequestSchema.parse(value))
-    .mutation(({ ctx, input }) => draftItinerary(ctx.container, ctx.session, input)),
+    .subscription(({ ctx, input }) => draftItinerary(ctx.container, ctx.session, input)),
 
   /** The agency's own itineraries, newest first — the marketplace listing
    * picker's projection (spec 011 contract §2, INV-004 tenant-scoped). */

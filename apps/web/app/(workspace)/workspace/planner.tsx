@@ -1,15 +1,17 @@
-// Workspace planner (spec 008 US1/US2, contract §2.1) — client component
-// driving the EXISTING agent-gated workspace.itinerary.draft mutation through
-// the typed browser tRPC client (research D1). Renders the canonical document
-// and budget fit exactly as returned — no client-side money arithmetic beyond
-// display formatting (FR-009); every user-visible failure string comes from the
-// pure mapping helpers (contract §2.3). The server component page gates who
-// sees this form (INV-024); authorization stays in agentProcedure (INV-023).
+// Workspace planner (spec 008 US1/US2, contract §2.1; streamed spec 016 —
+// INV-028) — client component driving the agent-gated workspace.itinerary.draft
+// SSE subscription through the typed browser tRPC client (research D1/D5).
+// Renders the canonical document and budget fit exactly as returned — no
+// client-side money arithmetic beyond display formatting (FR-009); every
+// user-visible failure string comes from the pure mapping helpers (contract
+// §2.3). Progress labels are purely informational (FR-008) — they never carry
+// server data, only a fixed per-step string. The server component page gates
+// who sees this form (INV-024); authorization stays in agentProcedure (INV-023).
 // Presentation rides the seed-0009s theme kit (.tf-*) — premium bar, no bare HTML.
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { trpc, type DraftOutput } from "../../../lib/trpc/client.js";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { trpc, type DraftEvent, type DraftOutput } from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
 import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
@@ -22,10 +24,20 @@ import {
 } from "../../../lib/planner-form.js";
 
 type DraftedOutcome = Extract<DraftOutput, { status: "drafted" }>;
+type DraftStep = Extract<DraftEvent, { type: "progress" }>["step"];
+
+// Fixed, server-data-free labels (FR-008) — one per LLMPort DraftStep.
+const STEP_LABEL: Record<DraftStep, string> = {
+  searchingHotels: "Searching hotels…",
+  searchingActivities: "Searching activities…",
+  quotingTransfer: "Pricing transfers…",
+  quotingCarRental: "Checking car-rental context…",
+  assembling: "Assembling your itinerary…",
+};
 
 type PlannerViewState =
   | { phase: "idle" }
-  | { phase: "drafting" }
+  | { phase: "drafting"; step?: DraftStep }
   | { phase: "drafted"; outcome: DraftedOutcome }
   | { phase: "failed"; message: string };
 
@@ -46,11 +58,22 @@ export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
   const drafting = view.phase === "drafting";
 
+  // Guards a late-arriving SSE event after the component unmounts or a fresh
+  // submit supersedes the in-flight one — never a React state-after-unmount
+  // warning (spec 016 edge case).
+  const activeSubscription = useRef<{ unsubscribe: () => void } | null>(null);
+  useEffect(() => {
+    return () => {
+      activeSubscription.current?.unsubscribe();
+      activeSubscription.current = null;
+    };
+  }, []);
+
   function update<K extends keyof PlannerFormValues>(field: K, value: PlannerFormValues[K]) {
     setValues((current) => ({ ...current, [field]: value }));
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (drafting) return;
     const mapped = toTripRequest(values);
@@ -58,21 +81,39 @@ export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
       setView({ phase: "failed", message: mapped.error });
       return;
     }
+    activeSubscription.current?.unsubscribe();
     setView({ phase: "drafting" });
-    try {
-      const outcome = await trpc.workspace.itinerary.draft.mutate(mapped.request);
-      if (outcome.status === "drafted") {
-        setView({ phase: "drafted", outcome });
-        // The workspace trips panel refreshes off this signal (spec 012 D2) —
-        // fired only for a persisted draft, so the list never learns of
-        // refusals or failures it cannot show.
-        onDrafted?.();
-      } else {
-        setView({ phase: "failed", message: draftFailureMessage(outcome) });
-      }
-    } catch (error) {
-      setView({ phase: "failed", message: draftErrorMessage(error) });
-    }
+    activeSubscription.current = trpc.workspace.itinerary.draft.subscribe(mapped.request, {
+      onData(draftEvent: DraftEvent) {
+        if (draftEvent.type === "progress") {
+          setView((current) => (current.phase === "drafting" ? { phase: "drafting", step: draftEvent.step } : current));
+          return;
+        }
+        const outcome = draftEvent.outcome;
+        if (outcome.status === "drafted") {
+          setView({ phase: "drafted", outcome });
+          // The workspace trips panel refreshes off this signal (spec 012 D2) —
+          // fired only for a persisted draft, so the list never learns of
+          // refusals or failures it cannot show.
+          onDrafted?.();
+        } else {
+          setView({ phase: "failed", message: draftFailureMessage(outcome) });
+        }
+      },
+      onError(error) {
+        setView({ phase: "failed", message: draftErrorMessage(error) });
+      },
+      onComplete() {
+        activeSubscription.current = null;
+        // A stream that ends without ever delivering a terminal result event
+        // is a failure, not a stuck spinner (spec 016 FR-007).
+        setView((current) =>
+          current.phase === "drafting"
+            ? { phase: "failed", message: "The connection ended before drafting finished. Please try again." }
+            : current,
+        );
+      },
+    });
   }
 
   return (
@@ -196,10 +237,10 @@ export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
         </button>
       </form>
 
-      {drafting ? (
+      {view.phase === "drafting" ? (
         <p className="tf-drafting" aria-live="polite">
           <span className="tf-spin" aria-hidden="true" />
-          Designing your trip — pricing real inventory…
+          {view.step ? STEP_LABEL[view.step] : "Designing your trip — pricing real inventory…"}
         </p>
       ) : null}
       {view.phase === "failed" ? <p role="alert">{view.message}</p> : null}

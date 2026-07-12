@@ -5,7 +5,13 @@
 // submit tool (research D2), every call metered (purpose, model, tokens).
 import Anthropic from "@anthropic-ai/sdk";
 import { LLM_MODEL, type LLMPort, type LlmCompleteRequest, type LlmCompleteResponse } from "./port.js";
-import type { DraftItineraryRequest, DraftItineraryResult, LlmUsage, PlannerTripRequest } from "./port.js";
+import type {
+  DraftItineraryRequest,
+  DraftProgressEvent,
+  DraftStep,
+  LlmUsage,
+  PlannerTripRequest,
+} from "./port.js";
 import type { PlannerDraft } from "./planner-draft.js";
 import { searchHotelRatesTool } from "./tools/search-hotel-rates.js";
 import { searchActivitiesTool } from "./tools/search-activities.js";
@@ -36,6 +42,16 @@ const PLANNER_SYSTEM = [
   "- Stay within the per-category budgets you are given; prefer cheaper options when tight.",
   "- Finish by calling submit_itinerary_draft exactly once with one entry per trip day.",
 ].join("\n");
+
+// Maps the planner tool names (INV-013 vocabulary) to the wire-safe progress
+// step reported to the caller — never the raw tool_use block (Constitution V).
+const TOOL_NAME_TO_STEP: Record<string, DraftStep> = {
+  search_hotel_rates: "searchingHotels",
+  search_activities: "searchingActivities",
+  quote_transfer: "quotingTransfer",
+  quote_car_rental: "quotingCarRental",
+  submit_itinerary_draft: "assembling",
+};
 
 function plannerUserPrompt(request: PlannerTripRequest): string {
   return [
@@ -77,7 +93,7 @@ export class AnthropicLLM implements LLMPort {
     return { text, model: LLM_MODEL, usage };
   }
 
-  async draftItinerary(req: DraftItineraryRequest): Promise<DraftItineraryResult> {
+  async *draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent> {
     let captured: PlannerDraft | undefined;
     const runner = this.client.beta.messages.toolRunner({
       model: LLM_MODEL,
@@ -102,16 +118,26 @@ export class AnthropicLLM implements LLMPort {
       for await (const message of runner) {
         usage.inputTokens += message.usage.input_tokens;
         usage.outputTokens += message.usage.output_tokens;
+        for (const block of message.content) {
+          if (block.type === "tool_use") {
+            const step = TOOL_NAME_TO_STEP[block.name];
+            if (step) {
+              yield { type: "progress", step };
+            }
+          }
+        }
       }
     } catch {
       this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
-      return { status: "failed", reason: "malformed_output" };
+      yield { type: "result", result: { status: "failed", reason: "malformed_output" } };
+      return;
     }
     this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
 
     if (!captured) {
-      return { status: "failed", reason: "no_proposals" };
+      yield { type: "result", result: { status: "failed", reason: "no_proposals" } };
+      return;
     }
-    return { status: "drafted", draft: captured, usage };
+    yield { type: "result", result: { status: "drafted", draft: captured, usage } };
   }
 }

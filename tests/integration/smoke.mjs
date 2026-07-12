@@ -226,8 +226,9 @@ async function main() {
   // tool loop (INV-013); keyless stacks use the deterministic fake and answer
   // in milliseconds. Every assertion below holds under either planner.
   const beforeDraft = await snapshotTables();
-  const draft = await agent.api(
-    "POST",
+  // Streamed (spec 016, INV-028) — SSE subscription, not a POST mutation;
+  // apiSubscribe drains it to the terminal result, same as a real client.
+  const draft = await agent.apiSubscribe(
     "/api/trpc/workspace.itinerary.draft",
     {
       destination: "Paris",
@@ -238,8 +239,13 @@ async function main() {
     },
     { timeoutMs: 45_000 },
   );
-  const drafted = draft.json?.result?.data;
+  const drafted = draft.outcome;
   check("build→book: draft returns a drafted itinerary", drafted?.status === "drafted", draft.text.slice(0, 300));
+  check(
+    "build→book: draft streamed at least one progress event before the result (INV-028)",
+    draft.events.some((e) => e.type === "progress"),
+    `events=${JSON.stringify(draft.events.map((e) => e.type))}`,
+  );
   const afterDraft = await snapshotTables();
   const draftDelta = assertDelta(beforeDraft, afterDraft, { itinerary: 1, pmf_event: 1 });
   check("build→book: draft delta is itinerary +1, pmf_event +1 (others conserved)", draftDelta.ok, draftDelta.detail);

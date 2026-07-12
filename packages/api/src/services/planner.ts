@@ -15,7 +15,7 @@ import {
 } from "@tripforge/domain";
 import type { Itinerary } from "@tripforge/itinerary-schema";
 import { itinerary as itineraryTable, recordPmfEvent } from "@tripforge/db";
-import type { PlannerToolDeps } from "@tripforge/llm";
+import type { DraftItineraryResult, DraftStep, PlannerToolDeps } from "@tripforge/llm";
 import { z } from "zod";
 import type { AgentSessionContext, Container } from "../context.js";
 
@@ -40,10 +40,18 @@ export const tripRequestSchema = z
 
 export type TripRequest = z.infer<typeof tripRequestSchema>;
 
-type DraftOutcome =
+// Exported (spec 016): the draft procedure is now a subscription, so this
+// union is inference-load-bearing for the router's AsyncGenerator return type
+// (see routers/itinerary.ts) — no longer a premature export.
+export type DraftOutcome =
   | { status: "drafted"; itinerary: Itinerary; fit: AssembleResult["fit"] }
   | { status: "infeasible"; reason: "budget_below_reserve" | "no_days" }
   | { status: "planner_failed"; reason: "malformed_output" | "no_proposals" };
+
+/** Streamed draft progress (INV-028, spec 016) — forwarded from LLMPort's
+ * DraftProgressEvent, terminated by exactly one result event carrying the
+ * existing DraftOutcome (unchanged shape/meaning). */
+export type DraftEvent = { type: "progress"; step: DraftStep } | { type: "result"; outcome: DraftOutcome };
 
 function tripDayCount(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86_400_000));
@@ -131,11 +139,11 @@ export async function verifiedSupplyCatalog(
   ];
 }
 
-export async function draftItinerary(
+export async function* draftItinerary(
   container: Container,
   session: AgentSessionContext,
   input: TripRequest,
-): Promise<DraftOutcome> {
+): AsyncGenerator<DraftEvent> {
   const db = container.db;
   if (!db) {
     throw new Error("database not configured");
@@ -151,12 +159,14 @@ export async function draftItinerary(
     flightsReserveMinor: input.flightsReserveMinor,
   });
   if (allocation.status === "infeasible") {
-    return { status: "infeasible", reason: allocation.reason };
+    yield { type: "result", outcome: { status: "infeasible", reason: allocation.reason } };
+    return;
   }
   const allocatedMinor = (category: string): number =>
     allocation.allocations.find((a) => a.category === category)?.allocated.amountMinor ?? 0;
 
-  const drafted = await container.llm.draftItinerary({
+  let plannerResult: DraftItineraryResult | undefined;
+  for await (const event of container.llm.draftItinerary({
     purpose: "planner.draft",
     request: {
       destination: input.destination,
@@ -172,10 +182,24 @@ export async function draftItinerary(
       },
     },
     tools: plannerToolDeps(container, input),
-  });
-  if (drafted.status === "failed") {
-    return { status: "planner_failed", reason: drafted.reason };
+  })) {
+    if (event.type === "progress") {
+      yield { type: "progress", step: event.step };
+    } else {
+      plannerResult = event.result;
+    }
   }
+  // A generator that ends without a terminal "result" event is treated the
+  // same as an explicit no_proposals failure (defensive — LLMPort's contract
+  // guarantees exactly one terminal event, per data-model.md).
+  if (!plannerResult || plannerResult.status === "failed") {
+    yield {
+      type: "result",
+      outcome: { status: "planner_failed", reason: plannerResult?.status === "failed" ? plannerResult.reason : "no_proposals" },
+    };
+    return;
+  }
+  const drafted = plannerResult;
 
   const offers = await verifiedSupplyCatalog(container, input);
   const id = randomUUID();
@@ -201,7 +225,8 @@ export async function draftItinerary(
   // typed with zero writes rather than persist an empty shell.
   const itemCount = assembled.itinerary.days.reduce((acc, d) => acc + d.items.length, 0);
   if (itemCount === 0) {
-    return { status: "planner_failed", reason: "no_proposals" };
+    yield { type: "result", outcome: { status: "planner_failed", reason: "no_proposals" } };
+    return;
   }
 
   const document = stampProvenance(assembled.itinerary, session.agencyId);
@@ -224,5 +249,5 @@ export async function draftItinerary(
     });
   });
 
-  return { status: "drafted", itinerary: document, fit: assembled.fit };
+  yield { type: "result", outcome: { status: "drafted", itinerary: document, fit: assembled.fit } };
 }

@@ -14,6 +14,10 @@ export type {
 // declaration emit must be able to NAME them (TS4023), so they are public
 // surface here, not incidental service exports (QS3-1).
 export type { BookOutcome, HeldQuote } from "./services/booking.js";
+// Draft streaming types surfaced the same way (spec 016): itinerary.draft is
+// now a subscription, so DraftEvent/DraftOutcome ride the inferred AppRouter
+// type and must be nameable (TS4023).
+export type { DraftEvent, DraftOutcome } from "./services/planner.js";
 // Marketplace-picker projection surfaced the same way (spec 011). Attach/
 // detach outcome types surfaced the same way (spec 015).
 export type { MyItinerary, MediaTarget, AttachMediaOutcome, DetachMediaOutcome } from "./services/itineraries.js";

@@ -68,8 +68,14 @@ test("an agent drafts a trip and sees the rendered itinerary + budget fit (US1)"
     await new Promise((resolve) => setTimeout(resolve, 700));
     await route.continue();
   });
+  // The draft request now streams (spec 016, INV-028) — assert the wire
+  // format directly (content-type) rather than racing the UI on which
+  // progress label happens to be visible when the FakeLLM path resolves
+  // its five progress events near-instantly once the connection opens.
+  const draftResponse = page.waitForResponse((res) => res.url().includes("/api/trpc/workspace.itinerary.draft"));
   await page.getByRole("button", { name: "Draft itinerary" }).click();
   await expect(page.getByRole("button", { name: "Drafting…" })).toBeDisabled();
+  expect((await draftResponse).headers()["content-type"]).toContain("text/event-stream");
 
   // Rendered canonical draft (FR-004): title, days, priced items. The title
   // and day-split are planner-authored (vary under the real model) — assert

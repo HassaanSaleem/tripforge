@@ -38,6 +38,7 @@ import {
 } from "@tripforge/supply-adapter";
 import { FakeLLM } from "@tripforge/llm";
 import { appRouter } from "../routers/root.js";
+import { draftViaCaller } from "./draft-helper.js";
 import { STATIC_RATES } from "../rates.js";
 import type { Container, SessionContext } from "../context.js";
 import type { Db } from "@tripforge/db";
@@ -188,7 +189,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const caller = appRouter.createCaller({ session, container });
 
       // ── draft (US1): itinerary +1, pmf trip_created +1, nothing else ──────
-      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(caller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const allocSum = drafted.itinerary.pricing.categories.reduce((a, c) => a + c.allocated.amountMinor, 0);
@@ -270,7 +271,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const staleContainer = makeContainer({ now: () => past });
       const staleCaller = appRouter.createCaller({ session, container: staleContainer });
 
-      const drafted = await staleCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(staleCaller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -320,7 +321,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const session = await makeAgency();
       const caller = appRouter.createCaller({ session, container: makeContainer() });
 
-      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(caller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -369,7 +370,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const session = await makeAgency();
       const caller = appRouter.createCaller({ session, container: makeContainer() });
 
-      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(caller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -445,7 +446,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
 
       // The fail-book fixture (9 900) is now the cheapest hotel → the
       // deterministic planner picks it.
-      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(caller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -511,7 +512,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       });
       const caller = appRouter.createCaller({ session, container: makeContainer({ llm: scripted }) });
 
-      const first = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const first = await draftViaCaller(caller, DRAFT_INPUT);
       expect(first.status).toBe("drafted");
       if (first.status !== "drafted") return;
       const items = first.itinerary.days.flatMap((d) => d.items);
@@ -519,7 +520,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       expect(items[0]?.supplyRef?.externalId).toBe("paris-002");
 
       const before = await countsFor(session.agencyId);
-      const second = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const second = await draftViaCaller(caller, DRAFT_INPUT);
       expect(second).toEqual({ status: "planner_failed", reason: "no_proposals" });
       expect(await countsFor(session.agencyId)).toEqual(before); // zero writes
     },
@@ -533,7 +534,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const caller = appRouter.createCaller({ session, container: makeContainer() });
       // 30 000 hard cap: accommodation band (10 500) < cheapest hotel (12 500)
       // → buffer/local donors cover it; a later activity is dropped at the cap.
-      const drafted = await caller.workspace.itinerary.draft({
+      const drafted = await draftViaCaller(caller, {
         ...DRAFT_INPUT,
         budget: { mode: "hardCap", amountMinor: 30_000, currency: "USD" },
       });
@@ -561,7 +562,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       // supplier's in-process memory is EMPTY at book time — exactly what a
       // separate serverless invocation sees. The persisted hold must still book.
       const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
-      const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(quoteCaller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -602,7 +603,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const session = await makeAgency();
       const caller = appRouter.createCaller({ session, container: makeContainer() });
-      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(caller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -637,7 +638,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const session = await makeAgency();
       const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
-      const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(quoteCaller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -672,7 +673,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const session = await makeAgency();
       const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
-      const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(quoteCaller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -720,7 +721,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
    * without consuming the old ones, leaving TWO live holds per item (the
    * FR-016 / spec-gap-0002 setup). Returns per-item hold-id pairs. */
   async function draftWithTwoHoldsPerItem(caller: ReturnType<typeof appRouter.createCaller>) {
-    const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+    const drafted = await draftViaCaller(caller, DRAFT_INPUT);
     expect(drafted.status).toBe("drafted");
     if (drafted.status !== "drafted") return undefined;
     const itineraryId = drafted.itinerary.id;
@@ -881,7 +882,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const session = await makeAgency();
       const supplier = makeSupplierSet();
       const setup = appRouter.createCaller({ session, container: supplier.container });
-      const drafted = await setup.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(setup, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -923,7 +924,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const owner = await makeAgency();
       const ownerCaller = appRouter.createCaller({ session: owner, container: makeContainer() });
-      const drafted = await ownerCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(ownerCaller, DRAFT_INPUT);
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
 
@@ -947,7 +948,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const owner = await makeAgency();
       const ownerCaller = appRouter.createCaller({ session: owner, container: makeContainer() });
-      const drafted = await ownerCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(ownerCaller, DRAFT_INPUT);
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
 
@@ -1012,7 +1013,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const session = await makeAgency();
       const supplier = makeSupplierSet();
       const setup = appRouter.createCaller({ session, container: supplier.container });
-      const drafted = await setup.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(setup, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -1061,7 +1062,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const session = await makeAgency();
       const setup = appRouter.createCaller({ session, container: makeContainer() });
-      const drafted = await setup.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(setup, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -1125,7 +1126,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
     async () => {
       const session = await makeAgency();
       const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
-      const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+      const drafted = await draftViaCaller(quoteCaller, DRAFT_INPUT);
       expect(drafted.status).toBe("drafted");
       if (drafted.status !== "drafted") return;
       const itineraryId = drafted.itinerary.id;
@@ -1203,7 +1204,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       for (let round = 0; round < ROUNDS; round += 1) {
         const session = await makeAgency();
         const quoteCaller = appRouter.createCaller({ session, container: makeContainer() });
-        const drafted = await quoteCaller.workspace.itinerary.draft(DRAFT_INPUT);
+        const drafted = await draftViaCaller(quoteCaller, DRAFT_INPUT);
         expect(drafted.status).toBe("drafted");
         if (drafted.status !== "drafted") return;
         const itineraryId = drafted.itinerary.id;

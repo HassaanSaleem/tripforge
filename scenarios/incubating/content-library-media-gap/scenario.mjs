@@ -99,6 +99,45 @@ async function trpcMutate(jar, proc, input) {
   const r = await api(jar, "POST", `/api/trpc/${proc}`, input);
   return { ...r, data: r.json?.result?.data ?? null };
 }
+/** tRPC SUBSCRIPTION over HTTP (spec 016, INV-028) — workspace.itinerary.draft
+ * streams (SSE) rather than a single JSON mutation response; this drains the
+ * stream to its terminal result event, in the SAME { data } shape trpcMutate
+ * returns, so every downstream `.data...` read below needs no further change. */
+async function trpcSubscribe(jar, proc, input) {
+  const url = `${BASE}/api/trpc/${proc}?input=${encodeURIComponent(JSON.stringify(input))}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: {
+      accept: "text/event-stream",
+      origin: BASE,
+      ...(jar.size ? { cookie: cookieHeader(jar) } : {}),
+    },
+  });
+  absorbCookies(jar, res);
+  const text = await res.text();
+  const frames = text
+    .split("\n\n")
+    .map((b) => b.trim())
+    .filter(Boolean)
+    .map((block) => {
+      let event = null;
+      const dataLines = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event:")) event = line.slice("event:".length).trim();
+        else if (line.startsWith("data:")) dataLines.push(line.slice("data:".length).trim());
+      }
+      return { event, data: dataLines.join("\n") };
+    });
+  const events = frames.filter((f) => f.event === null).map((f) => JSON.parse(f.data));
+  const terminal = events.find((e) => e?.type === "result");
+  const errorFrame = frames.find((f) => f.event === "serialized-error");
+  return {
+    res,
+    text,
+    data: terminal?.outcome ?? null,
+    error: errorFrame ? JSON.parse(errorFrame.data) : null,
+  };
+}
 /** tRPC query over HTTP GET (single, non-batched). */
 async function trpcQuery(jar, proc, input) {
   const qs = input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`;
@@ -213,20 +252,23 @@ async function main() {
   //      pin from the original gap scenario — still correct after seed-0022)
   const seller = await onboardAgent("seller", `Meridian Media ${runId}`);
 
-  const smuggled = await trpcMutate(seller.jar, "workspace.itinerary.draft", {
+  const smuggled = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", {
     ...TRIP,
     media: VALID_GALLERY,
   });
+  // Subscription-type responses (spec 016, INV-028) always answer HTTP 200 —
+  // a typed rejection is a serialized-error SSE frame in the body, not an
+  // HTTP status code (unlike the old mutation's plain JSON error response).
   check(
     "scoping: draft input REFUSES a media key (strict schema — attach is workspace.itinerary.attachMedia, not draft)",
-    smuggled.data === null && smuggled.res.status !== 200,
-    `status ${smuggled.res.status}: ${smuggled.text.slice(0, 200)}`,
+    smuggled.data === null && smuggled.error?.data?.code === "BAD_REQUEST",
+    `error ${JSON.stringify(smuggled.error)}: ${smuggled.text.slice(0, 200)}`,
   );
   const rowsAfterRefusal = psql(`SELECT count(*) FROM itinerary WHERE agency_id = '${seller.orgId}'`);
   check("gap: the refused draft persisted nothing", rowsAfterRefusal === "0", `${rowsAfterRefusal} rows`);
 
   // ── 2. Dormant schema: fresh drafts round-trip defaulted media fields ────
-  const draft = await trpcMutate(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
   const itineraryId = draft.data?.itinerary?.id;
   check("seller: AI draft persists an itinerary", draft.data?.status === "drafted" && !!itineraryId, draft.text.slice(0, 300));
 
@@ -315,7 +357,7 @@ async function main() {
     registered.text.slice(0, 200),
   );
 
-  const draft3 = await trpcMutate(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft3 = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
   const realItineraryId = draft3.data?.itinerary?.id;
   const attached = await trpcMutate(seller.jar, "workspace.itinerary.attachMedia", {
     itineraryId: realItineraryId,
@@ -398,7 +440,7 @@ async function main() {
   // Separate itinerary so the arranged-invalid document can't contaminate the
   // checks above; share link minted BEFORE the arrangement (mint re-reads the
   // document too).
-  const draft2 = await trpcMutate(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft2 = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
   const badItineraryId = draft2.data?.itinerary?.id;
   const share2 = await trpcMutate(seller.jar, "workspace.itinerary.share", { itineraryId: badItineraryId });
   const badToken = share2.data?.token;

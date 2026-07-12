@@ -3,21 +3,36 @@
 // will consume (INV-018). Browser-only module: the relative same-origin URL
 // carries the Better Auth session cookie automatically. No transformer — the
 // server's initTRPC configures none.
-import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { createTRPCClient, httpBatchLink, httpSubscriptionLink, splitLink } from "@trpc/client";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
+import { inferSubscriptionOutput } from "@trpc/server";
 import type { AppRouter } from "@tripforge/api";
 
+/**
+ * Subscriptions (itinerary.draft, spec 016 — INV-028 streaming) ride SSE via
+ * httpSubscriptionLink; everything else keeps the existing batched
+ * httpBatchLink. Same same-origin /api/trpc surface either way (INV-018).
+ */
 export const trpc = createTRPCClient<AppRouter>({
-  links: [httpBatchLink({ url: "/api/trpc" })],
+  links: [
+    splitLink({
+      condition: (op) => op.type === "subscription",
+      true: httpSubscriptionLink({ url: "/api/trpc" }),
+      false: httpBatchLink({ url: "/api/trpc" }),
+    }),
+  ],
 });
 
 /**
- * Draft input/outcome types via router inference (research D5): the server's
- * DraftOutcome/TripRequest stay un-exported (QS3-1 premature-export rule);
- * inference keeps this client exactly in sync with the deployed contract.
+ * Draft input/event types via router inference (research D5): the server's
+ * DraftEvent/TripRequest stay accessed only via inference here — the
+ * PACKAGE-BOUNDARY export in packages/api/src/index.ts exists solely to
+ * satisfy TS4023 declaration emit, not as a direct import surface for this
+ * client (QS3-1 premature-export spirit preserved).
  */
 export type DraftInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["draft"];
-export type DraftOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["draft"];
+export type DraftEvent = inferSubscriptionOutput<AppRouter["workspace"]["itinerary"]["draft"]>;
+export type DraftOutput = Extract<DraftEvent, { type: "result" }>["outcome"];
 
 /**
  * Booking input/outcome types via the same inference (spec 009 research D1):
