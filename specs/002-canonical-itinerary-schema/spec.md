@@ -140,7 +140,9 @@ missing `originalAuthorAgencyId`, `licenseTerms`, or `revenueShareBps`.
   port family (seed-0003) also includes car rental. Whether `carRental` is a
   fourth item kind at v0 or deferred is an **open decision for the operator**
   (see plan.md Open Decisions) because it interacts with the version the
-  operator authorizes.
+  operator authorizes. **RESOLVED by D-006 (2026-07-06)**: `carRental` is
+  DEFERRED to a later operator-gated version bump; v0 ships `stay` | `activity`
+  | `transfer` only (see `packages/itinerary-schema/src/item.ts`).
 
 ## Requirements *(mandatory)*
 
@@ -205,9 +207,10 @@ missing `originalAuthorAgencyId`, `licenseTerms`, or `revenueShareBps`.
   `provenance`.
 - **Day**: ordered container; `dayNumber` (and/or `date`), `items[]`, optional
   `subtotal` (Money).
-- **Item**: discriminated union on `kind` (`stay` | `activity` | `transfer`
-  [ | `carRental`, open decision]); `id`, `title`, optional `supplyRef`,
-  `media[]`, `pricing` (Money snapshot).
+- **Item**: discriminated union on `kind` — `stay` | `activity` | `transfer`
+  only at v0 (`carRental` DEFERRED to a later operator-gated bump, resolved
+  D-006.b); `id`, `title`, optional `supplyRef`, `media[]`, `pricing` (Money
+  snapshot).
 - **MediaRef**: `id`, `kind`, `storageKey`/`url`, `source` (licensed enum),
   `alt`, optional `attribution`. Reference only.
 - **PricingBlock (budget breakdown)**: `budgetMode` (hard-cap | target),

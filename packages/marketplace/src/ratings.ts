@@ -29,7 +29,7 @@ export type RateListingOutcome =
   | { status: "not_found" }
   | { status: "not_licensee" };
 
-export interface RatingAggregate {
+interface RatingAggregate {
   average: number;
   count: number;
 }

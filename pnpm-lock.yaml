@@ -200,9 +200,6 @@ importers:
       '@tripforge/itinerary-schema':
         specifier: workspace:*
         version: link:../itinerary-schema
-      '@tripforge/shared':
-        specifier: workspace:*
-        version: link:../shared
       zod:
         specifier: ^4.4.3
         version: 4.4.3

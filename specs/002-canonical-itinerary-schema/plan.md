@@ -124,18 +124,26 @@ operator reviews *this note* to authorize the landing.
 3. A version bump is an **operator gate** (ALWAYS-HALT) — the loop proposes, the
    owner authorizes before merge.
 
-**Open Decisions for the operator (fold into the D-006 answer)**
+**Open Decisions for the operator (fold into the D-006 answer) — RESOLVED by
+D-006 (2026-07-06, OPERATOR-DESK.md).** The proposal text below is preserved as
+history; each item now carries its resolved outcome.
 - **D-006.a — Version string**: `"0.1.0"` (recommended) vs `"1.0.0"`.
+  **RESOLVED: `SCHEMA_VERSION = "0.1.0"`.**
 - **D-006.b — Car-rental item kind**: add `carRental` as a 4th item `kind` at v0
   (aligns with the supply port family — hotel/activity/transfer/car, seed-0003/
   0005 book it) vs. ship stay/activity/transfer only per the seed wording and add
   `carRental` in a later bump. Recommendation: **include `carRental` now** — the
   entity graph is designed for it and adding it later is another operator-gated
   bump; deciding once is cheaper. Either choice slots in without reshaping.
+  **RESOLVED: the operator did NOT take the recommendation — v0 ships THREE item
+  kinds only (`stay` | `activity` | `transfer`, `supplyRef.port` =
+  `[hotel, activity, transfer]`); `carRental` is DEFERRED to a later
+  operator-gated version bump (see `packages/itinerary-schema/src/item.ts`).**
 - **D-006.c — Media `source` enum members**: proposed
   `licensed-stock | official-embed | agent-upload | traveler-ugc` (no member that
   could represent scraped or AI-fabricated-as-real imagery, Constitution
   Compliance). Operator confirms the closed set.
+  **RESOLVED: closed set confirmed exactly as proposed.**
 
 ## Project Structure
 
@@ -158,7 +166,7 @@ packages/itinerary-schema/
     index.ts        # public surface: re-exports + parseItinerary + SCHEMA_VERSION
     money.ts        # structural Money zod (integer-minor + currency) — INV-009, no domain import
     media.ts        # MediaRef schema + licensed source enum
-    item.ts         # Item discriminated union (stay/activity/transfer[/carRental])
+    item.ts         # Item discriminated union (stay/activity/transfer; carRental deferred, D-006.b)
     day.ts          # Day schema
     pricing.ts      # PricingBlock / budget breakdown (Constitution III categories)
     provenance.ts   # Provenance schema + ListedItinerary refinement (INV-002)

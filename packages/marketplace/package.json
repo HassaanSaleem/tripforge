@@ -16,7 +16,6 @@
     "@tripforge/db": "workspace:*",
     "@tripforge/domain": "workspace:*",
     "@tripforge/itinerary-schema": "workspace:*",
-    "@tripforge/shared": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
