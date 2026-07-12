@@ -256,10 +256,12 @@
     "body": "[QS3-2, quality-sweep-iter-3.md finding 2] jscpd (witness .kitchenloop/logs/sweep-iter-3-jscpd.log): packages/supply-adapter/src/sandbox/{hotel,transfer,activity,car-rental}.ts repeat the identical quote/book/cancel -> this.engine.* delegation (11 lines/92 tokens, 3 clone pairs vs transfer.ts). Per extraction thresholds (2+ callsites share a shape -> hoist the named concept): introduce one generic sandbox port adapter over SandboxEngine inside packages/supply-adapter/src/sandbox/, keeping per-port types via generics. Constitution V unaffected (all inside the adapter boundary). Pre-Write decision: generalize.",
     "type": "improvement",
     "priority": "medium",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-08T13:46:02Z",
-    "pr_url": "",
-    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 3): score 10/15 (U2/A5/I3) \u2014 largest baseline jscpd cluster (4x sandbox adapter delegation, verified still present); self-contained inside the adapter boundary, no prerequisites."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/48",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 3): score 10/15 (U2/A5/I3) \u2014 largest baseline jscpd cluster (4x sandbox adapter delegation, verified still present); self-contained inside the adapter boundary, no prerequisites.",
+    "merged": "2026-07-12T02:30:00Z",
+    "merge_commit": "4707a41"
   },
   {
     "id": "17835183631278810084",
@@ -290,10 +292,12 @@
     "body": "[QS3-5, quality-sweep-iter-3.md finding 5] packages/api/src/services/booking.ts is 531 lines (> 400 file threshold; next largest file is 275). Proposed split along layer boundaries: quote flow / book flow / hold persistence. HARD SEQUENCING: only after PR #13 (seed-0005) merges and seed-0005c (markup math -> packages/domain, INV-010) lands \u2014 both reshape this file. Optional in-scope: add eslint max-lines-per-function (warn) so the function-length outlier scan is tooled for the next sweep (normal-pipeline lint addition, not a gate change).",
     "type": "improvement",
     "priority": "low",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-08T13:46:03Z",
-    "pr_url": "",
-    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): UNBLOCKED \u2014 both sequencing dependencies merged (PR #13 seed-0005, seed-0005c markup math now in packages/domain). booking.ts grew 531 -> 711 lines meanwhile (seed-0005b/d/e + spec-gap-0002 claim-gate work). Recommend grooming bump low -> medium. Witness: wc -l in regress-iter-3 transcript. | Promoted to todo by Kitchen Loop backlog grooming (iteration 3). Score: 9/15 (U:2 A:4 I:3) \u2014 both sequencing deps merged (PR #13 seed-0005, seed-0005c); booking.ts now 711 lines on the money path. Regress recommended a low->medium priority bump; grooming leaves priority edits to triage/operator (state-only rule).\nSweep iter-3 (2026-07-10, regress run): booking.ts is now 754 lines (was 531 when filed) \u2014 grew via seed-0005d/e + seed-0015 claim-gate work. The HARD SEQUENCING blockers (PR #13 / seed-0005c) have long merged, so this ticket is unblocked, and the file is the repo's largest outlier by ~300 lines. Witness: quality-sweep-iter-3.md outlier table."
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/48",
+    "notes": "Iteration-3 regress re-run delta sweep (2026-07-09): UNBLOCKED \u2014 both sequencing dependencies merged (PR #13 seed-0005, seed-0005c markup math now in packages/domain). booking.ts grew 531 -> 711 lines meanwhile (seed-0005b/d/e + spec-gap-0002 claim-gate work). Recommend grooming bump low -> medium. Witness: wc -l in regress-iter-3 transcript. | Promoted to todo by Kitchen Loop backlog grooming (iteration 3). Score: 9/15 (U:2 A:4 I:3) \u2014 both sequencing deps merged (PR #13 seed-0005, seed-0005c); booking.ts now 711 lines on the money path. Regress recommended a low->medium priority bump; grooming leaves priority edits to triage/operator (state-only rule).\nSweep iter-3 (2026-07-10, regress run): booking.ts is now 754 lines (was 531 when filed) \u2014 grew via seed-0005d/e + seed-0015 claim-gate work. The HARD SEQUENCING blockers (PR #13 / seed-0005c) have long merged, so this ticket is unblocked, and the file is the repo's largest outlier by ~300 lines. Witness: quality-sweep-iter-3.md outlier table.",
+    "merged": "2026-07-12T02:30:00Z",
+    "merge_commit": "4707a41"
   },
   {
     "id": "17835183631278830499",
@@ -503,10 +507,13 @@
     "body": "PR #29 pr-auditor SPEC-SILENT: FR-014 (specs/006-marketplace-v0/spec.md ~line 94) says \"listing licensed (with amounts: ...)\" without prescribing an event type. The implementation extended the existing take_rate_accrued PMF event to carry the full split (priceMinor, amountMinor=platform take, sellerCreditMinor) rather than adding a new event, and recorded this reading in the PR body in lieu of a spec amendment. Amend spec 006 to pin the FR-014->take_rate_accrued mapping so code does not silently define the spec (SPEC-SILENT discipline). Docs-only.",
     "type": "improvement",
     "priority": "low",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-10T00:00:00Z",
     "blockedBy": [],
-    "notes": "Filed by operator from the PR #29 pr-auditor review (2026-07-10). Non-blocking; #29 merged."
+    "notes": "Filed by operator from the PR #29 pr-auditor review (2026-07-10). Non-blocking; #29 merged.",
+    "merged": "2026-07-12T02:30:00Z",
+    "merge_commit": "4707a41",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/48"
   },
   {
     "id": "seed-0006b-a",
@@ -514,10 +521,13 @@
     "body": "PR #29 pr-auditor coverage note: in packages/api/src/__tests__/l3-marketplace.test.ts the forced-fault conservation test asserts the take_rate_accrued rollback only transitively (via the revenueShareLedger count conserved to zero), because tradeCounts.resellerPmf counts reseller-side rows while the take_rate row is attributed to the SELLER. Add a direct seller-side take_rate_accrued zero-count on the failure path for a strictly stronger conservation witness. Happy-path already asserts the seller-side row directly.",
     "type": "improvement",
     "priority": "low",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-10T00:00:00Z",
     "blockedBy": [],
-    "notes": "Filed by operator from the PR #29 pr-auditor review (2026-07-10). Non-blocking; #29 merged."
+    "notes": "Filed by operator from the PR #29 pr-auditor review (2026-07-10). Non-blocking; #29 merged.",
+    "merged": "2026-07-12T02:30:00Z",
+    "merge_commit": "4707a41",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/48"
   },
   {
     "id": "seed-0016",
@@ -844,9 +854,11 @@
     "body": "Bug-sized -- test-fixture-only, discovered during seed-0031's live re-verification pass (iteration 4 execute), not filed as a product defect.\n\nPROBLEM: scenarios/incubating/content-library-media-gap/scenario.mjs defines STOCK_SENTINEL = \"eiffel-dusk-sentinel.jpg\" and STOCK_URL = \"https://images.example.test/\" + STOCK_SENTINEL (line ~167-171). Two checks require STOCK_URL to be present in the client payload/page (FR-009 affordance, the url-bearing gallery image legitimately crosses the trust boundary) while two STRENGTHENED checks (FR-010) require STOCK_SENTINEL to be ABSENT (the storageKey path must never cross). Since STOCK_URL literally contains STOCK_SENTINEL as a substring, the second pair of checks can never pass -- confirmed by running the scenario live against the built stack (both checks failed with the exact same string collision, not a real leak).\n\nFILE POINTERS: scenarios/incubating/content-library-media-gap/scenario.mjs:167-171 (constant definitions), :265-274 (clientView JSON check), :284-293 (/view SSR page check).\n\nFIX: rename STOCK_SENTINEL to a string that does not overlap with STOCK_URL's filename (e.g. keep STOCK_URL's filename distinct from the storageKey-only sentinel it is meant to represent), or derive STOCK_SENTINEL from a genuinely different fixture value than the url-bearing image. Re-run the scenario live to confirm both checks pass once fixed, then flip this scenario's KITCHENLOOP-COVERAGE content-library/api/client and content-library/web/client entries back to pass (currently marked fail with this ticket cited, seed-0031 bundle).\n\nACCEPTANCE CRITERIA:\n- [ ] STOCK_SENTINEL no longer collides with STOCK_URL\n- [ ] scenarios/incubating/content-library-media-gap/scenario.mjs passes all checks live against the built compose image\n- [ ] The two COVERAGE entries flip back to pass with an updated note\n\nSource: iteration 4 execute (kitchen/batch-coverage-scenario-polish), discovered while live-verifying seed-0031's coverage derivation tool against all 8 incubating scenarios.\n\nPriority Score: Severity 1 (test-only, no product impact) + Frequency 1 (single scenario, deterministic) + Fix effort 3 (rename one constant, small) = 5/9 -> low",
     "type": "bug",
     "priority": "low",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-11T21:25:17Z",
-    "pr_url": "",
-    "blockedBy": []
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/48",
+    "blockedBy": [],
+    "merged": "2026-07-12T02:30:00Z",
+    "merge_commit": "4707a41"
   }
 ]
