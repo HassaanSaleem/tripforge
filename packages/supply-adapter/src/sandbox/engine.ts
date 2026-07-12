@@ -130,3 +130,31 @@ export class SandboxSupplyEngine<TOffer extends OfferBase> {
     return [...this.bookings].filter(([, b]) => !b.cancelled).map(([id]) => id);
   }
 }
+
+/**
+ * Shared quote/book/cancel delegation for the sandbox adapters (QS3-2,
+ * quality-sweep-iter-3.md finding 2) — every port speaks the same three verbs
+ * against its own engine instance; only `search` (the fixture shape) differs
+ * per component. Concrete adapters build their engine, register fixtures, then
+ * call `super(engine)`.
+ */
+export abstract class SandboxPortAdapter<TOffer extends OfferBase> {
+  protected constructor(protected readonly engine: SandboxSupplyEngine<TOffer>) {}
+
+  quote(offerId: string): Promise<QuoteOutcome<QuoteBase>> {
+    return Promise.resolve(this.engine.quote(offerId));
+  }
+
+  book(quoteId: string): Promise<BookingOutcome> {
+    return Promise.resolve(this.engine.book(quoteId));
+  }
+
+  cancel(bookingId: string): Promise<CancelOutcome> {
+    return Promise.resolve(this.engine.cancel(bookingId));
+  }
+
+  /** Read-only supplier-state witness for conservation tests — see engine. */
+  liveBookingIds(): string[] {
+    return this.engine.liveBookingIds();
+  }
+}

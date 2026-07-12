@@ -365,6 +365,17 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
       // ZERO survivors: no license, no ledger row, no copy, no PMF event.
       expect(await tradeCounts({ seller: seller.agencyId, reseller: reseller.agencyId })).toEqual(before);
 
+      // tradeCounts.resellerPmf only counts reseller-side rows, but
+      // take_rate_accrued is attributed to the SELLER — assert it directly
+      // rather than transitively through the ledger-row count (seed-0006b-a,
+      // strictly stronger than the ledger-only witness above; the happy path
+      // already asserts the seller-side row directly).
+      const sellerTake = await handle.db
+        .select({ n: count() })
+        .from(pmfEvent)
+        .where(and(eq(pmfEvent.agencyId, seller.agencyId), eq(pmfEvent.type, "take_rate_accrued")));
+      expect(Number(sellerTake[0]?.n)).toBe(0);
+
       // And the hold on nothing: the same reseller can still license cleanly.
       const retry = await callerFor(reseller).workspace.marketplace.licenseListing({ listingId: listed.listingId });
       expect(retry.status).toBe("licensed");

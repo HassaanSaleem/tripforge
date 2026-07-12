@@ -1,28 +1,23 @@
 // Deterministic sandbox transfer adapter (Constitution V / INV-019). Licensed
 // third-party transfer providers only — never ride-hailing (PRD non-goal).
 import { money } from "@tripforge/domain";
-import type { BookingOutcome, CancelOutcome, QuoteOutcome } from "../ports/common.js";
-import type {
-  TransferOffer,
-  TransferPort,
-  TransferQuote,
-  TransferSearchCriteria,
-} from "../ports/transfer.js";
-import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxSupplyEngine } from "./engine.js";
+import type { TransferOffer, TransferPort, TransferSearchCriteria } from "../ports/transfer.js";
+import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxPortAdapter, SandboxSupplyEngine } from "./engine.js";
 
 const QUOTE_HOLD_MS = 10 * 60 * 1000;
 
-export class SandboxTransferAdapter implements TransferPort {
-  private readonly engine: SandboxSupplyEngine<TransferOffer>;
-
+export class SandboxTransferAdapter
+  extends SandboxPortAdapter<TransferOffer>
+  implements TransferPort
+{
   constructor(now: () => number = () => Date.now()) {
-    this.engine = new SandboxSupplyEngine<TransferOffer>({
+    const engine = new SandboxSupplyEngine<TransferOffer>({
       component: "transfer",
       holdMs: QUOTE_HOLD_MS,
       merchantOfRecord: "supplier",
       now,
     });
-    this.engine.register([
+    engine.register([
       {
         offerId: SANDBOX_FAIL_BOOK_OFFER_ID,
         content: { title: "Sandbox Always-Fails Transfer" },
@@ -30,6 +25,7 @@ export class SandboxTransferAdapter implements TransferPort {
         mode: "private",
       },
     ]);
+    super(engine);
   }
 
   async search(criteria: TransferSearchCriteria): Promise<TransferOffer[]> {
@@ -72,22 +68,5 @@ export class SandboxTransferAdapter implements TransferPort {
         mode: "shared",
       },
     ]);
-  }
-
-  async quote(offerId: string): Promise<QuoteOutcome<TransferQuote>> {
-    return this.engine.quote(offerId);
-  }
-
-  async book(quoteId: string): Promise<BookingOutcome> {
-    return this.engine.book(quoteId);
-  }
-
-  async cancel(bookingId: string): Promise<CancelOutcome> {
-    return this.engine.cancel(bookingId);
-  }
-
-  /** Read-only supplier-state witness for conservation tests — see engine. */
-  liveBookingIds(): string[] {
-    return this.engine.liveBookingIds();
   }
 }

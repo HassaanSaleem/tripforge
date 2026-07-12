@@ -44,8 +44,8 @@
 // [
 //   { "feature": "content-library", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T3", "note": "draft refuses media key typed; dormant media fields round-trip []; scraped-web source refused on read (D-006.c); no attach affordance exists (the gap)" },
 //   { "feature": "content-library", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T3", "note": "licensing a media-bearing listing succeeds; white-label copy carries the gallery verbatim incl. original agency's agent-upload attribution" },
-//   { "feature": "content-library", "platform": "api", "user_type": "client", "result": "fail", "iteration": 4, "tier": "T3", "note": "live re-verify (seed-0031 bundle) found the STRENGTHENED FR-010 check self-contradictory, not a product bug: STOCK_SENTINEL ('eiffel-dusk-sentinel.jpg') is a literal substring of STOCK_URL, whose presence the check ALSO requires (FR-009 affordance) -- ticketed for a scenario-only fixture fix, not filed as a product defect" },
-//   { "feature": "content-library", "platform": "web", "user_type": "client", "result": "fail", "iteration": 4, "tier": "T3", "note": "live re-verify (seed-0031 bundle): SAME self-contradictory fixture bug as the api/client entry, on the /view SSR page's copy of the check" }
+//   { "feature": "content-library", "platform": "api", "user_type": "client", "result": "pass", "iteration": 5, "tier": "T3", "note": "seed-0034 fix: STOCK_URL_FILENAME and STOCK_STORAGE_SENTINEL are now distinct fixture filenames, so the FR-009 url-presence check and the FR-010 storageKey-absence check no longer contradict each other; re-verified live against the built compose image, both checks pass" },
+//   { "feature": "content-library", "platform": "web", "user_type": "client", "result": "pass", "iteration": 5, "tier": "T3", "note": "seed-0034 fix: same fixture fix as the api/client entry (STOCK_URL_FILENAME vs STOCK_STORAGE_SENTINEL), on the /view SSR page's copy of the check; re-verified live, both checks pass" }
 // ]
 // KITCHENLOOP-COVERAGE-END
 
@@ -164,8 +164,14 @@ const TRIP = {
 // legitimately renders it — the upload entry stays storageKey-ONLY to prove
 // v0 still correctly has no CDN resolution for that path (a scoped boundary,
 // not a gap).
-const STOCK_SENTINEL = "eiffel-dusk-sentinel.jpg";
-const STOCK_URL = `https://images.example.test/${STOCK_SENTINEL}`;
+// Two DISTINCT filenames on purpose (seed-0034): STOCK_URL_FILENAME legitimately
+// crosses the trust boundary (FR-009 affordance) while STOCK_STORAGE_SENTINEL
+// lives only in the internal storageKey and must never cross (FR-010). They used
+// to share one constant, so STOCK_URL's required presence made the "sentinel
+// absent" leak check unsatisfiable by construction (not a real leak).
+const STOCK_URL_FILENAME = "eiffel-dusk-view.jpg";
+const STOCK_URL = `https://images.example.test/${STOCK_URL_FILENAME}`;
+const STOCK_STORAGE_SENTINEL = "eiffel-dusk-storagekey-only-sentinel.jpg";
 const UPLOAD_SENTINEL = "meridian-walking-tour-sentinel.jpg";
 const UPLOAD_ATTRIBUTION = "© Meridian media desk (author agency)";
 const STOCK_ALT = "Eiffel Tower at dusk";
@@ -173,7 +179,7 @@ const VALID_GALLERY = [
   {
     id: "media-stock-1",
     kind: "image",
-    storageKey: `agency-media/${STOCK_SENTINEL}`,
+    storageKey: `agency-media/${STOCK_STORAGE_SENTINEL}`,
     url: STOCK_URL,
     source: "licensed-stock",
     alt: STOCK_ALT,
@@ -241,7 +247,7 @@ async function main() {
   check(
     "agent surface: workspace.itinerary.get returns the media-bearing document intact (INV-001 re-validation passes)",
     gallery.length === 2 &&
-      gallery.some((m) => m.source === "licensed-stock" && m.storageKey?.includes(STOCK_SENTINEL)) &&
+      gallery.some((m) => m.source === "licensed-stock" && m.storageKey?.includes(STOCK_STORAGE_SENTINEL)) &&
       gallery.some((m) => m.source === "agent-upload" && m.attribution === UPLOAD_ATTRIBUTION),
     JSON.stringify(gallery).slice(0, 300),
   );
@@ -269,7 +275,7 @@ async function main() {
       !payload.includes("licensed-stock") &&
       !payload.includes("agent-upload") &&
       !payload.includes(UPLOAD_ATTRIBUTION) &&
-      !payload.includes(STOCK_SENTINEL) && // the storageKey path, not the url — never crosses
+      !payload.includes(STOCK_STORAGE_SENTINEL) && // the storageKey path, not the url — never crosses
       !payload.includes(UPLOAD_SENTINEL), // storageKey-only entry — no url, correctly absent entirely
     payload.slice(0, 300),
   );
@@ -287,7 +293,7 @@ async function main() {
       !viewPage.text.includes("licensed-stock") &&
       !viewPage.text.includes("agent-upload") &&
       !viewPage.text.includes(UPLOAD_ATTRIBUTION) &&
-      !viewPage.text.includes(STOCK_SENTINEL) &&
+      !viewPage.text.includes(STOCK_STORAGE_SENTINEL) &&
       !viewPage.text.includes(UPLOAD_SENTINEL),
     `status ${viewPage.res.status}`,
   );

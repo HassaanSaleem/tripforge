@@ -7,10 +7,10 @@
 # (seed-0031 — replaces the old hand-appended-by-two-phases convention, which
 # had silently drifted from both loop-state.md and the scenario files.)
 
-last_updated: "2026-07-11"
+last_updated: "2026-07-12"
 total_combos: 36   # 6 features x 2 platforms x 3 user_types (kitchenloop.yaml spec.dimensions)
-tested_combos: 24
-coverage_pct: 66.7
+tested_combos: 27
+coverage_pct: 75
 
 tested:
   # ── iteration 2 ──
@@ -19,10 +19,6 @@ tested:
     result: "pass"   # sign-up -> FORBIDDEN pre-membership -> org create/set-active -> whoami {agencyId, owner}; two tenants isolated (INV-004) — witness: agent-onboarding-live
     tier: "T1"
   # ── iteration 3 ──
-  - combo: { feature: "booking", platform: "api", user_type: "agent-reseller" }
-    iteration: 3
-    result: "pass"   # reseller quotes+books net-rate inventory inside their licensed copy at their own markup — witness: reseller-books-copy-live
-    tier: "T2"
   - combo: { feature: "booking", platform: "api", user_type: "agent-seller" }
     iteration: 3
     result: "pass"   # quote/book at 1800 bps; markup_ledger conserves net+markup=sell incl. FX-converted nets — witness: golden-path-trade-live
@@ -75,35 +71,43 @@ tested:
     iteration: 3
     result: "pass"   # live browser (companion pass): license receipt renders the conserved split 250.00 = 225.00 + 25.00 — witness: golden-path-trade-live
     tier: "T2"
-  - combo: { feature: "trust", platform: "api", user_type: "agent-reseller" }
-    iteration: 3
-    result: "pass"   # legitimate reseller with a licensed copy still cannot itinerary.get the seller's original; IDOR row-substitution probe refused — witness: trust-demand-side-live
-    tier: "T2"
   - combo: { feature: "trust", platform: "api", user_type: "client" }
     iteration: 3
     result: "pass"   # anonymous/traveler session hitting the full agent-gated surface -- refused live end-to-end — witness: trust-demand-side-live
     tier: "T2"
-  - combo: { feature: "trust", platform: "web", user_type: "agent-reseller" }
-    iteration: 3
-    result: "pass"   # live browser (companion pass, evidence .kitchenloop/evidence/iter-3-ideate-f/): reseller seat walked live — witness: trust-demand-side-live
-    tier: "T2"
   # ── iteration 4 ──
+  - combo: { feature: "booking", platform: "api", user_type: "agent-reseller" }
+    iteration: 4
+    result: "pass"   # seed-0034 backfill: reseller quotes+books a self-built itinerary at a custom 24% markup; markup_ledger conserves net+markup=sell on all 6 rows -- iteration-4-report.md — witness: reseller-builds-fresh
+    tier: "T2"
   - combo: { feature: "booking", platform: "api", user_type: "client" }
     iteration: 4
     result: "pass"   # client share link on a licensed white-label copy; price-fidelity promoted from a logged observation to a hard per-item zero-delta assertion (seed-0033), confirming seed-0025's fix (PR #36) generalizes to the licensed-copy path — witness: reseller-books-copy-live
     tier: "T2"
-  - combo: { feature: "content-library", platform: "api", user_type: "client" }
+  - combo: { feature: "booking", platform: "web", user_type: "agent-reseller" }
     iteration: 4
-    result: "fail"   # live re-verify (seed-0031 bundle) found the STRENGTHENED FR-010 check self-contradictory, not a product bug: STOCK_SENTINEL ('eiffel-dusk-sentinel.jpg') is a literal substring of STOCK_URL, whose presence the check ALSO requires (FR-009 affordance) -- ticketed for a scenario-only fixture fix, not filed as a product defect — witness: content-library-media-gap
-    tier: "T3"
-  - combo: { feature: "content-library", platform: "web", user_type: "client" }
+    result: "pass"   # seed-0034 backfill: companion live-browser pass, custom 20% markup quote -> 6 holds -> book -> confirmation via the web UI -- iteration-4-report.md — witness: reseller-builds-fresh
+    tier: "T2"
+  - combo: { feature: "itinerary-builder", platform: "api", user_type: "agent-reseller" }
     iteration: 4
-    result: "fail"   # live re-verify (seed-0031 bundle): SAME self-contradictory fixture bug as the api/client entry, on the /view SSR page's copy of the check — witness: content-library-media-gap
-    tier: "T3"
+    result: "pass"   # seed-0034 backfill: fresh reseller identity (no marketplace history) drafts an ORIGINAL itinerary via workspace.itinerary.draft; provenance names the reseller as original author with empty lineage -- iteration-4-report.md — witness: reseller-builds-fresh
+    tier: "T2"
+  - combo: { feature: "itinerary-builder", platform: "web", user_type: "agent-reseller" }
+    iteration: 4
+    result: "pass"   # seed-0034 backfill: companion live-browser pass (sign-up -> AI planner form drafts an original Prague trip), evidence .kitchenloop/evidence/iter-4-ideate/ -- iteration-4-report.md — witness: reseller-builds-fresh
+    tier: "T2"
   - combo: { feature: "revenue-share", platform: "api", user_type: "agent-seller" }
     iteration: 4
     result: "pass"   # seller's own listing card projects licenseCount + sellerCreditTotalMinor conserved from the ledger; other agencies' browse views see null for the same listing (seed-0030 gap closed + re-verified in this backfill) — witness: revenue-share-seller-visibility
     tier: "T3"
+  - combo: { feature: "trust", platform: "api", user_type: "agent-reseller" }
+    iteration: 4
+    result: "pass"   # seed-0034 backfill: anonymous client-view formally ASSERTS booked-price fidelity (not just logged) on the reseller-self-built path (BUG-1/seed-0025 class); payload structurally free of agent-confidential fields -- iteration-4-report.md — witness: reseller-builds-fresh
+    tier: "T2"
+  - combo: { feature: "trust", platform: "web", user_type: "agent-reseller" }
+    iteration: 4
+    result: "pass"   # seed-0034 backfill: companion live-browser pass, signed-out visitor opens the /view/<token> share link and sees the branded booked trip -- iteration-4-report.md — witness: reseller-builds-fresh
+    tier: "T2"
   - combo: { feature: "trust", platform: "web", user_type: "agent-seller" }
     iteration: 4
     result: "pass"   # live re-verify (seed-0031 bundle): anon /workspace membership prompt; authenticated /workspace greeting shows agency name + owner role — witness: agent-onboarding-live
@@ -112,3 +116,12 @@ tested:
     iteration: 4
     result: "pass"   # live re-verify (seed-0031 bundle): BUG-2 (INV-020 /view tab title leak) fixed by seed-0011/seed-0012 confirmed still fixed -- was incorrectly still marked fail from iteration 2, the exact class of drift this ticket exists to prevent — witness: agent-onboarding-live
     tier: "T1"
+  # ── iteration 5 ──
+  - combo: { feature: "content-library", platform: "api", user_type: "client" }
+    iteration: 5
+    result: "pass"   # seed-0034 fix: STOCK_URL_FILENAME and STOCK_STORAGE_SENTINEL are now distinct fixture filenames, so the FR-009 url-presence check and the FR-010 storageKey-absence check no longer contradict each other; re-verified live against the built compose image, both checks pass — witness: content-library-media-gap
+    tier: "T3"
+  - combo: { feature: "content-library", platform: "web", user_type: "client" }
+    iteration: 5
+    result: "pass"   # seed-0034 fix: same fixture fix as the api/client entry (STOCK_URL_FILENAME vs STOCK_STORAGE_SENTINEL), on the /view SSR page's copy of the check; re-verified live, both checks pass — witness: content-library-media-gap
+    tier: "T3"

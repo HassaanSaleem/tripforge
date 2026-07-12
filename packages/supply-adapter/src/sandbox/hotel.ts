@@ -5,31 +5,29 @@
 // the agency collects from the client and pays net, so the agency is merchant
 // of record (research D7; real adapters supply the true value).
 import { money } from "@tripforge/domain";
-import type { BookingOutcome, CancelOutcome, QuoteOutcome } from "../ports/common.js";
-import type { HotelOffer, HotelPort, HotelQuote, HotelSearchCriteria } from "../ports/hotel.js";
-import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxSupplyEngine } from "./engine.js";
+import type { HotelOffer, HotelPort, HotelSearchCriteria } from "../ports/hotel.js";
+import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxPortAdapter, SandboxSupplyEngine } from "./engine.js";
 
 // A hotel quote holds for this long before it must be re-quoted (INV-006).
 // Windows differ per component so nothing can assume a global TTL (research D6).
 const QUOTE_HOLD_MS = 15 * 60 * 1000;
 
-export class SandboxHotelAdapter implements HotelPort {
-  private readonly engine: SandboxSupplyEngine<HotelOffer>;
-
+export class SandboxHotelAdapter extends SandboxPortAdapter<HotelOffer> implements HotelPort {
   constructor(now: () => number = () => Date.now()) {
-    this.engine = new SandboxSupplyEngine<HotelOffer>({
+    const engine = new SandboxSupplyEngine<HotelOffer>({
       component: "hotel",
       holdMs: QUOTE_HOLD_MS,
       merchantOfRecord: "agency",
       now,
     });
-    this.engine.register([
+    engine.register([
       {
         offerId: SANDBOX_FAIL_BOOK_OFFER_ID,
         content: { title: "Sandbox Always-Fails Hotel" },
         netRate: money(9_900, "USD"),
       },
     ]);
+    super(engine);
   }
 
   async search(criteria: HotelSearchCriteria): Promise<HotelOffer[]> {
@@ -49,22 +47,5 @@ export class SandboxHotelAdapter implements HotelPort {
         netRate: money(12_500, "USD"),
       },
     ]);
-  }
-
-  async quote(offerId: string): Promise<QuoteOutcome<HotelQuote>> {
-    return this.engine.quote(offerId);
-  }
-
-  async book(quoteId: string): Promise<BookingOutcome> {
-    return this.engine.book(quoteId);
-  }
-
-  async cancel(bookingId: string): Promise<CancelOutcome> {
-    return this.engine.cancel(bookingId);
-  }
-
-  /** Read-only supplier-state witness for conservation tests — see engine. */
-  liveBookingIds(): string[] {
-    return this.engine.liveBookingIds();
   }
 }

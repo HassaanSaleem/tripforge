@@ -32,6 +32,17 @@
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/reseller-builds-fresh/scenario.mjs
 // Exit 0 = full journey passes; non-zero = a real failure.
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "itinerary-builder", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 4, "tier": "T2", "note": "seed-0034 backfill: fresh reseller identity (no marketplace history) drafts an ORIGINAL itinerary via workspace.itinerary.draft; provenance names the reseller as original author with empty lineage -- iteration-4-report.md" },
+//   { "feature": "itinerary-builder", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 4, "tier": "T2", "note": "seed-0034 backfill: companion live-browser pass (sign-up -> AI planner form drafts an original Prague trip), evidence .kitchenloop/evidence/iter-4-ideate/ -- iteration-4-report.md" },
+//   { "feature": "booking", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 4, "tier": "T2", "note": "seed-0034 backfill: reseller quotes+books a self-built itinerary at a custom 24% markup; markup_ledger conserves net+markup=sell on all 6 rows -- iteration-4-report.md" },
+//   { "feature": "booking", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 4, "tier": "T2", "note": "seed-0034 backfill: companion live-browser pass, custom 20% markup quote -> 6 holds -> book -> confirmation via the web UI -- iteration-4-report.md" },
+//   { "feature": "trust", "platform": "api", "user_type": "agent-reseller", "result": "pass", "iteration": 4, "tier": "T2", "note": "seed-0034 backfill: anonymous client-view formally ASSERTS booked-price fidelity (not just logged) on the reseller-self-built path (BUG-1/seed-0025 class); payload structurally free of agent-confidential fields -- iteration-4-report.md" },
+//   { "feature": "trust", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 4, "tier": "T2", "note": "seed-0034 backfill: companion live-browser pass, signed-out visitor opens the /view/<token> share link and sees the branded booked trip -- iteration-4-report.md" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 import { execFileSync } from "node:child_process";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
