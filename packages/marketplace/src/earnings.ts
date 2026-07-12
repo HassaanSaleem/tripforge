@@ -8,7 +8,7 @@
 import { eq, and, count, inArray, marketplaceLicense, revenueShareLedger, sum, type Db } from "@tripforge/db";
 import type { DbTx } from "./types.js";
 
-export interface EarningsAggregate {
+interface EarningsAggregate {
   licenseCount: number;
   sellerCreditTotalMinor: number;
 }

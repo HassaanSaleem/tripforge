@@ -9,97 +9,36 @@
 // each successful action (FR-011, research D6) — no optimistic marketplace
 // state is ever invented client-side. Presentation rides the seed-0009s theme
 // kit (.tf-*).
+//
+// This orchestrator owns state + server calls only; the browse/listing grid,
+// license/receipt flow, and sell form render via sibling components in this
+// directory (file-length quality-sweep, QS3-9).
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
-import { trpc, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
-import { formatMinorAmount } from "../../../lib/planner-form.js";
+import { trpc } from "../../../lib/trpc/client.js";
 import {
   createListingFailureMessage,
   deactivateListingFailureMessage,
-  formatEarnings,
-  formatRating,
-  formatShareBps,
   licenseFailureMessage,
   marketplaceErrorMessage,
   rateListingFailureMessage,
   toCreateListingInput,
-  type LicenseReceipt,
   type ListingFormValues,
   type MarketplaceListing,
 } from "../../../lib/marketplace-flow.js";
-
-type MyItinerary = MyItinerariesOutput["itineraries"][number];
-
-type BrowseState =
-  | { phase: "loading" }
-  | { phase: "loaded"; listings: MarketplaceListing[] }
-  | { phase: "failed"; message: string };
-
-type PickerState =
-  | { phase: "loading" }
-  | { phase: "loaded"; itineraries: MyItinerary[] }
-  | { phase: "failed"; message: string };
-
-type ListingFormState =
-  | { phase: "idle" }
-  | { phase: "submitting" }
-  | { phase: "listed" }
-  | { phase: "refused"; message: string };
-
-type LicenseState =
-  | { listingId: string; kind: "busy" }
-  | { listingId: string; kind: "receipt"; receipt: LicenseReceipt; title: string }
-  | { listingId: string; kind: "refused"; message: string }
-  | null;
-
-type RatingState =
-  | { listingId: string; kind: "busy" }
-  | { listingId: string; kind: "rated"; ratingAverage: number; ratingCount: number }
-  | { listingId: string; kind: "refused"; message: string }
-  | null;
-
-type DeactivateState =
-  | { listingId: string; kind: "busy" }
-  | { listingId: string; kind: "deactivated" }
-  | { listingId: string; kind: "refused"; message: string }
-  | null;
-
-const INITIAL_FORM: ListingFormValues = {
-  itineraryId: "",
-  title: "",
-  feeMajor: "",
-  licenseTerms: "",
-  sharePercent: "10",
-};
-
-/**
- * Read the listing form's values from the DOM at submit time. Some real input
- * paths (browser autofill, password managers, automation fills) set a field's
- * value without the events a controlled input needs, so React state can lag
- * what the seller actually sees — and a refusal re-render would then silently
- * snap a declared term (e.g. the revenue share) back to its default
- * (seed-0009d-b, Constitution VI: the recorded split must match the declared
- * terms). The DOM is what the seller saw when they pressed submit.
- */
-function readListingFormValues(form: HTMLFormElement): ListingFormValues {
-  const read = (name: string): string => {
-    const field = form.elements.namedItem(name);
-    return field instanceof HTMLInputElement ||
-      field instanceof HTMLSelectElement ||
-      field instanceof HTMLTextAreaElement
-      ? field.value
-      : "";
-  };
-  return {
-    itineraryId: read("listItineraryId"),
-    title: read("listingTitle"),
-    feeMajor: read("listingFee"),
-    licenseTerms: read("listingTerms"),
-    sharePercent: read("listingShare"),
-  };
-}
+import { LicenseReceiptPanel } from "./license-receipt-panel.js";
+import { ListingCard } from "./listing-browse.js";
+import { ListingForm, readListingFormValues } from "./listing-form.js";
+import {
+  INITIAL_FORM,
+  type BrowseState,
+  type DeactivateState,
+  type LicenseState,
+  type ListingFormState,
+  type PickerState,
+  type RatingState,
+} from "./marketplace-panel-types.js";
 
 export function MarketplacePanel() {
   const [browse, setBrowse] = useState<BrowseState>({ phase: "loading" });
@@ -305,304 +244,5 @@ export function MarketplacePanel() {
         />
       </section>
     </div>
-  );
-}
-
-function ListingCard({
-  listing,
-  license,
-  onLicense,
-  rating,
-  onRate,
-  deactivate,
-  onDeactivate,
-}: {
-  listing: MarketplaceListing;
-  license: LicenseState;
-  onLicense: (listing: MarketplaceListing) => void;
-  rating: RatingState;
-  onRate: (listingId: string, stars: number, comment: string) => void;
-  deactivate: DeactivateState;
-  onDeactivate: (listingId: string) => void;
-}) {
-  const active = license !== null && license.listingId === listing.listingId;
-  const busy = license?.kind === "busy";
-  const activeDeactivate = deactivate !== null && deactivate.listingId === listing.listingId;
-  const deactivating = deactivate?.kind === "busy";
-  return (
-    <article className="tf-market-card" data-testid="listing-card">
-      <h3>{listing.title}</h3>
-      <p className="tf-market-seller">
-        by <b>{listing.sellerAgencyName}</b> · {formatRating(listing.ratingAverage, listing.ratingCount)}
-      </p>
-      <p className="tf-price tf-market-price">{formatMinorAmount(listing.priceMinor, listing.currency)}</p>
-      <div className="tf-market-meta">
-        <span className="tf-badge">{formatShareBps(listing.revenueShareBps)} revenue share</span>
-        {listing.mine ? <span className="tf-badge tf-market-mine">Your listing</span> : null}
-      </div>
-      {listing.mine && listing.licenseCount !== null && listing.sellerCreditTotalMinor !== null ? (
-        <>
-          <p className="tf-market-earnings" data-testid="listing-earnings">
-            {formatEarnings(listing.licenseCount, listing.sellerCreditTotalMinor, listing.currency)}
-          </p>
-          <p className="tf-market-share-note" data-testid="listing-share-note">
-            Declared share applies to future resales — first-sale earnings above
-            use the platform&apos;s fixed take rate, not this share.
-          </p>
-        </>
-      ) : null}
-      <p className="tf-market-terms">{listing.licenseTerms}</p>
-      {listing.mine ? (
-        <>
-          <button
-            type="button"
-            className="tf-btn--ghost"
-            data-testid="deactivate-listing"
-            disabled={deactivating}
-            onClick={() => onDeactivate(listing.listingId)}
-          >
-            {activeDeactivate && deactivating ? "Taking off marketplace…" : "Take off marketplace"}
-          </button>
-          {activeDeactivate && deactivate.kind === "refused" ? <p role="alert">{deactivate.message}</p> : null}
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            className="tf-btn--cta"
-            disabled={busy}
-            onClick={() => onLicense(listing)}
-          >
-            {active && busy ? "Licensing…" : "License this trip"}
-          </button>
-          {active && license.kind === "refused" ? <p role="alert">{license.message}</p> : null}
-          <RatingControl listingId={listing.listingId} rating={rating} onRate={onRate} />
-        </>
-      )}
-    </article>
-  );
-}
-
-function RatingControl({
-  listingId,
-  rating,
-  onRate,
-}: {
-  listingId: string;
-  rating: RatingState;
-  onRate: (listingId: string, stars: number, comment: string) => void;
-}) {
-  const [stars, setStars] = useState(5);
-  const [comment, setComment] = useState("");
-  const active = rating !== null && rating.listingId === listingId;
-  const busy = rating?.kind === "busy";
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (busy) return;
-    onRate(listingId, stars, comment);
-  }
-
-  return (
-    <form className="tf-market-rate" data-testid="rate-listing-form" onSubmit={handleSubmit}>
-      <label htmlFor={`rateStars-${listingId}`}>
-        Your rating
-        <select
-          id={`rateStars-${listingId}`}
-          value={stars}
-          disabled={busy}
-          onChange={(e) => setStars(Number(e.target.value))}
-        >
-          {[5, 4, 3, 2, 1].map((n) => (
-            <option key={n} value={n}>
-              {n} star{n === 1 ? "" : "s"}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label htmlFor={`rateComment-${listingId}`}>
-        Comment (optional)
-        <input
-          id={`rateComment-${listingId}`}
-          type="text"
-          value={comment}
-          disabled={busy}
-          onChange={(e) => setComment(e.target.value)}
-        />
-      </label>
-      <button type="submit" className="tf-btn--ghost" disabled={busy}>
-        {active && busy ? "Submitting…" : "Submit rating"}
-      </button>
-      {active && rating.kind === "rated" ? (
-        <p data-testid="rate-listing-confirmed">Thanks — your rating is in.</p>
-      ) : null}
-      {active && rating.kind === "refused" ? <p role="alert">{rating.message}</p> : null}
-    </form>
-  );
-}
-
-function LicenseReceiptPanel({
-  state,
-}: {
-  state: Extract<NonNullable<LicenseState>, { kind: "receipt" }>;
-}) {
-  const { receipt, title } = state;
-  return (
-    <div data-testid="license-receipt" className="tf-confirmation tf-confirmation--ok tf-market-receipt">
-      <h3>Trip licensed — white-label copy created</h3>
-      <p>
-        “{title}” is now in your workspace as a white-label copy under your brand, with its
-        provenance and revenue-share terms travelling inside it.
-      </p>
-      <ul>
-        <li>
-          <span>License fee</span>
-          <span className="tf-price">{formatMinorAmount(receipt.priceMinor, receipt.currency)}</span>
-        </li>
-        <li>
-          <span>Seller credit</span>
-          <span className="tf-price">{formatMinorAmount(receipt.sellerCreditMinor, receipt.currency)}</span>
-        </li>
-        <li>
-          <span>Platform take</span>
-          <span className="tf-price">{formatMinorAmount(receipt.platformTakeMinor, receipt.currency)}</span>
-        </li>
-      </ul>
-      <p className="tf-confirmation-note">
-        Copy reference: <code>{receipt.copyItineraryId}</code>
-      </p>
-    </div>
-  );
-}
-
-function ListingForm({
-  picker,
-  values,
-  form,
-  pickedCurrency,
-  onUpdate,
-  onSubmit,
-}: {
-  picker: PickerState;
-  values: ListingFormValues;
-  form: ListingFormState;
-  pickedCurrency: string;
-  onUpdate: <K extends keyof ListingFormValues>(field: K, value: ListingFormValues[K]) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  if (picker.phase === "loading") {
-    return (
-      <p className="tf-drafting" aria-live="polite">
-        <span className="tf-spin" aria-hidden="true" />
-        Loading your itineraries…
-      </p>
-    );
-  }
-  if (picker.phase === "failed") {
-    return <p role="alert">{picker.message}</p>;
-  }
-  if (picker.itineraries.length === 0) {
-    return (
-      <p className="tf-market-empty" data-testid="no-itineraries">
-        Nothing to list yet — <Link href="/workspace">draft an itinerary in the workspace</Link>{" "}
-        first, then come back to put it on the marketplace.
-      </p>
-    );
-  }
-
-  const submitting = form.phase === "submitting";
-  return (
-    <>
-      <form onSubmit={onSubmit} className="tf-market-form">
-        <label htmlFor="listItineraryId">
-          Itinerary
-          <select
-            id="listItineraryId"
-            name="listItineraryId"
-            value={values.itineraryId}
-            disabled={submitting}
-            onChange={(e) => onUpdate("itineraryId", e.target.value)}
-          >
-            <option value="">Pick an itinerary…</option>
-            {picker.itineraries.map((itinerary) => (
-              <option key={itinerary.id} value={itinerary.id} disabled={itinerary.listing !== null}>
-                {itinerary.title} ({itinerary.currency})
-                {itinerary.listing !== null ? " — already listed" : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label htmlFor="listingTitle">
-          Listing title
-          <input
-            id="listingTitle"
-            name="listingTitle"
-            type="text"
-            placeholder="e.g. Paris on a budget — proven weekender"
-            value={values.title}
-            disabled={submitting}
-            onChange={(e) => onUpdate("title", e.target.value)}
-          />
-        </label>
-        <label htmlFor="listingFee">
-          License fee{pickedCurrency ? ` (${pickedCurrency})` : ""}
-          <input
-            id="listingFee"
-            name="listingFee"
-            type="number"
-            min={0}
-            step="0.01"
-            placeholder="e.g. 250"
-            value={values.feeMajor}
-            disabled={submitting}
-            aria-describedby={pickedCurrency ? undefined : "listingFeeHint"}
-            onChange={(e) => onUpdate("feeMajor", e.target.value)}
-          />
-        </label>
-        {/* Outside the label on purpose: a hint belongs in the field's
-            DESCRIPTION, not its accessible NAME (which label content becomes —
-            "itinerary" in the name would break the field's identity). */}
-        {pickedCurrency ? null : (
-          <small id="listingFeeHint">
-            Priced in the picked itinerary&apos;s own currency — pick one above.
-          </small>
-        )}
-        <label htmlFor="listingTerms">
-          License terms
-          <textarea
-            id="listingTerms"
-            name="listingTerms"
-            rows={3}
-            placeholder="e.g. White-label permitted; keep attribution lineage."
-            value={values.licenseTerms}
-            disabled={submitting}
-            onChange={(e) => onUpdate("licenseTerms", e.target.value)}
-          />
-        </label>
-        <label htmlFor="listingShare">
-          Revenue share %
-          <input
-            id="listingShare"
-            name="listingShare"
-            type="number"
-            min={0}
-            max={100}
-            step="0.01"
-            value={values.sharePercent}
-            disabled={submitting}
-            onChange={(e) => onUpdate("sharePercent", e.target.value)}
-          />
-        </label>
-        <button type="submit" className="tf-btn--cta" disabled={submitting}>
-          {submitting ? "Listing…" : "List it on the marketplace"}
-        </button>
-      </form>
-      {form.phase === "refused" ? <p role="alert">{form.message}</p> : null}
-      {form.phase === "listed" ? (
-        <p className="tf-market-listed" data-testid="listing-created">
-          Listed — your trip is live on the marketplace above.
-        </p>
-      ) : null}
-    </>
   );
 }

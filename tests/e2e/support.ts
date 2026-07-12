@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import { expect, type Page } from "@playwright/test";
 
-export interface AgencySignUp {
+interface AgencySignUp {
   name: string;
   email: string;
   password: string;

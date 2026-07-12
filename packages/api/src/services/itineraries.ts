@@ -7,7 +7,7 @@ import { and, desc, eq, itinerary as itineraryTable, marketplaceListing, scopedW
 import { ItinerarySchema, parseItinerary, type Itinerary, type MediaRef } from "@tripforge/itinerary-schema";
 import type { AgentSessionContext, Container } from "../context.js";
 
-export interface MyItineraryListing {
+interface MyItineraryListing {
   listingId: string;
   priceMinor: number;
   currency: string;
