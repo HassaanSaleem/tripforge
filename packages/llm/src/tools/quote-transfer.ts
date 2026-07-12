@@ -5,6 +5,7 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { TransferOffer, TransferSearchCriteria } from "@tripforge/supply-adapter";
+import { serializeOffers } from "./serialize-offers.js";
 
 const quoteTransferInput = z.strictObject({
   from: z.string().min(1).describe("Pickup location"),
@@ -16,18 +17,6 @@ const quoteTransferInput = z.strictObject({
 const _criteriaCheck: TransferSearchCriteria = {} as z.infer<typeof quoteTransferInput>;
 void _criteriaCheck;
 
-function serializeTransferOffers(offers: TransferOffer[]): string {
-  return JSON.stringify(
-    offers.map((o) => ({
-      offerId: o.offerId,
-      title: o.content.title,
-      netAmountMinor: o.netRate.amountMinor,
-      currency: o.netRate.currency,
-      mode: o.mode,
-    })),
-  );
-}
-
 export function quoteTransferTool(search: (criteria: TransferSearchCriteria) => Promise<TransferOffer[]>) {
   return betaZodTool({
     name: "quote_transfer",
@@ -36,6 +25,6 @@ export function quoteTransferTool(search: (criteria: TransferSearchCriteria) => 
       "providers). Returns offers with an offerId and an exact net price in " +
       "minor units. Only propose transfer offerIds this tool returned.",
     inputSchema: quoteTransferInput,
-    run: async (input) => serializeTransferOffers(await search(input)),
+    run: async (input) => serializeOffers(await search(input), (o) => ({ mode: o.mode })),
   });
 }

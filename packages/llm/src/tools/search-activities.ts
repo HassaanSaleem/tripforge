@@ -3,6 +3,7 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { ActivityOffer, ActivitySearchCriteria } from "@tripforge/supply-adapter";
+import { serializeOffers } from "./serialize-offers.js";
 
 const searchActivitiesInput = z.strictObject({
   destination: z.string().min(1).describe("City or area to search"),
@@ -13,18 +14,6 @@ const searchActivitiesInput = z.strictObject({
 const _criteriaCheck: ActivitySearchCriteria = {} as z.infer<typeof searchActivitiesInput>;
 void _criteriaCheck;
 
-function serializeActivityOffers(offers: ActivityOffer[]): string {
-  return JSON.stringify(
-    offers.map((o) => ({
-      offerId: o.offerId,
-      title: o.content.title,
-      netAmountMinor: o.netRate.amountMinor,
-      currency: o.netRate.currency,
-      durationMinutes: o.durationMinutes,
-    })),
-  );
-}
-
 export function searchActivitiesTool(search: (criteria: ActivitySearchCriteria) => Promise<ActivityOffer[]>) {
   return betaZodTool({
     name: "search_activities",
@@ -33,6 +22,6 @@ export function searchActivitiesTool(search: (criteria: ActivitySearchCriteria) 
       "with an offerId and an exact net price in minor units. Only propose " +
       "activity offerIds this tool returned.",
     inputSchema: searchActivitiesInput,
-    run: async (input) => serializeActivityOffers(await search(input)),
+    run: async (input) => serializeOffers(await search(input), (o) => ({ durationMinutes: o.durationMinutes })),
   });
 }

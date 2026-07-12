@@ -17,11 +17,13 @@ import { trpc, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
 import { formatMinorAmount } from "../../../lib/planner-form.js";
 import {
   createListingFailureMessage,
+  deactivateListingFailureMessage,
   formatEarnings,
   formatRating,
   formatShareBps,
   licenseFailureMessage,
   marketplaceErrorMessage,
+  rateListingFailureMessage,
   toCreateListingInput,
   type LicenseReceipt,
   type ListingFormValues,
@@ -49,6 +51,18 @@ type ListingFormState =
 type LicenseState =
   | { listingId: string; kind: "busy" }
   | { listingId: string; kind: "receipt"; receipt: LicenseReceipt; title: string }
+  | { listingId: string; kind: "refused"; message: string }
+  | null;
+
+type RatingState =
+  | { listingId: string; kind: "busy" }
+  | { listingId: string; kind: "rated"; ratingAverage: number; ratingCount: number }
+  | { listingId: string; kind: "refused"; message: string }
+  | null;
+
+type DeactivateState =
+  | { listingId: string; kind: "busy" }
+  | { listingId: string; kind: "deactivated" }
   | { listingId: string; kind: "refused"; message: string }
   | null;
 
@@ -93,6 +107,8 @@ export function MarketplacePanel() {
   const [values, setValues] = useState<ListingFormValues>(INITIAL_FORM);
   const [form, setForm] = useState<ListingFormState>({ phase: "idle" });
   const [license, setLicense] = useState<LicenseState>(null);
+  const [rating, setRating] = useState<RatingState>(null);
+  const [deactivate, setDeactivate] = useState<DeactivateState>(null);
 
   async function loadListings() {
     try {
@@ -195,6 +211,46 @@ export function MarketplacePanel() {
     }
   }
 
+  async function handleRate(listingId: string, stars: number, comment: string) {
+    if (rating?.kind === "busy") return;
+    setRating({ listingId, kind: "busy" });
+    try {
+      const outcome = await trpc.workspace.marketplace.rateListing.mutate({
+        listingId,
+        stars,
+        ...(comment.trim() === "" ? {} : { comment: comment.trim() }),
+      });
+      if (outcome.status === "rated") {
+        setRating({ listingId, kind: "rated", ratingAverage: outcome.ratingAverage, ratingCount: outcome.ratingCount });
+        // The aggregate on the card is server-derived (formatRating) — reload
+        // so every viewer's next render shows the same number (FR-011).
+        await loadListings();
+      } else {
+        setRating({ listingId, kind: "refused", message: rateListingFailureMessage(outcome) });
+      }
+    } catch (error) {
+      setRating({ listingId, kind: "refused", message: marketplaceErrorMessage(error) });
+    }
+  }
+
+  async function handleDeactivate(listingId: string) {
+    if (deactivate?.kind === "busy") return;
+    setDeactivate({ listingId, kind: "busy" });
+    try {
+      const outcome = await trpc.workspace.marketplace.deactivateListing.mutate({ listingId });
+      if (outcome.status === "deactivated") {
+        setDeactivate({ listingId, kind: "deactivated" });
+        // The listing must disappear from browse in place (FR-011) — no
+        // stale "active" card left over after taking it off the market.
+        await loadListings();
+      } else {
+        setDeactivate({ listingId, kind: "refused", message: deactivateListingFailureMessage(outcome) });
+      }
+    } catch (error) {
+      setDeactivate({ listingId, kind: "refused", message: marketplaceErrorMessage(error) });
+    }
+  }
+
   return (
     <div className="tf-market">
       <section className="tf-card" data-testid="marketplace-browse">
@@ -220,6 +276,10 @@ export function MarketplacePanel() {
                 listing={listing}
                 license={license}
                 onLicense={handleLicense}
+                rating={rating}
+                onRate={handleRate}
+                deactivate={deactivate}
+                onDeactivate={handleDeactivate}
               />
             ))}
           </div>
@@ -252,13 +312,23 @@ function ListingCard({
   listing,
   license,
   onLicense,
+  rating,
+  onRate,
+  deactivate,
+  onDeactivate,
 }: {
   listing: MarketplaceListing;
   license: LicenseState;
   onLicense: (listing: MarketplaceListing) => void;
+  rating: RatingState;
+  onRate: (listingId: string, stars: number, comment: string) => void;
+  deactivate: DeactivateState;
+  onDeactivate: (listingId: string) => void;
 }) {
   const active = license !== null && license.listingId === listing.listingId;
   const busy = license?.kind === "busy";
+  const activeDeactivate = deactivate !== null && deactivate.listingId === listing.listingId;
+  const deactivating = deactivate?.kind === "busy";
   return (
     <article className="tf-market-card" data-testid="listing-card">
       <h3>{listing.title}</h3>
@@ -282,18 +352,92 @@ function ListingCard({
         </>
       ) : null}
       <p className="tf-market-terms">{listing.licenseTerms}</p>
-      {listing.mine ? null : (
-        <button
-          type="button"
-          className="tf-btn--cta"
-          disabled={busy}
-          onClick={() => onLicense(listing)}
-        >
-          {active && busy ? "Licensing…" : "License this trip"}
-        </button>
+      {listing.mine ? (
+        <>
+          <button
+            type="button"
+            className="tf-btn--ghost"
+            data-testid="deactivate-listing"
+            disabled={deactivating}
+            onClick={() => onDeactivate(listing.listingId)}
+          >
+            {activeDeactivate && deactivating ? "Taking off marketplace…" : "Take off marketplace"}
+          </button>
+          {activeDeactivate && deactivate.kind === "refused" ? <p role="alert">{deactivate.message}</p> : null}
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            className="tf-btn--cta"
+            disabled={busy}
+            onClick={() => onLicense(listing)}
+          >
+            {active && busy ? "Licensing…" : "License this trip"}
+          </button>
+          {active && license.kind === "refused" ? <p role="alert">{license.message}</p> : null}
+          <RatingControl listingId={listing.listingId} rating={rating} onRate={onRate} />
+        </>
       )}
-      {active && license.kind === "refused" ? <p role="alert">{license.message}</p> : null}
     </article>
+  );
+}
+
+function RatingControl({
+  listingId,
+  rating,
+  onRate,
+}: {
+  listingId: string;
+  rating: RatingState;
+  onRate: (listingId: string, stars: number, comment: string) => void;
+}) {
+  const [stars, setStars] = useState(5);
+  const [comment, setComment] = useState("");
+  const active = rating !== null && rating.listingId === listingId;
+  const busy = rating?.kind === "busy";
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    onRate(listingId, stars, comment);
+  }
+
+  return (
+    <form className="tf-market-rate" data-testid="rate-listing-form" onSubmit={handleSubmit}>
+      <label htmlFor={`rateStars-${listingId}`}>
+        Your rating
+        <select
+          id={`rateStars-${listingId}`}
+          value={stars}
+          disabled={busy}
+          onChange={(e) => setStars(Number(e.target.value))}
+        >
+          {[5, 4, 3, 2, 1].map((n) => (
+            <option key={n} value={n}>
+              {n} star{n === 1 ? "" : "s"}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label htmlFor={`rateComment-${listingId}`}>
+        Comment (optional)
+        <input
+          id={`rateComment-${listingId}`}
+          type="text"
+          value={comment}
+          disabled={busy}
+          onChange={(e) => setComment(e.target.value)}
+        />
+      </label>
+      <button type="submit" className="tf-btn--ghost" disabled={busy}>
+        {active && busy ? "Submitting…" : "Submit rating"}
+      </button>
+      {active && rating.kind === "rated" ? (
+        <p data-testid="rate-listing-confirmed">Thanks — your rating is in.</p>
+      ) : null}
+      {active && rating.kind === "refused" ? <p role="alert">{rating.message}</p> : null}
+    </form>
   );
 }
 

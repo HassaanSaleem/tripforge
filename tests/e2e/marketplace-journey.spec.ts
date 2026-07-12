@@ -142,6 +142,14 @@ test("another agency licenses it cross-tenant and sees the recorded split (US3)"
   // Re-license: benign typed refusal, no second charge pretended.
   await card.getByRole("button", { name: /License this trip/i }).click();
   await expect(card.getByText(/already licensed this trip/)).toBeVisible({ timeout: 15_000 });
+
+  // Rate the trip now that this agency holds a license (US3, seed-0009d-a) —
+  // the license row IS the permission to rate (FR-013).
+  await card.getByLabel("Your rating").selectOption("4");
+  await card.getByLabel("Comment (optional)").fill("Smooth booking, would resell again.");
+  await card.getByRole("button", { name: /Submit rating/i }).click();
+  await expect(card.getByTestId("rate-listing-confirmed")).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText("★ 4.0 (1)")).toBeVisible();
 });
 
 test("the seller's own card now shows the license and the exact seller credit (spec 014 US1)", async ({
@@ -162,6 +170,14 @@ test("the seller's own card now shows the license and the exact seller credit (s
   await expect(card.getByTestId("listing-share-note")).toHaveText(
     /applies to future resales.*platform.*fixed take rate, not this share/,
   );
+  // The buyer's rating persisted cross-tenant, visible on the seller's own card.
+  await expect(card.getByText("★ 4.0 (1)")).toBeVisible();
+
+  // Seller takes the listing off the marketplace (contract §3, seed-0009d-a)
+  // — no rate control on your own card, only the deactivate action.
+  await expect(card.getByTestId("rate-listing-form")).toHaveCount(0);
+  await card.getByTestId("deactivate-listing").click();
+  await expect(card).toHaveCount(0, { timeout: 15_000 });
 });
 
 test("a signed-out visitor gets the membership prompt, never marketplace data (INV-024)", async ({

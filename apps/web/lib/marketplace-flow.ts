@@ -13,13 +13,18 @@ import type {
   BrowseListingsOutput,
   CreateListingInput,
   CreateListingOutput,
+  DeactivateListingOutput,
   LicenseListingOutput,
+  RateListingOutput,
 } from "./trpc/client.js";
 
 export type MarketplaceListing = BrowseListingsOutput["listings"][number];
 export type CreateListingRefusal = Exclude<CreateListingOutput, { status: "listed" }>;
 export type LicenseReceipt = Extract<LicenseListingOutput, { status: "licensed" }>;
 export type LicenseRefusal = Exclude<LicenseListingOutput, { status: "licensed" }>;
+export type RateListingReceipt = Extract<RateListingOutput, { status: "rated" }>;
+export type RateListingRefusal = Exclude<RateListingOutput, { status: "rated" }>;
+export type DeactivateListingRefusal = Exclude<DeactivateListingOutput, { status: "deactivated" }>;
 
 export interface ListingFormValues {
   itineraryId: string;
@@ -114,6 +119,32 @@ export function licenseFailureMessage(outcome: LicenseRefusal): string {
       return "This listing has left the marketplace. Refresh to see what's available now.";
     case "already_licensed":
       return "Your agency already licensed this trip — the white-label copy is in your workspace.";
+  }
+}
+
+/**
+ * One distinct human-readable message per typed rating refusal (US3, FR-013
+ * — the license row IS the permission to rate). Exhaustive over the server
+ * union; `not_found` never reaches here — the router throws it as a
+ * TRPCError (marketplaceErrorMessage's notFound wording covers it), same as
+ * every other marketplace procedure.
+ */
+export function rateListingFailureMessage(outcome: RateListingRefusal): string {
+  switch (outcome.status) {
+    case "not_licensee":
+      return "License this trip first — only agencies that licensed it can rate it.";
+  }
+}
+
+/**
+ * One distinct human-readable message per typed deactivation refusal
+ * (contract §3). Exhaustive over the server union; `not_found` never reaches
+ * here — the router throws it as a TRPCError.
+ */
+export function deactivateListingFailureMessage(outcome: DeactivateListingRefusal): string {
+  switch (outcome.status) {
+    case "already_inactive":
+      return "This listing is already off the marketplace.";
   }
 }
 

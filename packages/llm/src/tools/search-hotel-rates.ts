@@ -6,6 +6,7 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { HotelOffer, HotelSearchCriteria } from "@tripforge/supply-adapter";
+import { serializeOffers } from "./serialize-offers.js";
 
 const searchHotelRatesInput = z.strictObject({
   destination: z.string().min(1).describe("City or area to search"),
@@ -18,19 +19,6 @@ const searchHotelRatesInput = z.strictObject({
 const _criteriaCheck: HotelSearchCriteria = {} as z.infer<typeof searchHotelRatesInput>;
 void _criteriaCheck;
 
-/** Compact, supplier-agnostic offer serialization for the model's context. */
-function serializeHotelOffers(offers: HotelOffer[]): string {
-  return JSON.stringify(
-    offers.map((o) => ({
-      offerId: o.offerId,
-      title: o.content.title,
-      netAmountMinor: o.netRate.amountMinor,
-      currency: o.netRate.currency,
-      features: o.content.features,
-    })),
-  );
-}
-
 export function searchHotelRatesTool(search: (criteria: HotelSearchCriteria) => Promise<HotelOffer[]>) {
   return betaZodTool({
     name: "search_hotel_rates",
@@ -39,6 +27,6 @@ export function searchHotelRatesTool(search: (criteria: HotelSearchCriteria) => 
       "Returns offers with an offerId and an exact net price in minor units. " +
       "Call this before proposing any stay; only propose offerIds it returned.",
     inputSchema: searchHotelRatesInput,
-    run: async (input) => serializeHotelOffers(await search(input)),
+    run: async (input) => serializeOffers(await search(input), (o) => ({ features: o.content.features })),
   });
 }

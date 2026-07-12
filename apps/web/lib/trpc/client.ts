@@ -38,6 +38,8 @@ export type BrowseListingsOutput = inferRouterOutputs<AppRouter>["workspace"]["m
 export type CreateListingInput = inferRouterInputs<AppRouter>["workspace"]["marketplace"]["createListing"];
 export type CreateListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["createListing"];
 export type LicenseListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["licenseListing"];
+export type RateListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["rateListing"];
+export type DeactivateListingOutput = inferRouterOutputs<AppRouter>["workspace"]["marketplace"]["deactivateListing"];
 export type MyItinerariesOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["list"];
 
 /**

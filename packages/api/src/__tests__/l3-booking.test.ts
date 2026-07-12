@@ -364,6 +364,79 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
   );
 
   it(
+    "itinerary.get shows the booked CLIENT price, not the net rate, in item pricing and day subtotals (seed-0026)",
+    async () => {
+      const session = await makeAgency();
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+
+      const drafted = await caller.workspace.itinerary.draft(DRAFT_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+
+      // Pre-booking: the document's draft placeholder (netRate == sellPrice,
+      // assemble.ts FR-007) — nothing booked yet, nothing to project.
+      const freshView = await caller.workspace.itinerary.get({ itineraryId });
+      expect(freshView.status).toBe("found");
+      if (freshView.status !== "found") return;
+      const freshItems = freshView.itinerary.days.flatMap((d) => d.items);
+      expect(freshItems.length).toBeGreaterThan(0);
+      expect(freshItems.every((it) => it.pricing?.sellPrice.amountMinor === it.pricing?.netRate.amountMinor)).toBe(
+        true,
+      );
+
+      // Book everything at a non-default 2200 bps markup — the exact live
+      // repro shape (client price = net × markup, strictly greater than net).
+      const quoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 2200 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const quoteRowIds = quoted.items.flatMap((i) => (i.outcome === "held" ? [i.quote.quoteRowId] : []));
+      expect(quoteRowIds.length).toBeGreaterThan(0);
+      const booked = await caller.workspace.booking.book({ itineraryId, quoteRowIds });
+      expect(booked.status === "confirmed" || booked.status === "partially_confirmed").toBe(true);
+      const bookedItemIds = new Set(booked.components.flatMap((c) => (c.outcome === "confirmed" ? [c.itemId] : [])));
+      expect(bookedItemIds.size).toBeGreaterThan(0);
+
+      // The real booked sells, read straight from the booking record — an
+      // independent witness the projection must match exactly.
+      const bookedSellByItemId = new Map(
+        (
+          await handle.db
+            .select({ itemId: bookingComponentTable.itemId, sellMinor: bookingComponentTable.sellMinor })
+            .from(bookingComponentTable)
+            .where(eq(bookingComponentTable.agencyId, session.agencyId))
+        ).map((c) => [c.itemId, c.sellMinor]),
+      );
+
+      const afterBook = await caller.workspace.itinerary.get({ itineraryId });
+      expect(afterBook.status).toBe("found");
+      if (afterBook.status !== "found") return;
+
+      for (const day of afterBook.itinerary.days) {
+        let expectedSubtotal = 0;
+        for (const item of day.items) {
+          const bookedSell = bookedSellByItemId.get(item.id);
+          if (bookedSell !== undefined) {
+            // Booked: the workspace view must show the realized client price,
+            // never the net rate — the exact seed-0026 symptom (two
+            // disagreeing totals on one page).
+            expect(item.pricing?.sellPrice.amountMinor).toBe(bookedSell);
+            expect(item.pricing?.sellPrice.amountMinor).not.toBe(item.pricing?.netRate.amountMinor);
+          } else {
+            // Un-booked items keep the stored draft estimate, unchanged.
+            expect(item.pricing?.sellPrice.amountMinor).toBe(item.pricing?.netRate.amountMinor);
+          }
+          expectedSubtotal += item.pricing?.sellPrice.amountMinor ?? 0;
+        }
+        // The day subtotal is server-recomputed from the (booked-or-draft)
+        // item prices — never left disagreeing with its own items.
+        expect(day.subtotal?.amountMinor).toBe(expectedSubtotal);
+      }
+    },
+    LONG,
+  );
+
+  it(
     "partial failure: failing component reports typed reason and writes ZERO rows; siblings confirm (US3)",
     async () => {
       const session = await makeAgency();

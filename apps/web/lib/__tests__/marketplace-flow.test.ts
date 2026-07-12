@@ -10,11 +10,13 @@ import { TRPCClientError } from "@trpc/client";
 import { percentToBps, formatBps } from "../basis-points.js";
 import {
   createListingFailureMessage,
+  deactivateListingFailureMessage,
   formatEarnings,
   formatRating,
   formatShareBps,
   licenseFailureMessage,
   marketplaceErrorMessage,
+  rateListingFailureMessage,
   toCreateListingInput,
   type ListingFormValues,
 } from "../marketplace-flow.js";
@@ -149,6 +151,20 @@ describe("licenseFailureMessage (FR-007, exhaustive)", () => {
     expect(messages[2]).toContain("left the marketplace");
     expect(messages[3]).toContain("already licensed");
     expect(new Set(messages).size).toBe(4);
+  });
+});
+
+describe("rateListingFailureMessage (US3, FR-013, exhaustive)", () => {
+  it("maps the typed rating refusal to a plain-language message (not_found is thrown, never returned, like every other marketplace procedure)", () => {
+    const notLicensee = rateListingFailureMessage({ status: "not_licensee" });
+    expect(notLicensee).toContain("License this trip first");
+  });
+});
+
+describe("deactivateListingFailureMessage (contract §3, exhaustive)", () => {
+  it("maps the typed deactivation refusal to a plain-language message (not_found is thrown, never returned)", () => {
+    const alreadyInactive = deactivateListingFailureMessage({ status: "already_inactive", listingId: "x" });
+    expect(alreadyInactive).toContain("already off the marketplace");
   });
 });
 

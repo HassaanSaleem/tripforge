@@ -308,6 +308,10 @@ label > input, label > select, label > textarea {
 .tf-market-form button[type="submit"] { justify-self: start; min-width: 230px; margin-top: 4px; }
 .tf-market-listed { color: var(--ok); font-weight: 600; background: var(--ok-tint); border: 1px solid color-mix(in srgb, var(--ok) 25%, var(--line)); border-radius: var(--r-sm); padding: 10px 13px; }
 
+.tf-market-rate { gap: 8px; margin-top: 2px; border-top: 1px solid var(--line); padding-top: 10px; }
+.tf-market-rate label { display: grid; gap: 4px; font-size: 13px; color: var(--ink-soft); }
+.tf-market-rate button[type="submit"] { justify-self: start; }
+
 /* ---- workspace trips list (spec 012): the agency's itineraries ---- */
 .tf-triplist { display: grid; gap: 12px; }
 .tf-triplist > ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 10px; }

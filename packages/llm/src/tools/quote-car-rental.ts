@@ -5,6 +5,7 @@
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import type { CarRentalOffer, CarRentalSearchCriteria } from "@tripforge/supply-adapter";
+import { serializeOffers } from "./serialize-offers.js";
 
 const quoteCarRentalInput = z.strictObject({
   pickupLocation: z.string().min(1).describe("Pickup location"),
@@ -17,18 +18,6 @@ const quoteCarRentalInput = z.strictObject({
 const _criteriaCheck: CarRentalSearchCriteria = {} as z.infer<typeof quoteCarRentalInput>;
 void _criteriaCheck;
 
-function serializeCarRentalOffers(offers: CarRentalOffer[]): string {
-  return JSON.stringify(
-    offers.map((o) => ({
-      offerId: o.offerId,
-      title: o.content.title,
-      netAmountMinor: o.netRate.amountMinor,
-      currency: o.netRate.currency,
-      vehicleClass: o.vehicleClass,
-    })),
-  );
-}
-
 export function quoteCarRentalTool(search: (criteria: CarRentalSearchCriteria) => Promise<CarRentalOffer[]>) {
   return betaZodTool({
     name: "quote_car_rental",
@@ -37,6 +26,6 @@ export function quoteCarRentalTool(search: (criteria: CarRentalSearchCriteria) =
       "car rentals cannot be added to the itinerary in this version, so never " +
       "propose these offerIds as itinerary items).",
     inputSchema: quoteCarRentalInput,
-    run: async (input) => serializeCarRentalOffers(await search(input)),
+    run: async (input) => serializeOffers(await search(input), (o) => ({ vehicleClass: o.vehicleClass })),
   });
 }
