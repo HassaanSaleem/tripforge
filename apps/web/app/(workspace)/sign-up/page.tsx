@@ -1,6 +1,7 @@
 // /sign-up — self-serve agency onboarding (spec 007 US2, INV-024 platform
-// side). Server component: an already-signed-in AGENT is sent to the workspace
-// (research D7); everyone else sees the form.
+// side). Server component: an already-signed-in AGENT is sent to the
+// dashboard (research D7, spec 017 D1 — new post-sign-in default); everyone
+// else sees the form.
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function SignUpPage() {
   const session = await getSessionContext(await headers());
   if (session?.agencyId) {
-    redirect("/workspace");
+    redirect("/dashboard");
   }
 
   return (

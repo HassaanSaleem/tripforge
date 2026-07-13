@@ -1,16 +1,20 @@
-// Shared shell for the two workspace-route-group pages (workspace, marketplace):
-// the membership-gate card shown to a non-member, and — for a verified agent —
-// the branded header (nav + identity) wrapping the page-specific <main> content.
-// Extracted per the clean-architecture extraction threshold (2+ callsites share
-// a shape) — quality-sweep iter-3 QS3-7.
+// Shared shell for every authenticated page (dashboard, workspace, trips,
+// marketplace, media, discover): the membership-gate card shown to a
+// non-member, and — for a verified agent — the persistent sidebar (spec 017
+// research D3) + branded top header (identity, unchanged) wrapping the
+// page-specific <main> content. Extracted per the clean-architecture
+// extraction threshold (2+ callsites share a shape) — quality-sweep iter-3
+// QS3-7; extended (not duplicated) for the dashboard app shell.
 import type { ReactNode } from "react";
 import Link from "next/link";
 import type { WorkspaceIdentity } from "../../../lib/auth.js";
+import type { NavDestinationId } from "../../../lib/nav.js";
 import { SignOutButton } from "../workspace/sign-out-button.js";
+import { AppSidebar } from "./app-sidebar.js";
 
 interface WorkspacePageShellProps {
   identity: WorkspaceIdentity | null;
-  activeNav: "workspace" | "marketplace";
+  activeNav: NavDestinationId;
   guardTitle: string;
   guardVerb: string;
   children: ReactNode;
@@ -34,30 +38,25 @@ export function WorkspacePageShell({ identity, activeNav, guardTitle, guardVerb,
   }
 
   return (
-    <>
-      <header className="tf-header tf-workspace-header">
-        <span className="tf-brand">TripForge</span>
-        <nav className="tf-nav" aria-label="Workspace">
-          <Link href="/workspace" aria-current={activeNav === "workspace" ? "page" : undefined}>
-            Workspace
-          </Link>
-          <Link href="/marketplace" aria-current={activeNav === "marketplace" ? "page" : undefined}>
-            Marketplace
-          </Link>
-        </nav>
-        <div className="tf-id">
-          <b>{identity.userName}</b>
-          <i className="sep" aria-hidden="true" />
-          <span>{identity.agencyName}</span>
-          <span>
-            role <span className="tf-badge">{identity.role}</span>
-          </span>
-          <span className="tf-signout">
-            <SignOutButton />
-          </span>
-        </div>
-      </header>
-      <main className="tf-workspace-main">{children}</main>
-    </>
+    <div className="tf-app-shell">
+      <AppSidebar activeNav={activeNav} />
+      <div className="tf-app-shell-content">
+        <header className="tf-header tf-workspace-header">
+          <span className="tf-brand">TripForge</span>
+          <div className="tf-id">
+            <b>{identity.userName}</b>
+            <i className="sep" aria-hidden="true" />
+            <span>{identity.agencyName}</span>
+            <span>
+              role <span className="tf-badge">{identity.role}</span>
+            </span>
+            <span className="tf-signout">
+              <SignOutButton />
+            </span>
+          </div>
+        </header>
+        <main className="tf-workspace-main">{children}</main>
+      </div>
+    </div>
   );
 }

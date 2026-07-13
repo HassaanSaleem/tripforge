@@ -51,10 +51,15 @@ test("an agent registers media, attaches it to the gallery and an item, and the 
   await signUpAgency(page, agent);
 
   // US1: register a media item — appears in the library without a reload.
+  // Media is its own nav destination now (spec 017 research D1).
+  await page.goto("/media");
   await registerMedia(page);
 
-  // US2: draft a trip, open it, attach to the gallery.
+  // US2: draft a trip, then open it from the Trips destination (also its own
+  // route now) to attach media — the planner's own inline drafted view
+  // doesn't carry media-attach controls; only the opened Trips view does.
   await draftParisTrip(page);
+  await page.goto("/trips");
   await expect(page.getByTestId("trip-row")).toHaveCount(1, { timeout: 15_000 });
   await page.getByTestId("trip-open").click();
   const opened = page.getByTestId("opened-trip");

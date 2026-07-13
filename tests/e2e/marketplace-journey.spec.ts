@@ -57,8 +57,8 @@ test("a seller lists a drafted trip — refused unvetted, live once vetted (US1+
   await signUpAgency(page, seller);
   await draftParisTrip(page, "2026-09-03");
 
-  // To the marketplace via the workspace nav (contract §1).
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Marketplace" }).click();
+  // To the marketplace via the sidebar nav (spec 017 contract §1).
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Marketplace" }).click();
   await expect(page).toHaveURL(/\/marketplace$/);
   await expect(page.getByTestId("marketplace-browse")).toBeVisible();
 
@@ -100,8 +100,9 @@ test("a seller lists a drafted trip — refused unvetted, live once vetted (US1+
   // HTML attribute itself is the ground truth.
   await expect(itineraryOptions.first()).toHaveAttribute("disabled", "");
 
-  // Workspace trip list (spec 014 US2): the "Listed" mark carries the fee.
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Workspace" }).click();
+  // Trips list (spec 014 US2, its own nav destination per spec 017): the
+  // "Listed" mark carries the fee.
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Trips" }).click();
   await expect(page.getByTestId("trip-listed")).toHaveText("Listed · 250.00 USD");
 });
 

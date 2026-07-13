@@ -1,0 +1,26 @@
+// Single source of truth for the authenticated sidebar (spec 017 research
+// D8, data-model "Nav Destination"). Pure data — DOM-free so it is L1
+// testable — consumed by both AppSidebar (rendering) and every page's
+// activeNav prop (WorkspacePageShell). `id` is exhaustive over
+// WorkspacePageShell's activeNav union: adding/removing a destination here
+// without updating that type is a compile error, not a runtime gap.
+export type NavDestinationId = "dashboard" | "builder" | "trips" | "marketplace" | "media" | "discover";
+
+/** Which local icon `AppSidebar` renders for this destination (D8 — no icon library). */
+export type NavIconKind = "grid" | "sparkle" | "suitcase" | "storefront" | "image" | "compass";
+
+export interface NavDestination {
+  id: NavDestinationId;
+  label: string;
+  href: string;
+  icon: NavIconKind;
+}
+
+export const NAV_DESTINATIONS: readonly NavDestination[] = [
+  { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: "grid" },
+  { id: "builder", label: "AI Builder", href: "/workspace", icon: "sparkle" },
+  { id: "trips", label: "Trips", href: "/trips", icon: "suitcase" },
+  { id: "marketplace", label: "Marketplace", href: "/marketplace", icon: "storefront" },
+  { id: "media", label: "Media", href: "/media", icon: "image" },
+  { id: "discover", label: "Discover", href: "/discover", icon: "compass" },
+];

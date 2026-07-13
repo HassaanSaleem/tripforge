@@ -19,10 +19,10 @@ const password = "correct-horse-9";
 
 test.describe.configure({ mode: "serial" });
 
-test("self-serve sign-up creates account + agency and lands in the workspace (US2)", async ({
+test("self-serve sign-up creates account + agency and lands on the dashboard (US2)", async ({
   page,
 }) => {
-  // Rate-limit-aware shared helper (support.ts) asserts the workspace landing.
+  // Rate-limit-aware shared helper (support.ts) asserts the dashboard landing.
   await signUpAgency(page, { name: agentName, email, password, agencyName });
 
   // Greeted by HUMAN names — user, agency, role (FR-006).
@@ -71,12 +71,12 @@ test("wrong password is refused with a human-readable error and no session (FR-0
   await expect(page.getByText(/agency membership/i)).toBeVisible();
 });
 
-test("an already-signed-in agent visiting /sign-in is sent to the workspace (D7 edge case)", async ({
+test("an already-signed-in agent visiting /sign-in is sent to the dashboard (D7 edge case)", async ({
   page,
 }) => {
   await signInAgency(page, { email, password });
 
   await page.goto("/sign-in");
-  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText(agentName, { exact: true })).toBeVisible();
 });

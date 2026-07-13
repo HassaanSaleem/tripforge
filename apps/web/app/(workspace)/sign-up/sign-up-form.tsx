@@ -37,7 +37,7 @@ export function SignUpForm() {
     const agencyCreated = await run(() => createAndActivateAgency(agencyName, agencySlug(agencyName)));
     if (!agencyCreated) return;
 
-    router.push("/workspace");
+    router.push("/dashboard");
     router.refresh();
   }
 

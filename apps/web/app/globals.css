@@ -177,6 +177,46 @@ main.home { width: 100%; max-width: none; margin: 0; }
 .tf-workspace-main { display: grid; gap: 26px; }
 .tf-workspace-main > header p { max-width: 58ch; }
 
+/* ---- app shell (spec 017): persistent sidebar + wide multi-pane content;
+   overrides the global `main` width cap for the authenticated surface only
+   (research D9 — same specificity technique as [data-plain] main; the
+   landing page and auth screens don't use .tf-app-shell, so they're
+   unaffected) ---- */
+.tf-app-shell { display: grid; grid-template-columns: 248px 1fr; align-items: start; min-height: 100dvh; }
+.tf-app-shell-content { display: flex; flex-direction: column; min-width: 0; }
+.tf-app-shell main { width: min(100% - 40px, 1180px); max-width: none; margin: clamp(24px, 4vw, 48px) auto; }
+.tf-sidebar { grid-column: 1; position: sticky; top: 0; align-self: start; height: 100dvh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 22px 14px; background: var(--surface); border-right: 1px solid var(--line); }
+.tf-sidebar-brand { padding: 0 10px 14px; margin: 0 0 10px; border-bottom: 1px solid var(--line); }
+.tf-sidebar ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.tf-sidebar a { display: flex; align-items: center; gap: 11px; padding: 10px 12px; border-radius: var(--r-sm); color: var(--ink-soft); font-weight: 600; font-size: 14px; text-decoration: none; transition: background .12s, color .12s; }
+.tf-sidebar a:hover { background: var(--sea-tint); color: var(--sea-deep); }
+.tf-sidebar a[aria-current="page"] { background: var(--sea-tint); color: var(--sea-deep); }
+.tf-sidebar a svg { flex: none; }
+.tf-sidebar-toggle-input { position: fixed; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.tf-sidebar-toggle-btn { display: none; position: fixed; top: 14px; left: 14px; z-index: 30; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px; box-shadow: var(--shadow-sm); cursor: pointer; color: var(--ink); }
+@media (max-width: 880px) {
+  .tf-app-shell { grid-template-columns: 1fr; }
+  .tf-sidebar { position: fixed; inset: 0 auto 0 0; width: 240px; left: -260px; z-index: 25; transition: left .22s ease; box-shadow: var(--shadow); }
+  .tf-sidebar-toggle-input:checked ~ .tf-sidebar { left: 0; }
+  .tf-sidebar-toggle-btn { display: grid; place-items: center; }
+  .tf-app-shell main { width: min(100% - 32px, 1180px); margin-top: clamp(56px, 10vw, 72px); }
+}
+
+/* ---- Agent Home dashboard (spec 017): stat tiles, recent activity, quick actions ---- */
+.tf-dashboard { display: grid; gap: 22px; }
+.tf-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-top: 14px; }
+.tf-stat-tile { background: var(--sand); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; display: grid; gap: 6px; }
+.tf-stat-tile .tf-price { font-size: 20px; }
+.tf-activity-list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 2px; }
+.tf-activity-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14.5px; }
+.tf-activity-row:last-child { border-bottom: none; }
+.tf-activity-row time { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.tf-quick-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.tf-quick-action { display: grid; gap: 6px; text-decoration: none; transition: transform .12s ease, box-shadow .12s ease; }
+.tf-quick-action:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.tf-quick-action b { color: var(--sea-deep); font-size: 16px; }
+.tf-quick-action span { color: var(--ink-soft); font-size: 14px; }
+
 /* label-wrapped inputs (the app's form anatomy): the label typography above
    must not cascade into the field text itself */
 label > input, label > select, label > textarea {
@@ -290,12 +330,7 @@ label > input, label > select, label > textarea {
 .tf-share-link { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tf-share-link code { flex: 1 1 320px; background: var(--sand); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; font-family: var(--mono); font-size: 13px; word-break: break-all; user-select: all; }
 
-/* ---- marketplace (spec 011): nav, listing grid, split receipt, sell form ---- */
-.tf-nav { display: flex; gap: 16px; margin-right: auto; padding-left: 6px; font-size: 14.5px; }
-.tf-nav a { font-weight: 600; text-decoration: none; color: var(--ink-soft); }
-.tf-nav a:hover { color: var(--coral-deep); }
-.tf-nav a[aria-current="page"] { color: var(--sea-deep); box-shadow: inset 0 -2px 0 var(--sea); border-radius: 0; }
-
+/* ---- marketplace (spec 011): listing grid, split receipt, sell form ---- */
 .tf-market { display: grid; gap: 26px; }
 .tf-market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 10px; }
 .tf-market-card { display: grid; gap: 10px; align-content: start; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; box-shadow: var(--shadow-sm); animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }

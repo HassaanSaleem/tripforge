@@ -16,8 +16,9 @@ interface AgencySignUp {
  * seed-0009c: two consecutive full-suite runs failed a different journey's
  * sign-up each time once the suite reached four parallel sign-up journeys).
  * A real user retries after the advertised backoff — so does this helper,
- * boundedly. No assertion is weakened: the journey MUST still land in the
- * workspace, and any non-rate-limit failure still fails immediately below.
+ * boundedly. No assertion is weakened: the journey MUST still land on the
+ * dashboard (spec 017 — the new post-sign-in default), and any non-rate-limit
+ * failure still fails immediately below.
  */
 export async function signUpAgency(page: Page, input: AgencySignUp): Promise<void> {
   await page.goto("/sign-up");
@@ -30,7 +31,7 @@ export async function signUpAgency(page: Page, input: AgencySignUp): Promise<voi
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     await page.getByRole("button", { name: /Create account & agency/i }).click();
     const outcome = await Promise.race([
-      page.waitForURL(/\/workspace$/, { timeout: 15_000 }).then(() => "ok" as const),
+      page.waitForURL(/\/dashboard$/, { timeout: 15_000 }).then(() => "ok" as const),
       page
         .getByText(/Too many requests/i)
         .waitFor({ state: "visible", timeout: 15_000 })
@@ -42,7 +43,7 @@ export async function signUpAgency(page: Page, input: AgencySignUp): Promise<voi
     await page.waitForTimeout(11_000);
   }
 
-  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 /**
@@ -64,7 +65,7 @@ export async function signInAgency(page: Page, input: { email: string; password:
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     await page.getByRole("button", { name: /^Sign in$/i }).click();
     const outcome = await Promise.race([
-      page.waitForURL(/\/workspace$/, { timeout: 15_000 }).then(() => "ok" as const),
+      page.waitForURL(/\/dashboard$/, { timeout: 15_000 }).then(() => "ok" as const),
       // Exact mapped message, not getByRole("alert") — Next.js injects its own
       // empty role="alert" route announcer on every page (see sign-in.spec.ts).
       page
@@ -76,7 +77,7 @@ export async function signInAgency(page: Page, input: { email: string; password:
     await page.waitForTimeout(11_000);
   }
 
-  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 /** How long a live draft may take end-to-end (real LLM; FakeLLM is instant). */
@@ -89,9 +90,12 @@ export const DRAFT_TIMEOUT_MS = 90_000;
  * subject needs an itinerary to exist (booking, client-view, marketplace);
  * planner-journey.spec.ts keeps its own inline flow because drafting IS its
  * subject there. `checkOut` varies per journey (trip length is not what these
- * suites assert).
+ * suites assert). Owns navigating to the AI Builder's own route (spec 017 —
+ * the planner is no longer on the page callers land on after sign-in/-up),
+ * so callers never need their own `page.goto("/workspace")` before this.
  */
 export async function draftParisTrip(page: Page, checkOut = "2026-09-04"): Promise<void> {
+  await page.goto("/workspace");
   await page.getByLabel("Destination").fill("Paris");
   await page.getByLabel("Check-in").fill("2026-09-01");
   await page.getByLabel("Check-out").fill(checkOut);

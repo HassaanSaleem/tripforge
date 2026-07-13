@@ -53,7 +53,7 @@ const INITIAL_VALUES: PlannerFormValues = {
   currency: "EUR",
 };
 
-export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
+export function Planner() {
   const [values, setValues] = useState<PlannerFormValues>(INITIAL_VALUES);
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
   const drafting = view.phase === "drafting";
@@ -92,10 +92,6 @@ export function Planner({ onDrafted }: { onDrafted?: () => void } = {}) {
         const outcome = draftEvent.outcome;
         if (outcome.status === "drafted") {
           setView({ phase: "drafted", outcome });
-          // The workspace trips panel refreshes off this signal (spec 012 D2) —
-          // fired only for a persisted draft, so the list never learns of
-          // refusals or failures it cannot show.
-          onDrafted?.();
         } else {
           setView({ phase: "failed", message: draftFailureMessage(outcome) });
         }

@@ -21,7 +21,7 @@ export function SignInForm() {
       return signInError ? "Invalid email or password." : null;
     });
     if (!ok) return;
-    router.push("/workspace");
+    router.push("/dashboard");
     router.refresh();
   }
 

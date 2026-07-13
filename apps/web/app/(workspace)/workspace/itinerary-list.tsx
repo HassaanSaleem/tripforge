@@ -40,11 +40,12 @@ type OpenState =
 
 /**
  * The agency's itineraries, newest first, with an open-in-place continue-work
- * view. `refreshToken` re-runs the list load (bumped by the planner's
- * onDrafted signal — research D2, the seed-0016 staleness lesson); a bump
- * never disturbs an opened trip (data-model state machine).
+ * view. Loads once on mount — now that Trips is its own nav destination
+ * (spec 017 research D2), navigating here from the AI Builder after a draft
+ * is itself a fresh mount, which is what previously needed the planner's
+ * onDrafted signal.
  */
-export function ItineraryList({ refreshToken }: { refreshToken: number }) {
+export function ItineraryList() {
   const [list, setList] = useState<ListState>({ phase: "loading" });
   const [open, setOpen] = useState<OpenState>(null);
 
@@ -62,7 +63,7 @@ export function ItineraryList({ refreshToken }: { refreshToken: number }) {
     return () => {
       cancelled = true;
     };
-  }, [refreshToken]);
+  }, []);
 
   async function handleOpen(itineraryId: string) {
     if (open?.kind === "loading") return;

@@ -75,3 +75,10 @@ export type RegisterMediaInput = inferRouterInputs<AppRouter>["workspace"]["medi
 export type RegisterMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["media"]["register"];
 export type AttachMediaInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["attachMedia"];
 export type AttachMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["attachMedia"];
+
+/**
+ * Agent Home dashboard aggregate via the same inference (spec 017): the
+ * GBV/earnings/counts/recent-activity shape stays un-exported server-side;
+ * inference keeps the browser exactly in sync.
+ */
+export type DashboardStatsOutput = inferRouterOutputs<AppRouter>["workspace"]["dashboard"]["stats"];

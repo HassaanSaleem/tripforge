@@ -35,6 +35,9 @@ export type {
   CreateShareLinkOutcome,
   ResolveShareLinkOutcome,
 } from "./services/client-view.js";
+// Agent Home dashboard aggregate surfaced the same way (spec 017, TS4023):
+// DashboardStats rides the inferred AppRouter type via workspace.dashboard.stats.
+export type { DashboardStats, CurrencyTotal, RecentActivityEntry } from "./services/dashboard-stats.js";
 export { buildContainer } from "./container.js";
 export type { BuildContainerOptions } from "./container.js";
 export {

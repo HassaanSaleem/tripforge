@@ -5,6 +5,7 @@ import { itineraryRouter } from "./itinerary.js";
 import { bookingRouter } from "./booking.js";
 import { marketplaceRouter } from "./marketplace.js";
 import { workspaceMediaRouter } from "./workspace-media.js";
+import { dashboardRouter } from "./dashboard.js";
 
 export const workspaceRouter = router({
   /**
@@ -31,4 +32,7 @@ export const workspaceRouter = router({
 
   /** Content: agency media library — register/list/get (spec 015). */
   media: workspaceMediaRouter,
+
+  /** Agent Home dashboard aggregate — GBV/earnings/counts/recent activity (spec 017). */
+  dashboard: dashboardRouter,
 });

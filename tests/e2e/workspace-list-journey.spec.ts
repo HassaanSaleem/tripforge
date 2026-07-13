@@ -33,6 +33,10 @@ test("trips panel: empty state, draft appears without reload, survives reload, o
   test.setTimeout(DRAFT_TIMEOUT_MS + 90_000);
   await signUpAgency(page, owner);
 
+  // Trips is its own nav destination now (spec 017 research D1) — sign-up
+  // lands on the dashboard, so navigate there explicitly.
+  await page.goto("/trips");
+
   // US1: a fresh agency sees the guidance empty state — planner and
   // marketplace both named, never a blank panel (contract §2).
   const panel = page.getByTestId("trips-panel");
@@ -43,8 +47,13 @@ test("trips panel: empty state, draft appears without reload, survives reload, o
   await expect(empty.getByRole("link", { name: /marketplace/i })).toBeVisible();
 
   // US3a (the seed-0016 staleness lesson): the drafted trip appears in the
-  // panel WITHOUT any page reload.
+  // panel WITHOUT a page reload — click the sidebar's Trips link (a Next.js
+  // client-side transition, not a hard navigation) rather than page.goto();
+  // the fresh mount fetches current data (spec 017 research D2), which is
+  // what previously needed the same-page onDrafted signal.
   await draftParisTrip(page, "2026-09-03");
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Trips" }).click();
+  await expect(page).toHaveURL(/\/trips$/);
   const rows = page.getByTestId("trip-row");
   await expect(rows).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByTestId("trips-empty")).toHaveCount(0);
@@ -86,10 +95,10 @@ test("arrangement: the owner lists the drafted trip on the marketplace", async (
   await page.getByRole("button", { name: /List it on the marketplace/i }).click();
   await expect(page.getByTestId("listing-created")).toBeVisible({ timeout: 15_000 });
 
-  // Listed mark (spec 014 US2): the owner's workspace trip list now carries
-  // the listing's fee/currency alongside the row, no reload needed.
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Workspace" }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Listed mark (spec 014 US2): the owner's Trips list now carries the
+  // listing's fee/currency alongside the row, no reload needed.
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Trips" }).click();
+  await expect(page).toHaveURL(/\/trips$/);
   await expect(page.getByTestId("trip-listed")).toHaveText("Listed · 250.00 USD");
 });
 
@@ -100,7 +109,8 @@ test("a licensed white-label copy lands in the buyer's workspace list and opens 
   await signUpAgency(page, buyer);
   vetAgencyByName(buyer.agencyName);
 
-  // The buyer's workspace starts empty — the pre-license witness.
+  // The buyer's Trips destination starts empty — the pre-license witness.
+  await page.goto("/trips");
   await expect(page.getByTestId("trips-panel")).toBeVisible();
   await expect(page.getByTestId("trips-empty")).toBeVisible();
 
@@ -111,11 +121,11 @@ test("a licensed white-label copy lands in the buyer's workspace list and opens 
   await card.getByRole("button", { name: /License this trip/i }).click();
   await expect(page.getByTestId("license-receipt")).toBeVisible({ timeout: 15_000 });
 
-  // Back on the workspace, the white-label copy IS the buyer's one trip —
-  // structural assertions only (count + badge), never the copy's title
-  // (copies are titled after the trip, a planner-authored string).
-  await page.getByRole("navigation", { name: "Workspace" }).getByRole("link", { name: "Workspace" }).click();
-  await expect(page).toHaveURL(/\/workspace$/);
+  // Back on Trips, the white-label copy IS the buyer's one trip — structural
+  // assertions only (count + badge), never the copy's title (copies are
+  // titled after the trip, a planner-authored string).
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Trips" }).click();
+  await expect(page).toHaveURL(/\/trips$/);
   const rows = page.getByTestId("trip-row");
   await expect(rows).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByTestId("trips-empty")).toHaveCount(0);
