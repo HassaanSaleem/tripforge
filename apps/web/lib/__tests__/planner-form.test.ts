@@ -1,15 +1,21 @@
-// L1 tests for the planner's pure view logic (spec 008 T006/T011): form →
-// trip-request mapping (validation refusals + exact minor-unit conversion,
-// SC-004), display formatting (research D7), and the FR-006/007 failure →
-// message mapping (contract §2.3: only these strings ever reach the page).
+// L1 tests for the planner's pure view logic (spec 008 T006/T011, extended by
+// spec 018 for the planner UX redesign): form → trip-request mapping
+// (validation refusals + exact minor-unit conversion, SC-004), display
+// formatting (research D7), the FR-006/007 failure → message mapping
+// (contract §2.3: only these strings ever reach the page), and the spec 018
+// presentation-only additions (human labels, destination picker seed data).
 import { describe, it, expect } from "vitest";
 import { TRPCClientError } from "@trpc/client";
 import {
+  BUDGET_MODE_LABELS,
   currencyFractionDigits,
   draftErrorMessage,
   draftFailureMessage,
   formatMinorAmount,
+  HERO_DESTINATIONS,
+  resolveDestinationTreatment,
   toTripRequest,
+  TRIP_STYLE_LABELS,
   type PlannerFormValues,
 } from "../planner-form.js";
 
@@ -166,5 +172,53 @@ describe("draftErrorMessage (FR-007) — transport/authorization failures", () =
   it("never echoes raw error text", () => {
     const leaky = new Error('{"stack":"secret"}');
     expect(draftErrorMessage(leaky)).not.toContain("secret");
+  });
+});
+
+describe("BUDGET_MODE_LABELS / TRIP_STYLE_LABELS (spec 018 FR-001/002) — no raw enum text", () => {
+  const RAW_ENUM_TEXT = ["hardCap", "target", "balanced", "budget", "premium"];
+
+  it("gives every budgetMode value a non-raw-enum label", () => {
+    const values: PlannerFormValues["budgetMode"][] = ["hardCap", "target"];
+    for (const value of values) {
+      const label = BUDGET_MODE_LABELS[value];
+      expect(label.length).toBeGreaterThan(0);
+      expect(RAW_ENUM_TEXT).not.toContain(label);
+    }
+  });
+
+  it("gives every non-empty tripStyle value a non-raw-enum label", () => {
+    const values: Exclude<PlannerFormValues["tripStyle"], "">[] = ["balanced", "budget", "premium"];
+    for (const value of values) {
+      const label = TRIP_STYLE_LABELS[value];
+      expect(label.length).toBeGreaterThan(0);
+      expect(RAW_ENUM_TEXT).not.toContain(label);
+    }
+  });
+});
+
+describe("HERO_DESTINATIONS / resolveDestinationTreatment (spec 018 FR-004, research.md Decision 2/3)", () => {
+  it("seeds at least the four spec-required hero destinations", () => {
+    const cities = HERO_DESTINATIONS.map((hero) => `${hero.city}, ${hero.country}`);
+    expect(cities).toEqual(
+      expect.arrayContaining(["Lisbon, Portugal", "Tokyo, Japan", "Marrakech, Morocco", "Reykjavik, Iceland"]),
+    );
+  });
+
+  it("resolves a treatment for an exact seeded destination string", () => {
+    const treatment = resolveDestinationTreatment("Lisbon, Portugal");
+    expect(treatment.flag).toBe("🇵🇹");
+    expect(treatment.gradient.length).toBeGreaterThan(0);
+  });
+
+  it("resolves case-insensitively, including a bare city match", () => {
+    expect(resolveDestinationTreatment("lisbon, portugal").flag).toBe("🇵🇹");
+    expect(resolveDestinationTreatment("Lisbon").flag).toBe("🇵🇹");
+  });
+
+  it("falls back to a default treatment for an unmatched destination, without throwing", () => {
+    const treatment = resolveDestinationTreatment("Ljubljana");
+    expect(treatment.flag).toBeTruthy();
+    expect(treatment.gradient.length).toBeGreaterThan(0);
   });
 });

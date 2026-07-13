@@ -22,6 +22,88 @@ export interface PlannerFormValues {
 
 type TripRequestMapping = { request: DraftInput } | { error: string };
 
+/** A seeded, human-facing destination the planner's picker offers (spec 018 FR-004). */
+export interface HeroDestination {
+  id: string;
+  city: string;
+  country: string;
+  flag: string;
+  /** CSS `background` value — gradient only, never a photo (spec 018 Assumptions). */
+  gradient: string;
+}
+
+/**
+ * Static seed set for the destination picker and the drafted-result hero card
+ * (spec 018 US2/US3). Deliberately hardcoded, not backend-fetched: the demo
+ * image/catalog seed ticket (demo-01-seed) has not landed, and this is a
+ * presentation-only feature (FR-009) — swapping in real catalog data later is
+ * a separate change.
+ */
+export const HERO_DESTINATIONS: HeroDestination[] = [
+  {
+    id: "lisbon",
+    city: "Lisbon",
+    country: "Portugal",
+    flag: "🇵🇹",
+    gradient: "linear-gradient(135deg, #f2a65a, var(--coral) 55%, #8e4b6e)",
+  },
+  {
+    id: "tokyo",
+    city: "Tokyo",
+    country: "Japan",
+    flag: "🇯🇵",
+    gradient: "linear-gradient(135deg, var(--coral) 0%, #b3477a 50%, var(--sea-deep) 100%)",
+  },
+  {
+    id: "marrakech",
+    city: "Marrakech",
+    country: "Morocco",
+    flag: "🇲🇦",
+    gradient: "linear-gradient(135deg, var(--gold), var(--coral-deep) 60%, #7a3b2e)",
+  },
+  {
+    id: "reykjavik",
+    city: "Reykjavik",
+    country: "Iceland",
+    flag: "🇮🇸",
+    gradient: "linear-gradient(135deg, var(--sea-tint), var(--sea) 55%, var(--sea-deep))",
+  },
+];
+
+const DEFAULT_DESTINATION_TREATMENT = {
+  flag: "🌍",
+  gradient: "linear-gradient(135deg, var(--sand-2), var(--sea-tint))",
+};
+
+/**
+ * Resolves the image-forward visual treatment for a destination string —
+ * used by both the picker (per-option swatch) and the drafted-result hero
+ * card, so a seeded destination looks the same in both places (spec 018
+ * research.md Decision 3). Total function: always returns a value, matched
+ * or not, and never touches the network. Matches by substring (not just
+ * exact equality) so it resolves both a bare destination value ("Lisbon,
+ * Portugal") and a generated itinerary title that embeds it ("Lisbon
+ * balanced trip", per packages/llm/src/fake.ts's title template).
+ */
+export function resolveDestinationTreatment(destination: string): { flag: string; gradient: string } {
+  const normalized = destination.trim().toLowerCase();
+  const match = HERO_DESTINATIONS.find((hero) => normalized.includes(hero.city.toLowerCase()));
+  return match ? { flag: match.flag, gradient: match.gradient } : DEFAULT_DESTINATION_TREATMENT;
+}
+
+/** Plain-language label for each server-accepted `budgetMode` value (spec 018 FR-001) — no raw enum text reaches the UI. */
+export const BUDGET_MODE_LABELS: Record<PlannerFormValues["budgetMode"], string> = {
+  hardCap: "Hard cap",
+  target: "Target budget",
+};
+
+/** Plain-language label for each server-accepted `tripStyle` value (spec 018 FR-002) — the empty string keeps its own explicit UI label. */
+export const TRIP_STYLE_LABELS: Record<Exclude<PlannerFormValues["tripStyle"], "">, string> = {
+  budget: "Budget-savvy",
+  balanced: "Balanced",
+  premium: "Premium",
+};
+
 /**
  * Fraction digits for an ISO currency (EUR → 2, JPY → 0), from Intl metadata.
  * Falls back to 2 for anything Intl refuses — the server independently

@@ -1,13 +1,19 @@
 // Workspace planner (spec 008 US1/US2, contract §2.1; streamed spec 016 —
-// INV-028) — client component driving the agent-gated workspace.itinerary.draft
-// SSE subscription through the typed browser tRPC client (research D1/D5).
-// Renders the canonical document and budget fit exactly as returned — no
-// client-side money arithmetic beyond display formatting (FR-009); every
-// user-visible failure string comes from the pure mapping helpers (contract
-// §2.3). Progress labels are purely informational (FR-008) — they never carry
-// server data, only a fixed per-step string. The server component page gates
-// who sees this form (INV-024); authorization stays in agentProcedure (INV-023).
-// Presentation rides the seed-0009s theme kit (.tf-*) — premium bar, no bare HTML.
+// INV-028; redesigned presentation-only by spec 018) — client component
+// driving the agent-gated workspace.itinerary.draft SSE subscription through
+// the typed browser tRPC client (research D1/D5). Renders the canonical
+// document and budget fit exactly as returned — no client-side money
+// arithmetic beyond display formatting (FR-009); every user-visible failure
+// string comes from the pure mapping helpers (contract §2.3). Progress labels
+// are purely informational (FR-008) — they never carry server data, only a
+// fixed per-step string. The server component page gates who sees this form
+// (INV-024); authorization stays in agentProcedure (INV-023).
+// Presentation rides the seed-0009s theme kit (.tf-*) — premium bar, no bare
+// HTML. Spec 018 redesign is presentation-only (no DraftInput/DraftOutput
+// change): human-labeled segmented controls replace raw-enum <select>s, the
+// destination field gains a seeded picker with free-text fallback, and the
+// drafted result renders as an image-forward hero card instead of a plain
+// table — see specs/018-planner-ux-redesign/ for the spec/plan/research.
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -16,10 +22,15 @@ import { BookingFlow } from "./booking-flow.js";
 import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
 import {
+  BUDGET_MODE_LABELS,
   draftErrorMessage,
   draftFailureMessage,
   formatMinorAmount,
+  HERO_DESTINATIONS,
+  resolveDestinationTreatment,
   toTripRequest,
+  TRIP_STYLE_LABELS,
+  type HeroDestination,
   type PlannerFormValues,
 } from "../../../lib/planner-form.js";
 
@@ -53,10 +64,60 @@ const INITIAL_VALUES: PlannerFormValues = {
   currency: "EUR",
 };
 
+// Human labels only (spec 018 FR-001/002) — never the raw enum values themselves.
+const BUDGET_MODE_OPTIONS = (Object.entries(BUDGET_MODE_LABELS) as [PlannerFormValues["budgetMode"], string][]).map(
+  ([value, label]) => ({ value, label }),
+);
+const TRIP_STYLE_OPTIONS = (
+  Object.entries(TRIP_STYLE_LABELS) as [Exclude<PlannerFormValues["tripStyle"], "">, string][]
+).map(([value, label]) => ({ value, label }));
+
+/** Accessible "choose exactly one" control (spec 018 research.md Decision 1) — replaces a raw `<select>` with human-labeled buttons, no new dependency. */
+function SegmentedControl({
+  ariaLabel,
+  testId,
+  value,
+  options,
+  onChange,
+}: {
+  ariaLabel: string;
+  testId: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="tf-segmented" role="radiogroup" aria-label={ariaLabel} data-testid={testId}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Planner() {
   const [values, setValues] = useState<PlannerFormValues>(INITIAL_VALUES);
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
+  const [destinationOpen, setDestinationOpen] = useState(false);
   const drafting = view.phase === "drafting";
+
+  const destinationQuery = values.destination.trim().toLowerCase();
+  const destinationMatches = HERO_DESTINATIONS.filter((hero) =>
+    `${hero.city}, ${hero.country}`.toLowerCase().includes(destinationQuery),
+  );
+
+  function selectDestination(hero: HeroDestination) {
+    update("destination", `${hero.city}, ${hero.country}`);
+    setDestinationOpen(false);
+  }
 
   // Guards a late-arriving SSE event after the component unmounts or a fresh
   // submit supersedes the in-flight one — never a React state-after-unmount
@@ -117,17 +178,53 @@ export function Planner() {
       <p className="tf-eyebrow">AI itinerary planner</p>
       <h2>Plan a trip</h2>
       <form onSubmit={handleSubmit} className="tf-planner-form">
-        <label htmlFor="destination" className="span-2">
+        <label htmlFor="destination" className="span-2 tf-destination-field">
           Destination
           <input
             id="destination"
             name="destination"
             type="text"
             required
-            placeholder="e.g. Lisbon"
+            autoComplete="off"
+            placeholder="Search a destination, or type your own"
             value={values.destination}
-            onChange={(e) => update("destination", e.target.value)}
+            aria-expanded={destinationOpen}
+            onFocus={() => setDestinationOpen(true)}
+            onChange={(e) => {
+              update("destination", e.target.value);
+              setDestinationOpen(true);
+            }}
+            onBlur={() => setDestinationOpen(false)}
           />
+          {destinationOpen ? (
+            <div className="tf-destination-picker" data-testid="destination-picker">
+              {destinationMatches.length === 0 ? (
+                <p className="tf-destination-empty">No seeded match — your typed destination will be used as-is.</p>
+              ) : (
+                destinationMatches.map((hero) => (
+                  <button
+                    key={hero.id}
+                    type="button"
+                    className="tf-destination-option"
+                    data-testid="destination-option"
+                    data-destination-id={hero.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => selectDestination(hero)}
+                  >
+                    <span className="tf-dest-card" style={{ background: hero.gradient }}>
+                      <span className="tf-dest-flag" aria-hidden="true">
+                        {hero.flag}
+                      </span>
+                    </span>
+                    <span className="tf-destination-option-label">
+                      <b>{hero.city}</b>
+                      <span>{hero.country}</span>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : null}
         </label>
         <label htmlFor="checkIn">
           Check-in
@@ -176,20 +273,16 @@ export function Planner() {
             onChange={(e) => update("children", e.target.value)}
           />
         </label>
-        <label htmlFor="tripStyle">
+        <div className="span-2">
           Trip style
-          <select
-            id="tripStyle"
-            name="tripStyle"
+          <SegmentedControl
+            ariaLabel="Trip style"
+            testId="trip-style-control"
             value={values.tripStyle}
-            onChange={(e) => update("tripStyle", e.target.value as PlannerFormValues["tripStyle"])}
-          >
-            <option value="">(default)</option>
-            <option value="balanced">balanced</option>
-            <option value="budget">budget</option>
-            <option value="premium">premium</option>
-          </select>
-        </label>
+            options={[{ value: "", label: "No preference" }, ...TRIP_STYLE_OPTIONS]}
+            onChange={(value) => update("tripStyle", value as PlannerFormValues["tripStyle"])}
+          />
+        </div>
         <label htmlFor="budgetMajor">
           Budget
           <input
@@ -204,18 +297,16 @@ export function Planner() {
             onChange={(e) => update("budgetMajor", e.target.value)}
           />
         </label>
-        <label htmlFor="budgetMode">
+        <div>
           Budget mode
-          <select
-            id="budgetMode"
-            name="budgetMode"
+          <SegmentedControl
+            ariaLabel="Budget mode"
+            testId="budget-mode-control"
             value={values.budgetMode}
-            onChange={(e) => update("budgetMode", e.target.value as PlannerFormValues["budgetMode"])}
-          >
-            <option value="hardCap">hardCap</option>
-            <option value="target">target</option>
-          </select>
-        </label>
+            options={BUDGET_MODE_OPTIONS}
+            onChange={(value) => update("budgetMode", value as PlannerFormValues["budgetMode"])}
+          />
+        </div>
         <label htmlFor="currency">
           Currency
           <input
@@ -259,16 +350,20 @@ export function Planner() {
 
 function DraftResult({ outcome }: { outcome: DraftedOutcome }) {
   const { itinerary, fit } = outcome;
+  const treatment = resolveDestinationTreatment(itinerary.title);
   return (
     <section data-testid="draft-result" className="tf-draft" style={{ marginTop: "1.5rem" }}>
-      <header className="tf-draft-head">
+      <header className="tf-draft-hero-header" data-testid="draft-hero-header" style={{ background: treatment.gradient }}>
+        <span className="tf-draft-hero-flag" aria-hidden="true">
+          {treatment.flag}
+        </span>
+        <p className="tf-eyebrow">{BUDGET_MODE_LABELS[itinerary.pricing.budgetMode]}</p>
         <h2>{itinerary.title}</h2>
         <p>
           Total{" "}
           <strong className="tf-price">
             {formatMinorAmount(itinerary.pricing.total.amountMinor, itinerary.currency)}
-          </strong>{" "}
-          · budget mode <strong>{itinerary.pricing.budgetMode}</strong>
+          </strong>
         </p>
       </header>
 
