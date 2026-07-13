@@ -2,15 +2,17 @@
 #
 # GENERATED FILE — do not hand-edit tested/tested_combos/coverage_pct below.
 # Source of truth: the KITCHENLOOP-COVERAGE block each scenarios/incubating/*/
-# scenario.mjs declares near its top. Regenerate with:
+# scenario.mjs or tests/e2e/*.spec.ts file declares near its top. Regenerate with:
 #   node scripts/kitchenloop/derive-coverage.mjs
 # (seed-0031 — replaces the old hand-appended-by-two-phases convention, which
-# had silently drifted from both loop-state.md and the scenario files.)
+# had silently drifted from both loop-state.md and the scenario files. seed-0035
+# extended the walk to tests/e2e/*.spec.ts, the other place coverage is durably
+# witnessed.)
 
-last_updated: "2026-07-12"
+last_updated: "2026-07-13"
 total_combos: 36   # 6 features x 2 platforms x 3 user_types (kitchenloop.yaml spec.dimensions)
-tested_combos: 27
-coverage_pct: 75
+tested_combos: 28
+coverage_pct: 77.8
 
 tested:
   # ── iteration 2 ──
@@ -35,6 +37,10 @@ tested:
     iteration: 3
     result: "pass"   # draft refuses media key typed; dormant media fields round-trip []; scraped-web source refused on read (D-006.c); no attach affordance exists (the gap) — witness: content-library-media-gap
     tier: "T3"
+  - combo: { feature: "content-library", platform: "web", user_type: "agent-seller" }
+    iteration: 3
+    result: "pass"   # agent registers a media asset via the workspace media-library panel, attaches it to the gallery and to a specific item, and the client's /view page renders both with alt text and no internal id/source leak (spec 015 US1-US3); durable regression coverage since PR #42 — witness: content-library-journey.spec.ts
+    tier: "T2"
   - combo: { feature: "itinerary-builder", platform: "api", user_type: "agent-seller" }
     iteration: 3
     result: "pass"   # workspace.itinerary.draft persists a budget-fit draft; document canonical on read — witness: golden-path-trade-live

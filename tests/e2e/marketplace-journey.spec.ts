@@ -17,6 +17,12 @@ import { DRAFT_TIMEOUT_MS, draftParisTrip, signInAgency, signUpAgency, vetAgency
 // split the L3 suite pins against the ledger). Re-licensing refuses benignly.
 // A signed-out visitor never sees marketplace data (INV-024).
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "marketplace", "platform": "web", "user_type": "agent-reseller", "result": "pass", "iteration": 3, "tier": "T2", "note": "full two-agency trade loop through the browser: seller drafts and is refused listing while unvetted, operator vets, listing goes live; a second (reseller) agency licenses cross-tenant and receives a receipt with the platform's conserved 10% split; re-licensing refuses benignly; a signed-out visitor sees no marketplace data (INV-024); durable regression coverage since PR #27" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const seller = {
   name: "Sella Seller",

@@ -8,6 +8,12 @@ import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency } from "./support.js";
 // unattached itinerary rendering unchanged (SC-005), and detach removing
 // only the targeted attachment (US2 edge case).
 
+// KITCHENLOOP-COVERAGE-BEGIN
+// [
+//   { "feature": "content-library", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "agent registers a media asset via the workspace media-library panel, attaches it to the gallery and to a specific item, and the client's /view page renders both with alt text and no internal id/source leak (spec 015 US1-US3); durable regression coverage since PR #42" }
+// ]
+// KITCHENLOOP-COVERAGE-END
+
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const agent = {
   name: "Mira Media",
