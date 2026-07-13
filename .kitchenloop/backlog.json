@@ -974,9 +974,10 @@
     "body": "Today the planner is a 9-field grid form that EXPOSES RAW ENUM STRINGS to the user (budgetMode dropdown shows 'hardCap'/'target'; pace shows 'balanced'; destination is a bare text input placeholder 'e.g. Lisbon'). It reads as a debug form, not a product.\n\nBUILD a polished planner entry:\n1. Replace raw enums with human labels + segmented controls / nice selects ('Hard cap' vs 'Target budget'; pace 'Relaxed / Balanced / Packed'; trip style as chips). No enum identifiers visible anywhere.\n2. DESTINATION as a country/city selector (B12 'country selection'): a searchable picker seeded at least with the hero cities/countries (Portugal/Lisbon, Japan/Tokyo, Morocco/Marrakech, Iceland/Reykjavik) with flags/thumbnails; free-text still allowed as fallback.\n3. Present the generated draft as a HERO ITINERARY CARD (image-forward, day timeline, budget breakdown) using .tf-* components + the demo-01 catalog imagery \u2014 not a plain table.\n\nUI BAR: match landing-page polish; premium, image-forward. ACCEPTANCE: the planner has zero raw enum strings, destination is a real selector, and the draft renders as a premium hero card. No change to the underlying draft/budget contract beyond presentation. PRD refs: \u00a79.1 inputs (destination, dates, party, style/pace, budget).",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-13T08:45:29Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/57",
+    "merge_commit": "b10d63d"
   },
   {
     "id": "demo-06-auth-ux",
