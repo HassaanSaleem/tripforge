@@ -8,9 +8,12 @@
 // nothing here computes money.
 import { bpsToPercentInput, formatBps, percentToBps } from "./basis-points.js";
 import { transportErrorMessage } from "./transport-error.js";
-import type { BookOutput, DraftOutput, QuoteOutput } from "./trpc/client.js";
+import type { BookOutput, QuoteOutput, SelectDraftOutput } from "./trpc/client.js";
 
-export type DraftedItinerary = Extract<DraftOutput, { status: "drafted" }>["itinerary"];
+// Spec 019: the booking flow always operates on an already-persisted
+// itinerary — that's `selectDraft`'s output now, not compare-time `draft`
+// (which no longer carries a persisted `itinerary` field at all).
+export type DraftedItinerary = Extract<SelectDraftOutput, { status: "drafted" }>["itinerary"];
 
 export type QuoteItem = QuoteOutput["items"][number];
 export type HeldQuoteItem = Extract<QuoteItem, { outcome: "held" }>;

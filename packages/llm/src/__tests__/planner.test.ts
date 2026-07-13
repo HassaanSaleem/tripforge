@@ -1,7 +1,8 @@
 // L1/L2 — planner boundary (spec 005 FR-006; INV-013): the draft vocabulary is
 // zod-enforced at the submit-tool boundary, the tool definitions carry the
 // INV-013 names, and the deterministic fake drives the same injected tools the
-// real planner would — reproducible with zero network.
+// real planner would — reproducible with zero network. Spec 019: a trip
+// request now yields 1-3 labeled candidate drafts instead of exactly one.
 import { describe, it, expect } from "vitest";
 import type { ActivityOffer, HotelOffer, TransferOffer, CarRentalOffer } from "@tripforge/supply-adapter";
 
@@ -10,13 +11,13 @@ import type { ActivityOffer, HotelOffer, TransferOffer, CarRentalOffer } from "@
 const usd = (amountMinor: number) => ({ amountMinor, currency: "USD" });
 const eur = (amountMinor: number) => ({ amountMinor, currency: "EUR" });
 import { FakeLLM } from "../fake.js";
-import { PlannerDraftSchema } from "../planner-draft.js";
+import { PlannerDraftSchema, NamedPlannerDraftsSchema, DRAFT_VARIANTS, type NamedPlannerDraft } from "../planner-draft.js";
 import type { DraftItineraryResult, DraftProgressEvent, DraftStep, PlannerToolDeps } from "../port.js";
 import { searchHotelRatesTool } from "../tools/search-hotel-rates.js";
 import { searchActivitiesTool } from "../tools/search-activities.js";
 import { quoteTransferTool } from "../tools/quote-transfer.js";
 import { quoteCarRentalTool } from "../tools/quote-car-rental.js";
-import { submitItineraryDraftTool } from "../tools/submit-itinerary-draft.js";
+import { submitItineraryDraftsTool } from "../tools/submit-itinerary-drafts.js";
 
 /**
  * Drains draftItinerary's progress-then-result stream (spec 016, INV-028) to
@@ -35,6 +36,16 @@ async function drainDraft(
   }
   if (!result) throw new Error("draftItinerary ended without a terminal result event");
   return { steps, result };
+}
+
+/** Pulls the "balanced" variant's draft out of a drafted result — the variant
+ * whose selection logic is byte-for-byte the pre-spec-019 single-draft
+ * behavior, so existing single-option assertions can reuse it unchanged. */
+function balancedDraft(result: DraftItineraryResult) {
+  if (result.status !== "drafted") throw new Error(`expected drafted, got ${result.status}`);
+  const named = result.drafts.find((d) => d.variant === "balanced");
+  if (!named) throw new Error("no balanced variant in result");
+  return named.draft;
 }
 
 const hotels: HotelOffer[] = [
@@ -99,24 +110,27 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
     if (result.status !== "drafted") return;
     // All four tools exercised exactly once (car rental is context only —
     // D-006); the transfer search's ONE response already carries both
-    // directions (the tool boundary pins criteria — no second call).
+    // directions (the tool boundary pins criteria — no second call). The
+    // shared tool-lookup pass happens ONCE regardless of how many variants
+    // are produced (spec 019 research.md D2/D3).
     expect([...calls].sort()).toEqual(["activity", "car", "hotel", "transfer"]);
+    const balanced = balancedDraft(result);
     // 2-night trip → 2 days; day 1 carries transfer + cheapest stay.
-    expect(result.draft.days).toHaveLength(2);
-    expect(result.draft.days[0]?.items).toContainEqual({ port: "hotel", offerId: "paris-002" });
-    expect(result.draft.days[0]?.items).toContainEqual({ port: "transfer", offerId: "tx-1" });
+    expect(balanced.days).toHaveLength(2);
+    expect(balanced.days[0]?.items).toContainEqual({ port: "hotel", offerId: "paris-002" });
+    expect(balanced.days[0]?.items).toContainEqual({ port: "transfer", offerId: "tx-1" });
     // Final day's transfer is the DISTINCT return-direction offer, never the
     // arrival offerId verbatim (seed-0019 — title/route mismatch fix).
-    expect(result.draft.days[1]?.items).toContainEqual({ port: "transfer", offerId: "tx-1-return" });
-    expect(result.draft.days[1]?.items.some((i) => i.port === "transfer" && i.offerId === "tx-1")).toBe(false);
+    expect(balanced.days[1]?.items).toContainEqual({ port: "transfer", offerId: "tx-1-return" });
+    expect(balanced.days[1]?.items.some((i) => i.port === "transfer" && i.offerId === "tx-1")).toBe(false);
     // No car-rental proposals possible: the vocabulary has no such port.
-    const validated = PlannerDraftSchema.parse(result.draft);
+    const validated = PlannerDraftSchema.parse(balanced);
     expect(validated.days.every((d) => d.items.every((i) => ["hotel", "activity", "transfer"].includes(i.port)))).toBe(
       true,
     );
   });
 
-  it("is deterministic — same request, same draft", async () => {
+  it("is deterministic — same request, same drafts", async () => {
     const a = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
     const b = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
     expect(a).toEqual(b);
@@ -125,7 +139,12 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
   it("consumes scripted results first (test injection seam)", async () => {
     const scripted = {
       status: "drafted" as const,
-      draft: { title: "Scripted", days: [{ items: [{ port: "hotel" as const, offerId: "made-up" }] }] },
+      drafts: [
+        {
+          variant: "balanced" as const,
+          draft: { title: "Scripted", days: [{ items: [{ port: "hotel" as const, offerId: "made-up" }] }] },
+        },
+      ],
       usage: { inputTokens: 0, outputTokens: 0 },
     };
     const fake = new FakeLLM({ plannerScripts: [scripted] });
@@ -141,11 +160,11 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
     const calls: string[] = [];
     const { result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: oneNight, tools: deps(calls) }));
     expect(result.status).toBe("drafted");
-    if (result.status !== "drafted") return;
-    expect(result.draft.days).toHaveLength(1);
+    const balanced = balancedDraft(result);
+    expect(balanced.days).toHaveLength(1);
     expect(calls.filter((c) => c === "transfer")).toHaveLength(1);
-    expect(result.draft.days[0]?.items).toContainEqual({ port: "transfer", offerId: "tx-1" });
-    expect(result.draft.days[0]?.items.some((i) => i.port === "transfer" && i.offerId === "tx-1-return")).toBe(false);
+    expect(balanced.days[0]?.items).toContainEqual({ port: "transfer", offerId: "tx-1" });
+    expect(balanced.days[0]?.items.some((i) => i.port === "transfer" && i.offerId === "tx-1-return")).toBe(false);
   });
 
   it("fails typed with no_proposals when supply is empty", async () => {
@@ -181,6 +200,82 @@ describe("FakeLLM.draftItinerary — deterministic planner (INV-019)", () => {
   });
 });
 
+// ─── Multi-option drafting (spec 019) ──────────────────────────────────────
+describe("FakeLLM.draftItinerary — multi-option variants (spec 019 FR-001/FR-009/FR-010)", () => {
+  function signature(draft: NamedPlannerDraft["draft"]) {
+    return JSON.stringify(draft.days);
+  }
+
+  it("produces 2-3 distinct, schema-valid, differently-labeled options for a normal multi-day/multi-offer trip", async () => {
+    const { result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
+    expect(result.status).toBe("drafted");
+    if (result.status !== "drafted") return;
+
+    expect(result.drafts.length).toBeGreaterThanOrEqual(2);
+    expect(result.drafts.length).toBeLessThanOrEqual(3);
+    // Every returned variant is a fully valid PlannerDraft (INV-001 vocabulary
+    // unchanged) and the whole array satisfies the tool-boundary schema.
+    for (const named of result.drafts) {
+      expect(PlannerDraftSchema.safeParse(named.draft).success).toBe(true);
+    }
+    expect(NamedPlannerDraftsSchema.safeParse(result.drafts).success).toBe(true);
+
+    // No two variants are byte-identical in their day-by-day plan (FR-010) —
+    // and each declared variant appears at most once.
+    const signatures = result.drafts.map((d) => signature(d.draft));
+    expect(new Set(signatures).size).toBe(signatures.length);
+    const variants = result.drafts.map((d) => d.variant);
+    expect(new Set(variants).size).toBe(variants.length);
+
+    // "balanced" is always present (backward-compatible with the pre-spec-019
+    // single-draft output) and titled exactly as the old single-draft flow did.
+    const balanced = result.drafts.find((d) => d.variant === "balanced");
+    expect(balanced?.draft.title).toBe("Paris balanced trip");
+  });
+
+  it("varies hotel/transfer selection at the price extremes: budgetSavvy/balanced use the cheapest offers, premium uses the priciest", async () => {
+    const { result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
+    expect(result.status).toBe("drafted");
+    if (result.status !== "drafted") return;
+
+    const balanced = result.drafts.find((d) => d.variant === "balanced")?.draft;
+    const premium = result.drafts.find((d) => d.variant === "premium")?.draft;
+    expect(balanced?.days[0]?.items).toContainEqual({ port: "hotel", offerId: "paris-002" }); // cheapest
+    expect(premium?.days[0]?.items).toContainEqual({ port: "hotel", offerId: "paris-001" }); // priciest
+  });
+
+  it("is deterministic across repeated calls — same trip request always yields the same option set (FR-009, keyless demo)", async () => {
+    const a = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
+    const b = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: REQUEST, tools: deps([]) }));
+    expect(a.result).toEqual(b.result);
+  });
+
+  it("collapses to fewer, never-duplicate options when the trip's constraints can't support 3 distinct plans", async () => {
+    // A single hotel, single activity, single transfer pair leaves nothing
+    // for budgetSavvy to trim or premium to upgrade to on a 1-night trip —
+    // every variant's day-by-day plan degenerates to the same thing.
+    const oneOfEach: PlannerToolDeps = {
+      searchHotelRates: async () => [hotels[0]!],
+      searchActivities: async () => [activities[0]!],
+      quoteTransfer: async () => [transfers[0]!],
+      quoteCarRental: async () => [],
+    };
+    const oneNight = { ...REQUEST, checkOut: "2026-09-02" };
+    const { result } = await drainDraft(new FakeLLM().draftItinerary({ purpose: "t", request: oneNight, tools: oneOfEach }));
+    expect(result.status).toBe("drafted");
+    if (result.status !== "drafted") return;
+
+    expect(result.drafts.length).toBeGreaterThanOrEqual(1);
+    expect(result.drafts.some((d) => d.variant === "balanced")).toBe(true);
+    const signatures = result.drafts.map((d) => signature(d.draft));
+    expect(new Set(signatures).size).toBe(signatures.length);
+  });
+
+  it("DRAFT_VARIANTS declares exactly the three fixed labels the fake and the schema both use", () => {
+    expect(DRAFT_VARIANTS).toEqual(["budgetSavvy", "balanced", "premium"]);
+  });
+});
+
 describe("PlannerDraftSchema — the structured-output gate (research D2)", () => {
   it("rejects malformed drafts (unknown port, missing offerId, empty days)", () => {
     expect(PlannerDraftSchema.safeParse({ title: "x", days: [] }).success).toBe(false);
@@ -209,13 +304,46 @@ describe("PlannerDraftSchema — the structured-output gate (research D2)", () =
   });
 });
 
+describe("NamedPlannerDraftsSchema — the multi-option tool-boundary gate (spec 019)", () => {
+  it("rejects a repeated variant, an empty array, and more than 3 entries", () => {
+    const one = { title: "x", days: [{ items: [{ port: "hotel" as const, offerId: "h1" }] }] };
+    expect(
+      NamedPlannerDraftsSchema.safeParse([
+        { variant: "balanced", draft: one },
+        { variant: "balanced", draft: one },
+      ]).success,
+    ).toBe(false);
+    expect(NamedPlannerDraftsSchema.safeParse([]).success).toBe(false);
+    expect(
+      NamedPlannerDraftsSchema.safeParse([
+        { variant: "budgetSavvy", draft: one },
+        { variant: "balanced", draft: one },
+        { variant: "premium", draft: one },
+        { variant: "budgetSavvy", draft: one },
+      ]).success,
+    ).toBe(false);
+  });
+
+  it("accepts 1-3 distinct-variant drafts", () => {
+    const one = { title: "x", days: [{ items: [{ port: "hotel" as const, offerId: "h1" }] }] };
+    expect(NamedPlannerDraftsSchema.safeParse([{ variant: "balanced", draft: one }]).success).toBe(true);
+    expect(
+      NamedPlannerDraftsSchema.safeParse([
+        { variant: "budgetSavvy", draft: one },
+        { variant: "balanced", draft: one },
+        { variant: "premium", draft: one },
+      ]).success,
+    ).toBe(true);
+  });
+});
+
 describe("tool definitions — INV-013 names + injected executors", () => {
   it("carries the exact INV-013 tool names", () => {
     expect(searchHotelRatesTool(async () => hotels).name).toBe("search_hotel_rates");
     expect(searchActivitiesTool(async () => activities).name).toBe("search_activities");
     expect(quoteTransferTool(async () => transfers).name).toBe("quote_transfer");
     expect(quoteCarRentalTool(async () => cars).name).toBe("quote_car_rental");
-    expect(submitItineraryDraftTool(() => undefined).name).toBe("submit_itinerary_draft");
+    expect(submitItineraryDraftsTool(() => undefined).name).toBe("submit_itinerary_drafts");
   });
 
   it("runs the injected executor and serializes supplier-agnostic offers only", async () => {
@@ -232,13 +360,14 @@ describe("tool definitions — INV-013 names + injected executors", () => {
     });
   });
 
-  it("submit tool captures the validated draft", async () => {
+  it("submit tool captures the validated drafts array", async () => {
     let captured: unknown;
-    const tool = submitItineraryDraftTool((d) => {
+    const tool = submitItineraryDraftsTool((d) => {
       captured = d;
     });
     const draft = { title: "Paris", days: [{ items: [{ port: "hotel" as const, offerId: "h-1" }] }] };
-    await tool.run(draft);
-    expect(captured).toEqual(draft);
+    const drafts = [{ variant: "balanced" as const, draft }];
+    await tool.run({ drafts });
+    expect(captured).toEqual(drafts);
   });
 });

@@ -5,7 +5,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, agentProcedure } from "../trpc.js";
-import { draftItinerary, tripRequestSchema } from "../services/planner.js";
+import { draftOptions, selectDraftInputSchema, selectDraftOption, tripRequestSchema } from "../services/planner.js";
 import { itineraryOverview } from "../services/booking.js";
 import { attachMedia, detachMedia, listItineraries } from "../services/itineraries.js";
 import { createShareLink, shareInputSchema } from "../services/client-view.js";
@@ -32,13 +32,22 @@ const detachMediaInputSchema = z.strictObject({
 });
 
 export const itineraryRouter = router({
-  /** Describe a trip, get a persisted, budget-fit, live-priced draft (US1).
-   * Streamed (INV-028, spec 016): the LLM tool loop can take several
-   * round trips, so this is an SSE subscription — progress events followed
-   * by exactly one terminal result event — rather than a blocking mutation. */
+  /** Describe a trip, get 1-3 comparable, budget-fit, live-priced options
+   * (spec 019 US1). NOT persisted — see `selectDraft` for that. Streamed
+   * (INV-028, spec 016): the LLM tool loop can take several round trips, so
+   * this is an SSE subscription — progress events followed by exactly one
+   * terminal result event — rather than a blocking mutation. */
   draft: agentProcedure
     .input((value) => tripRequestSchema.parse(value))
-    .subscription(({ ctx, input }) => draftItinerary(ctx.container, ctx.session, input)),
+    .subscription(({ ctx, input }) => draftOptions(ctx.container, ctx.session, input)),
+
+  /** Persist exactly the option the agent picked from `draft`'s compare view
+   * (spec 019 US2). Re-runs the same pipeline (fresh supply verification,
+   * FR-008) rather than trusting client-echoed content (FR-012) — streamed
+   * for the same reason `draft` is (INV-028). */
+  selectDraft: agentProcedure
+    .input((value) => selectDraftInputSchema.parse(value))
+    .subscription(({ ctx, input }) => selectDraftOption(ctx.container, ctx.session, input)),
 
   /** The agency's own itineraries, newest first — the marketplace listing
    * picker's projection (spec 011 contract §2, INV-004 tenant-scoped). */

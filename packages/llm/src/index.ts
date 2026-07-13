@@ -14,8 +14,15 @@ export type {
   DraftStep,
   DraftProgressEvent,
 } from "./port.js";
-export { PlannerDraftSchema, PlannerDraftItemSchema } from "./planner-draft.js";
-export type { PlannerDraft, PlannerDraftItem } from "./planner-draft.js";
+export {
+  PlannerDraftSchema,
+  PlannerDraftItemSchema,
+  DRAFT_VARIANTS,
+  DRAFT_VARIANT_LABELS,
+  NamedPlannerDraftSchema,
+  NamedPlannerDraftsSchema,
+} from "./planner-draft.js";
+export type { PlannerDraft, PlannerDraftItem, DraftVariant, NamedPlannerDraft, NamedPlannerDrafts } from "./planner-draft.js";
 export { FakeLLM } from "./fake.js";
 export type { FakeLLMOptions } from "./fake.js";
 export { AnthropicLLM } from "./anthropic.js";

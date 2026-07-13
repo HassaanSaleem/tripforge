@@ -51,19 +51,24 @@ if (mode === "quote") {
   if (active.res.status !== 200) fail(`set-active (${active.res.status})`, active.text.slice(0, 200));
 
   // Streamed (spec 016, INV-028) — SSE subscription, not a POST mutation.
-  const draft = await agent.apiSubscribe(
-    "/api/trpc/workspace.itinerary.draft",
-    {
-      destination: "Paris",
-      checkIn: "2026-09-01",
-      checkOut: "2026-09-03",
-      party: { adults: 2, children: 0 },
-      budget: { mode: "hardCap", amountMinor: 100000, currency: "USD" },
-    },
+  // Spec 019: `draft` only compares (nothing persisted); `selectDraft`
+  // persists the picked variant — "balanced" reproduces the pre-spec-019
+  // single-draft selection byte-for-byte, so this tool's fixture behavior is
+  // unchanged.
+  const tripRequest = {
+    destination: "Paris",
+    checkIn: "2026-09-01",
+    checkOut: "2026-09-03",
+    party: { adults: 2, children: 0 },
+    budget: { mode: "hardCap", amountMinor: 100000, currency: "USD" },
+  };
+  const select = await agent.apiSubscribe(
+    "/api/trpc/workspace.itinerary.selectDraft",
+    { tripRequest, variant: "balanced" },
     { timeoutMs: 45_000 },
   );
-  const drafted = draft.outcome;
-  if (drafted?.status !== "drafted") fail("draft", draft.text.slice(0, 300));
+  const drafted = select.outcome;
+  if (drafted?.status !== "drafted") fail("selectDraft", select.text.slice(0, 300));
   const itineraryId = drafted.itinerary.id;
 
   const quote = await agent.api("POST", "/api/trpc/workspace.booking.quote", { itineraryId, markupBps: 1500 });

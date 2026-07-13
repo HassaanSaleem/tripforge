@@ -17,7 +17,13 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { trpc, type DraftEvent, type DraftOutput } from "../../../lib/trpc/client.js";
+import {
+  trpc,
+  type DraftEvent,
+  type DraftInput,
+  type DraftOption,
+  type SelectDraftOutput,
+} from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
 import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
@@ -27,6 +33,7 @@ import {
   draftFailureMessage,
   formatMinorAmount,
   HERO_DESTINATIONS,
+  optionHighlight,
   resolveDestinationTreatment,
   toTripRequest,
   TRIP_STYLE_LABELS,
@@ -34,8 +41,9 @@ import {
   type PlannerFormValues,
 } from "../../../lib/planner-form.js";
 
-type DraftedOutcome = Extract<DraftOutput, { status: "drafted" }>;
+type DraftedOutcome = Extract<SelectDraftOutput, { status: "drafted" }>;
 type DraftStep = Extract<DraftEvent, { type: "progress" }>["step"];
+type DraftVariant = DraftOption["variant"];
 
 // Fixed, server-data-free labels (FR-008) — one per LLMPort DraftStep.
 const STEP_LABEL: Record<DraftStep, string> = {
@@ -49,6 +57,11 @@ const STEP_LABEL: Record<DraftStep, string> = {
 type PlannerViewState =
   | { phase: "idle" }
   | { phase: "drafting"; step?: DraftStep }
+  // 1-3 unpersisted options to compare (spec 019 US1) — tripRequest is kept
+  // so "Choose this option" can round-trip it to selectDraft (FR-012: the
+  // client sends back the ORIGINAL request, never itinerary content).
+  | { phase: "comparing"; options: DraftOption[]; tripRequest: DraftInput }
+  | { phase: "selecting"; step?: DraftStep }
   | { phase: "drafted"; outcome: DraftedOutcome }
   | { phase: "failed"; message: string };
 
@@ -108,6 +121,8 @@ export function Planner() {
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
   const [destinationOpen, setDestinationOpen] = useState(false);
   const drafting = view.phase === "drafting";
+  const selecting = view.phase === "selecting";
+  const busy = drafting || selecting;
 
   const destinationQuery = values.destination.trim().toLowerCase();
   const destinationMatches = HERO_DESTINATIONS.filter((hero) =>
@@ -136,15 +151,16 @@ export function Planner() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (drafting) return;
+    if (busy) return;
     const mapped = toTripRequest(values);
     if ("error" in mapped) {
       setView({ phase: "failed", message: mapped.error });
       return;
     }
+    const tripRequest = mapped.request;
     activeSubscription.current?.unsubscribe();
     setView({ phase: "drafting" });
-    activeSubscription.current = trpc.workspace.itinerary.draft.subscribe(mapped.request, {
+    activeSubscription.current = trpc.workspace.itinerary.draft.subscribe(tripRequest, {
       onData(draftEvent: DraftEvent) {
         if (draftEvent.type === "progress") {
           setView((current) => (current.phase === "drafting" ? { phase: "drafting", step: draftEvent.step } : current));
@@ -152,7 +168,7 @@ export function Planner() {
         }
         const outcome = draftEvent.outcome;
         if (outcome.status === "drafted") {
-          setView({ phase: "drafted", outcome });
+          setView({ phase: "comparing", options: outcome.options, tripRequest });
         } else {
           setView({ phase: "failed", message: draftFailureMessage(outcome) });
         }
@@ -171,6 +187,43 @@ export function Planner() {
         );
       },
     });
+  }
+
+  // Persist the picked option (spec 019 US2) — re-verifies against fresh
+  // supply server-side (FR-008) rather than trusting whatever the compare
+  // card displayed; streamed for the same reason `draft` is (INV-028).
+  function chooseOption(tripRequest: DraftInput, variant: DraftVariant) {
+    if (busy) return;
+    activeSubscription.current?.unsubscribe();
+    setView({ phase: "selecting" });
+    activeSubscription.current = trpc.workspace.itinerary.selectDraft.subscribe(
+      { tripRequest, variant },
+      {
+        onData(selectEvent) {
+          if (selectEvent.type === "progress") {
+            setView((current) => (current.phase === "selecting" ? { phase: "selecting", step: selectEvent.step } : current));
+            return;
+          }
+          const outcome = selectEvent.outcome;
+          if (outcome.status === "drafted") {
+            setView({ phase: "drafted", outcome });
+          } else {
+            setView({ phase: "failed", message: draftFailureMessage(outcome) });
+          }
+        },
+        onError(error) {
+          setView({ phase: "failed", message: draftErrorMessage(error) });
+        },
+        onComplete() {
+          activeSubscription.current = null;
+          setView((current) =>
+            current.phase === "selecting"
+              ? { phase: "failed", message: "The connection ended before your trip was saved. Please try again." }
+              : current,
+          );
+        },
+      },
+    );
   }
 
   return (
@@ -319,7 +372,7 @@ export function Planner() {
             onChange={(e) => update("currency", e.target.value)}
           />
         </label>
-        <button type="submit" className="tf-btn--cta" disabled={drafting}>
+        <button type="submit" className="tf-btn--cta" disabled={busy}>
           {drafting ? "Drafting…" : "Draft itinerary"}
         </button>
       </form>
@@ -330,7 +383,16 @@ export function Planner() {
           {view.step ? STEP_LABEL[view.step] : "Designing your trip — pricing real inventory…"}
         </p>
       ) : null}
+      {view.phase === "selecting" ? (
+        <p className="tf-drafting" aria-live="polite">
+          <span className="tf-spin" aria-hidden="true" />
+          {view.step ? STEP_LABEL[view.step] : "Finding your trip…"}
+        </p>
+      ) : null}
       {view.phase === "failed" ? <p role="alert">{view.message}</p> : null}
+      {view.phase === "comparing" ? (
+        <CompareOptions options={view.options} tripRequest={view.tripRequest} onChoose={chooseOption} />
+      ) : null}
       {view.phase === "drafted" ? (
         <>
           <DraftResult outcome={view.outcome} />
@@ -344,6 +406,53 @@ export function Planner() {
           <ShareControl key={`share-${view.outcome.itinerary.id}`} itineraryId={view.outcome.itinerary.id} />
         </>
       ) : null}
+    </section>
+  );
+}
+
+/** Compare view (spec 019 US1): one card per unpersisted option — label,
+ * total vs budget, and a differentiating highlight. Picking a card is the
+ * ONLY way an option becomes a real, saved trip (US2). */
+function CompareOptions({
+  options,
+  tripRequest,
+  onChoose,
+}: {
+  options: DraftOption[];
+  tripRequest: DraftInput;
+  onChoose: (tripRequest: DraftInput, variant: DraftVariant) => void;
+}) {
+  return (
+    <section data-testid="compare-options" className="tf-compare" style={{ marginTop: "1.5rem" }}>
+      <h2>Compare your options</h2>
+      <div className="tf-compare-grid">
+        {options.map((option) => {
+          const treatment = resolveDestinationTreatment(option.itinerary.title);
+          const withinBudget = option.itinerary.pricing.total.amountMinor <= tripRequest.budget.amountMinor;
+          return (
+            <article
+              key={option.variant}
+              className="tf-card tf-compare-card"
+              data-testid="compare-option"
+              data-variant={option.variant}
+            >
+              <header className="tf-compare-card-header" style={{ background: treatment.gradient }}>
+                <span className="tf-eyebrow">{option.label}</span>
+                <strong className="tf-price">
+                  {formatMinorAmount(option.itinerary.pricing.total.amountMinor, option.itinerary.currency)}
+                </strong>
+              </header>
+              <p className={`tf-state tf-state--${withinBudget ? "fits" : "overTarget"}`}>
+                {withinBudget ? "Within budget" : "Over budget"}
+              </p>
+              <p className="tf-compare-highlight">{optionHighlight(option)}</p>
+              <button type="button" className="tf-btn--cta" onClick={() => onChoose(tripRequest, option.variant)}>
+                Choose this option
+              </button>
+            </article>
+          );
+        })}
+      </div>
     </section>
   );
 }

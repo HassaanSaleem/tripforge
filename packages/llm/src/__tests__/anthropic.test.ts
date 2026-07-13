@@ -69,9 +69,13 @@ describe("AnthropicLLM.draftItinerary — streamed progress (spec 016, INV-028)"
       yield { usage, content: [{ type: "tool_use", name: "search_activities" }] };
       yield { usage, content: [{ type: "tool_use", name: "quote_transfer" }] };
       yield { usage, content: [{ type: "tool_use", name: "quote_car_rental" }] };
-      const submitTool = opts.tools.find((t) => t.name === "submit_itinerary_draft");
-      submitTool?.run({ title: "Paris trip", days: [{ items: [{ port: "hotel", offerId: "h-1" }] }] });
-      yield { usage, content: [{ type: "tool_use", name: "submit_itinerary_draft" }] };
+      const submitTool = opts.tools.find((t) => t.name === "submit_itinerary_drafts");
+      submitTool?.run({
+        drafts: [
+          { variant: "balanced", draft: { title: "Paris trip", days: [{ items: [{ port: "hotel", offerId: "h-1" }] }] } },
+        ],
+      });
+      yield { usage, content: [{ type: "tool_use", name: "submit_itinerary_drafts" }] };
     };
     const llm = new AnthropicLLM({ apiKey: "test-key" });
     const { steps, result } = await drainDraft(llm.draftItinerary(REQUEST));
@@ -80,7 +84,9 @@ describe("AnthropicLLM.draftItinerary — streamed progress (spec 016, INV-028)"
       type: "result",
       result: {
         status: "drafted",
-        draft: { title: "Paris trip", days: [{ items: [{ port: "hotel", offerId: "h-1" }] }] },
+        drafts: [
+          { variant: "balanced", draft: { title: "Paris trip", days: [{ items: [{ port: "hotel", offerId: "h-1" }] }] } },
+        ],
         usage: { inputTokens: 50, outputTokens: 25 },
       },
     });

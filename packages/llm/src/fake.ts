@@ -17,7 +17,14 @@ import {
   type LlmCompleteRequest,
   type LlmCompleteResponse,
 } from "./port.js";
-import type { PlannerDraft, PlannerDraftItem } from "./planner-draft.js";
+import {
+  DRAFT_VARIANTS,
+  DRAFT_VARIANT_LABELS,
+  type DraftVariant,
+  type NamedPlannerDraft,
+  type PlannerDraft,
+  type PlannerDraftItem,
+} from "./planner-draft.js";
 
 export interface FakeLLMOptions {
   /** Canned complete() responses (consumed in order). */
@@ -99,12 +106,14 @@ export class FakeLLM implements LLMPort {
 
     const cheapest = <T extends { netRate: { amountMinor: number }; offerId: string }>(offers: T[]): T[] =>
       [...offers].sort((a, b) => a.netRate.amountMinor - b.netRate.amountMinor || a.offerId.localeCompare(b.offerId));
+    const pickEnd = <T>(ranked: T[], end: "cheapest" | "priciest"): T | undefined =>
+      end === "cheapest" ? ranked[0] : ranked[ranked.length - 1];
 
     const dayCount = Math.max(
       1,
       Math.round((Date.parse(`${request.checkOut}T00:00:00Z`) - Date.parse(`${request.checkIn}T00:00:00Z`)) / 86_400_000),
     );
-    const hotel = cheapest(hotels)[0];
+    const rankedHotels = cheapest(hotels);
     // The transfer search's single response carries BOTH directions (the
     // planner tool boundary pins criteria to the trip's own canonical
     // direction — spec 008 FR-011 — so a second, reverse-direction call is
@@ -118,42 +127,92 @@ export class FakeLLM implements LLMPort {
     // real/live adapter that only ever returns one direction).
     const outboundTransfers = transfers.filter((t) => !t.offerId.endsWith("-return"));
     const returnTransfers = transfers.filter((t) => t.offerId.endsWith("-return"));
-    const transfer = cheapest(outboundTransfers)[0] ?? cheapest(transfers)[0];
-    const returnTransfer = cheapest(returnTransfers)[0] ?? transfer;
+    const rankedOutbound = cheapest(outboundTransfers);
+    const rankedAllTransfers = cheapest(transfers);
+    const rankedReturn = cheapest(returnTransfers);
     const rankedActivities = cheapest(activities);
 
-    if (!hotel && rankedActivities.length === 0 && !transfer) {
+    if (rankedHotels.length === 0 && rankedActivities.length === 0 && rankedAllTransfers.length === 0) {
       yield { type: "result", result: { status: "failed", reason: "no_proposals" } };
       return;
     }
 
-    const days: PlannerDraft["days"] = [];
-    for (let day = 1; day <= dayCount; day++) {
-      const items: PlannerDraftItem[] = [];
-      if (day === 1) {
-        if (transfer) items.push({ port: "transfer", offerId: transfer.offerId });
-        if (hotel) items.push({ port: "hotel", offerId: hotel.offerId });
+    // Which activity offer(s) land on a given day, per variant (spec 019
+    // research.md D2) — all three variants share the SAME ranked activity
+    // list from the ONE tool-lookup pass above; only the selection pattern
+    // differs, so options stay mutually comparable at the same live prices.
+    // `at` is always in-bounds (idx % length against a non-empty array) — the
+    // undefined-filter below satisfies noUncheckedIndexedAccess without a
+    // non-null assertion.
+    function activitiesForDay(variant: DraftVariant, day: number): (typeof rankedActivities)[number][] {
+      if (rankedActivities.length === 0) return [];
+      const at = (idx: number) => rankedActivities[idx % rankedActivities.length];
+      let picks: ((typeof rankedActivities)[number] | undefined)[];
+      if (variant === "budgetSavvy") {
+        // Fewer activities: only every other day.
+        if (day % 2 === 0) return [];
+        picks = [at(Math.floor((day - 1) / 2))];
+      } else if (variant === "premium") {
+        // One extra activity per day when the ranked list supports it.
+        picks = rankedActivities.length < 2 ? [at(day - 1)] : [at(day - 1), at(day)];
+      } else {
+        // balanced — unchanged from the original single-draft selection.
+        picks = [at(day - 1)];
       }
-      const activity = rankedActivities[(day - 1) % Math.max(1, rankedActivities.length)];
-      if (activity) items.push({ port: "activity", offerId: activity.offerId });
-      if (day === dayCount && dayCount > 1 && transfer) {
-        // transfer is narrowed truthy here; returnTransfer already falls
-        // back to it when no distinct return offer exists.
-        items.push({ port: "transfer", offerId: (returnTransfer ?? transfer).offerId });
-      }
-      days.push({ items });
+      return picks.filter((p): p is (typeof rankedActivities)[number] => p !== undefined);
     }
+
+    function buildVariant(variant: DraftVariant): PlannerDraft {
+      const end: "cheapest" | "priciest" = variant === "premium" ? "priciest" : "cheapest";
+      const hotel = pickEnd(rankedHotels, end);
+      const transfer = pickEnd(rankedOutbound, end) ?? pickEnd(rankedAllTransfers, end);
+      const returnTransfer = pickEnd(rankedReturn, end) ?? transfer;
+
+      const days: PlannerDraft["days"] = [];
+      for (let day = 1; day <= dayCount; day++) {
+        const items: PlannerDraftItem[] = [];
+        if (day === 1) {
+          if (transfer) items.push({ port: "transfer", offerId: transfer.offerId });
+          if (hotel) items.push({ port: "hotel", offerId: hotel.offerId });
+        }
+        for (const activity of activitiesForDay(variant, day)) {
+          items.push({ port: "activity", offerId: activity.offerId });
+        }
+        if (day === dayCount && dayCount > 1 && transfer) {
+          items.push({ port: "transfer", offerId: (returnTransfer ?? transfer).offerId });
+        }
+        days.push({ items });
+      }
+
+      const title =
+        variant === "balanced"
+          ? `${request.destination} ${request.tripStyle ?? "balanced"} trip`
+          : `${request.destination} ${DRAFT_VARIANT_LABELS[variant].toLowerCase()} trip`;
+      return { title, days };
+    }
+
+    // Build in dedup-priority order — "balanced" is always kept (backward
+    // compatible with the pre-spec-019 single-draft output); budgetSavvy/
+    // premium are dropped when their day-by-day plan is byte-identical to
+    // one already kept (FR-010: never show two indistinguishable options).
+    const priority: DraftVariant[] = ["balanced", "budgetSavvy", "premium"];
+    const seenSignatures: string[] = [];
+    const kept: NamedPlannerDraft[] = [];
+    for (const variant of priority) {
+      const draft = buildVariant(variant);
+      const signature = JSON.stringify(draft.days);
+      if (variant === "balanced" || !seenSignatures.includes(signature)) {
+        seenSignatures.push(signature);
+        kept.push({ variant, draft });
+      }
+    }
+    const drafts = DRAFT_VARIANTS.map((variant) => kept.find((k) => k.variant === variant)).filter(
+      (d): d is NamedPlannerDraft => d !== undefined,
+    );
 
     yield {
       type: "result",
-      result: {
-        status: "drafted",
-        draft: {
-          title: `${request.destination} ${request.tripStyle ?? "balanced"} trip`,
-          days,
-        },
-        usage: { inputTokens: 0, outputTokens: 0 },
-      },
+      result: { status: "drafted", drafts, usage: { inputTokens: 0, outputTokens: 0 } },
     };
   }
 }

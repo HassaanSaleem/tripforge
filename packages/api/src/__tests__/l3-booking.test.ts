@@ -489,23 +489,33 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
         plannerScripts: [
           {
             status: "drafted",
-            draft: {
-              title: "Mostly made up",
-              days: [
-                {
-                  items: [
-                    { port: "hotel", offerId: "paris-002" },
-                    { port: "hotel", offerId: "totally-fabricated" },
-                    { port: "activity", offerId: "also-fake" },
+            drafts: [
+              {
+                variant: "balanced",
+                draft: {
+                  title: "Mostly made up",
+                  days: [
+                    {
+                      items: [
+                        { port: "hotel", offerId: "paris-002" },
+                        { port: "hotel", offerId: "totally-fabricated" },
+                        { port: "activity", offerId: "also-fake" },
+                      ],
+                    },
                   ],
                 },
-              ],
-            },
+              },
+            ],
             usage: { inputTokens: 0, outputTokens: 0 },
           },
           {
             status: "drafted",
-            draft: { title: "All made up", days: [{ items: [{ port: "hotel", offerId: "nope" }] }] },
+            drafts: [
+              {
+                variant: "balanced",
+                draft: { title: "All made up", days: [{ items: [{ port: "hotel", offerId: "nope" }] }] },
+              },
+            ],
             usage: { inputTokens: 0, outputTokens: 0 },
           },
         ],

@@ -28,11 +28,19 @@ export const trpc = createTRPCClient<AppRouter>({
  * DraftEvent/TripRequest stay accessed only via inference here — the
  * PACKAGE-BOUNDARY export in packages/api/src/index.ts exists solely to
  * satisfy TS4023 declaration emit, not as a direct import surface for this
- * client (QS3-1 premature-export spirit preserved).
+ * client (QS3-1 premature-export spirit preserved). Spec 019: `draft` is now
+ * compare-only (1-3 unpersisted options); `selectDraft` persists the picked
+ * one, mirroring the pre-spec-019 single-draft outcome shape exactly.
  */
 export type DraftInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["draft"];
 export type DraftEvent = inferSubscriptionOutput<AppRouter["workspace"]["itinerary"]["draft"]>;
 export type DraftOutput = Extract<DraftEvent, { type: "result" }>["outcome"];
+export type DraftedOptions = Extract<DraftOutput, { status: "drafted" }>["options"];
+export type DraftOption = DraftedOptions[number];
+
+export type SelectDraftInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["selectDraft"];
+export type SelectDraftEvent = inferSubscriptionOutput<AppRouter["workspace"]["itinerary"]["selectDraft"]>;
+export type SelectDraftOutput = Extract<SelectDraftEvent, { type: "result" }>["outcome"];
 
 /**
  * Booking input/outcome types via the same inference (spec 009 research D1):

@@ -12,12 +12,12 @@ import type {
   LlmUsage,
   PlannerTripRequest,
 } from "./port.js";
-import type { PlannerDraft } from "./planner-draft.js";
+import type { NamedPlannerDrafts } from "./planner-draft.js";
 import { searchHotelRatesTool } from "./tools/search-hotel-rates.js";
 import { searchActivitiesTool } from "./tools/search-activities.js";
 import { quoteTransferTool } from "./tools/quote-transfer.js";
 import { quoteCarRentalTool } from "./tools/quote-car-rental.js";
-import { submitItineraryDraftTool } from "./tools/submit-itinerary-draft.js";
+import { submitItineraryDraftsTool } from "./tools/submit-itinerary-drafts.js";
 
 export interface AnthropicLLMOptions {
   apiKey: string;
@@ -33,14 +33,18 @@ const PLANNER_MAX_TOKENS = 4096;
 // Stable planner instructions (kept free of per-request values so the prompt
 // prefix stays cacheable — INV-013 prompt-caching note).
 const PLANNER_SYSTEM = [
-  "You are a travel-agency itinerary planner. Draft a realistic day-by-day trip",
-  "using ONLY real, bookable inventory you discover through the lookup tools.",
+  "You are a travel-agency itinerary planner. Draft 1-3 distinct, labeled day-by-day",
+  "trip options using ONLY real, bookable inventory you discover through the lookup tools.",
   "Rules:",
   "- Call search_hotel_rates, search_activities and quote_transfer before proposing.",
   "- quote_car_rental is budget context only; car rentals can never be itinerary items.",
   "- Propose only offerIds the tools returned — never invent one.",
   "- Stay within the per-category budgets you are given; prefer cheaper options when tight.",
-  "- Finish by calling submit_itinerary_draft exactly once with one entry per trip day.",
+  "- Produce up to 3 variants — budgetSavvy (cheaper choices), balanced (your best default",
+  "  pick), premium (higher-end choices) — each proposed at most once; skip a variant rather",
+  "  than duplicate another one if the inventory can't support a genuinely different plan.",
+  "- Finish by calling submit_itinerary_drafts exactly once with every variant you produced,",
+  "  each with one entry per trip day.",
 ].join("\n");
 
 // Maps the planner tool names (INV-013 vocabulary) to the wire-safe progress
@@ -50,7 +54,7 @@ const TOOL_NAME_TO_STEP: Record<string, DraftStep> = {
   search_activities: "searchingActivities",
   quote_transfer: "quotingTransfer",
   quote_car_rental: "quotingCarRental",
-  submit_itinerary_draft: "assembling",
+  submit_itinerary_drafts: "assembling",
 };
 
 function plannerUserPrompt(request: PlannerTripRequest): string {
@@ -94,7 +98,7 @@ export class AnthropicLLM implements LLMPort {
   }
 
   async *draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent> {
-    let captured: PlannerDraft | undefined;
+    let captured: NamedPlannerDrafts | undefined;
     const runner = this.client.beta.messages.toolRunner({
       model: LLM_MODEL,
       max_tokens: PLANNER_MAX_TOKENS,
@@ -106,8 +110,8 @@ export class AnthropicLLM implements LLMPort {
         searchActivitiesTool((c) => req.tools.searchActivities(c)),
         quoteTransferTool((c) => req.tools.quoteTransfer(c)),
         quoteCarRentalTool((c) => req.tools.quoteCarRental(c)),
-        submitItineraryDraftTool((draft) => {
-          captured = draft;
+        submitItineraryDraftsTool((drafts) => {
+          captured = drafts;
         }),
       ],
       // NOTE: no `effort` param — unsupported on Haiku 4.5 (INV-013).
@@ -138,6 +142,6 @@ export class AnthropicLLM implements LLMPort {
       yield { type: "result", result: { status: "failed", reason: "no_proposals" } };
       return;
     }
-    yield { type: "result", result: { status: "drafted", draft: captured, usage } };
+    yield { type: "result", result: { status: "drafted", drafts: captured, usage } };
   }
 }

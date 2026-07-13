@@ -16,8 +16,11 @@ export type {
 export type { BookOutcome, HeldQuote } from "./services/booking.js";
 // Draft streaming types surfaced the same way (spec 016): itinerary.draft is
 // now a subscription, so DraftEvent/DraftOutcome ride the inferred AppRouter
-// type and must be nameable (TS4023).
-export type { DraftEvent, DraftOutcome } from "./services/planner.js";
+// type and must be nameable (TS4023). Spec 019: draft is compare-only
+// (CompareEvent/CompareOutcome/DraftOption); selectDraft persists and reuses
+// DraftEvent/DraftOutcome's pre-existing shape; SelectDraftInput is the
+// selectDraft procedure's own input type — same TS4023 nameability need.
+export type { DraftEvent, DraftOutcome, CompareEvent, CompareOutcome, DraftOption, SelectDraftInput } from "./services/planner.js";
 // Marketplace-picker projection surfaced the same way (spec 011). Attach/
 // detach outcome types surfaced the same way (spec 015).
 export type { MyItinerary, MediaTarget, AttachMediaOutcome, DetachMediaOutcome } from "./services/itineraries.js";

@@ -35,3 +35,33 @@ export const PlannerDraftSchema = z.strictObject({
     .describe("One entry per trip day, in order"),
 });
 export type PlannerDraft = z.infer<typeof PlannerDraftSchema>;
+
+// ─── Multi-option drafting (spec 019) ─────────────────────────────────────
+// A trip request now yields 1-3 labeled candidate drafts instead of exactly
+// one — a fixed, server-owned vocabulary (never freeform text), mirroring
+// DraftStep's existing fixed-vocabulary pattern. Each named draft is still
+// JUST a PlannerDraft (offer references + hints only, INV-001 unaffected) —
+// comparison/selection is orchestrated one layer up (packages/api).
+export const DRAFT_VARIANTS = ["budgetSavvy", "balanced", "premium"] as const;
+export type DraftVariant = (typeof DRAFT_VARIANTS)[number];
+
+export const DRAFT_VARIANT_LABELS: Record<DraftVariant, string> = {
+  budgetSavvy: "Budget-savvy",
+  balanced: "Balanced",
+  premium: "Premium",
+};
+
+export const NamedPlannerDraftSchema = z.strictObject({
+  variant: z.enum(DRAFT_VARIANTS).describe("Which themed option this draft represents"),
+  draft: PlannerDraftSchema,
+});
+export type NamedPlannerDraft = z.infer<typeof NamedPlannerDraftSchema>;
+
+export const NamedPlannerDraftsSchema = z
+  .array(NamedPlannerDraftSchema)
+  .min(1)
+  .max(DRAFT_VARIANTS.length)
+  .refine((drafts) => new Set(drafts.map((d) => d.variant)).size === drafts.length, {
+    message: "Each variant may be proposed at most once",
+  });
+export type NamedPlannerDrafts = z.infer<typeof NamedPlannerDraftsSchema>;

@@ -221,34 +221,54 @@ async function main() {
   const setActive = await agent.api("POST", "/api/auth/organization/set-active", { organizationId: orgId });
   check("build→book: agency set active", setActive.res.status === 200, `got ${setActive.res.status}`);
 
-  // 8b. Draft: itinerary +1, trip_created PMF event +1, nothing else.
-  // 45s cap: with ANTHROPIC_API_KEY in the stack env this runs a REAL Haiku
-  // tool loop (INV-013); keyless stacks use the deterministic fake and answer
-  // in milliseconds. Every assertion below holds under either planner.
-  const beforeDraft = await snapshotTables();
+  // 8b. Draft (spec 019): compare-only, ZERO persistence — 1-3 unpersisted
+  // options. 45s cap: with ANTHROPIC_API_KEY in the stack env this runs a
+  // REAL Haiku tool loop (INV-013); keyless stacks use the deterministic
+  // fake and answer in milliseconds. Every assertion below holds under
+  // either planner.
+  const tripRequest = {
+    destination: "Paris",
+    checkIn: "2026-09-01",
+    checkOut: "2026-09-03",
+    party: { adults: 2, children: 0 },
+    budget: { mode: "hardCap", amountMinor: 100000, currency: "USD" },
+  };
+  const beforeCompare = await snapshotTables();
   // Streamed (spec 016, INV-028) — SSE subscription, not a POST mutation;
   // apiSubscribe drains it to the terminal result, same as a real client.
-  const draft = await agent.apiSubscribe(
-    "/api/trpc/workspace.itinerary.draft",
-    {
-      destination: "Paris",
-      checkIn: "2026-09-01",
-      checkOut: "2026-09-03",
-      party: { adults: 2, children: 0 },
-      budget: { mode: "hardCap", amountMinor: 100000, currency: "USD" },
-    },
-    { timeoutMs: 45_000 },
+  const compare = await agent.apiSubscribe("/api/trpc/workspace.itinerary.draft", tripRequest, { timeoutMs: 45_000 });
+  const compared = compare.outcome;
+  check(
+    "build→book: draft returns 1-3 comparable options",
+    compared?.status === "drafted" && (compared?.options?.length ?? 0) >= 1,
+    compare.text.slice(0, 300),
   );
-  const drafted = draft.outcome;
-  check("build→book: draft returns a drafted itinerary", drafted?.status === "drafted", draft.text.slice(0, 300));
   check(
     "build→book: draft streamed at least one progress event before the result (INV-028)",
-    draft.events.some((e) => e.type === "progress"),
-    `events=${JSON.stringify(draft.events.map((e) => e.type))}`,
+    compare.events.some((e) => e.type === "progress"),
+    `events=${JSON.stringify(compare.events.map((e) => e.type))}`,
   );
+  const afterCompare = await snapshotTables();
+  const compareDelta = assertDelta(beforeCompare, afterCompare, {});
+  check(
+    "build→book: draft (compare) writes ZERO rows — persistence moved to selectDraft (spec 019)",
+    compareDelta.ok,
+    compareDelta.detail,
+  );
+
+  // 8c. Select: itinerary +1, trip_created PMF event +1, nothing else — the
+  // chosen option becomes the real, saved trip (spec 019 FR-005/FR-006).
+  const chosenVariant = compared?.options?.[0]?.variant ?? "balanced";
+  const select = await agent.apiSubscribe(
+    "/api/trpc/workspace.itinerary.selectDraft",
+    { tripRequest, variant: chosenVariant },
+    { timeoutMs: 45_000 },
+  );
+  const drafted = select.outcome;
+  check("build→book: selectDraft persists the chosen option", drafted?.status === "drafted", select.text.slice(0, 300));
   const afterDraft = await snapshotTables();
-  const draftDelta = assertDelta(beforeDraft, afterDraft, { itinerary: 1, pmf_event: 1 });
-  check("build→book: draft delta is itinerary +1, pmf_event +1 (others conserved)", draftDelta.ok, draftDelta.detail);
+  const draftDelta = assertDelta(afterCompare, afterDraft, { itinerary: 1, pmf_event: 1 });
+  check("build→book: select delta is itinerary +1, pmf_event +1 (others conserved)", draftDelta.ok, draftDelta.detail);
   const allocSum = (drafted?.itinerary?.pricing?.categories ?? []).reduce(
     (acc, c) => acc + (c.allocated?.amountMinor ?? 0),
     0,
@@ -265,7 +285,7 @@ async function main() {
     `items=${draftItems.length}`,
   );
 
-  // 8c. Quote: one hold per bookable item, hold fields present.
+  // 8d. Quote: one hold per bookable item, hold fields present.
   const itineraryId = drafted?.itinerary?.id;
   const quote = await agent.api("POST", "/api/trpc/workspace.booking.quote", { itineraryId, markupBps: 1500 });
   const quoted = quote.json?.result?.data;
@@ -281,7 +301,7 @@ async function main() {
   const quoteDelta = assertDelta(afterDraft, afterQuote, { booking_quote: heldQuotes.length });
   check(`build→book: quote delta is booking_quote +${heldQuotes.length}`, quoteDelta.ok, quoteDelta.detail);
 
-  // 8d. Book: ONE transaction — booking, components, ledger, PMF events.
+  // 8e. Book: ONE transaction — booking, components, ledger, PMF events.
   // Booked as a concurrent RACE (seed-0015): two simultaneous book requests
   // for the same holds with OPPOSED request orders — the interleaving that
   // deadlocked (40P01) the claim gate against the recording transaction
@@ -332,7 +352,7 @@ async function main() {
     bookDelta.detail,
   );
 
-  // 8e. Ledger identity (SC-005): markup = sell − net exactly, in every row.
+  // 8f. Ledger identity (SC-005): markup = sell − net exactly, in every row.
   const ledgerCheck = await sql(
     "SELECT COUNT(*) AS bad FROM markup_ledger WHERE markup_minor <> sell_minor - net_minor;",
   );
@@ -342,7 +362,7 @@ async function main() {
     ledgerCheck.trim(),
   );
 
-  // 8f. Plan→book conversion computes from this flow's events (SC-007).
+  // 8g. Plan→book conversion computes from this flow's events (SC-007).
   const planBook = await sql("SELECT * FROM pmf_plan_to_book;");
   const planBookRow = planBook.split("\n")[1] ?? "";
   const [createdCount, bookedCount] = planBookRow.split(",").map(Number);
@@ -352,7 +372,7 @@ async function main() {
     `view row: ${planBookRow}`,
   );
 
-  // 8g. Double-book the same holds: typed failure, ZERO state delta (SC-004).
+  // 8h. Double-book the same holds: typed failure, ZERO state delta (SC-004).
   const again = await agent.api("POST", "/api/trpc/workspace.booking.book", { itineraryId, quoteRowIds });
   const againData = again.json?.result?.data;
   check(

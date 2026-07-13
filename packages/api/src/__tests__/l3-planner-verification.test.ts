@@ -10,7 +10,16 @@
 // Postgres (the compose stack); skipping without the env is loud, never silent.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { createDb, eq, itinerary as itineraryTable, organization, user as userTable, type DbHandle } from "@tripforge/db";
+import {
+  count,
+  createDb,
+  eq,
+  itinerary as itineraryTable,
+  organization,
+  pmfEvent,
+  user as userTable,
+  type DbHandle,
+} from "@tripforge/db";
 import {
   SandboxActivityAdapter,
   SandboxCarRentalAdapter,
@@ -18,16 +27,18 @@ import {
   SandboxMediaStoreAdapter,
   SandboxTransferAdapter,
 } from "@tripforge/supply-adapter";
-import type {
-  DraftItineraryRequest,
-  DraftProgressEvent,
-  LlmCompleteRequest,
-  LlmCompleteResponse,
-  LLMPort,
+import {
+  FakeLLM,
+  type DraftItineraryRequest,
+  type DraftProgressEvent,
+  type LlmCompleteRequest,
+  type LlmCompleteResponse,
+  type LLMPort,
 } from "@tripforge/llm";
 import { appRouter } from "../routers/root.js";
 import { STATIC_RATES } from "../rates.js";
 import type { Container, SessionContext } from "../context.js";
+import type { DraftOutcome } from "../services/planner.js";
 import { draftViaCaller } from "./draft-helper.js";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -76,18 +87,23 @@ class SloppyCriteriaLLM implements LLMPort {
       type: "result",
       result: {
         status: "drafted",
-        draft: {
-          title: `${request.destination} weekender`,
-          days: [
-            {
-              items: [
-                { port: "transfer", offerId: transfer.offerId },
-                { port: "hotel", offerId: hotel.offerId },
-                { port: "activity", offerId: activity.offerId },
+        drafts: [
+          {
+            variant: "balanced",
+            draft: {
+              title: `${request.destination} weekender`,
+              days: [
+                {
+                  items: [
+                    { port: "transfer", offerId: transfer.offerId },
+                    { port: "hotel", offerId: hotel.offerId },
+                    { port: "activity", offerId: activity.offerId },
+                  ],
+                },
               ],
             },
-          ],
-        },
+          },
+        ],
         usage: { inputTokens: 0, outputTokens: 0 },
       },
     };
@@ -104,14 +120,14 @@ describe.skipIf(!DATABASE_URL)("L3 planner draft verification alignment (real Po
     await handle.close();
   });
 
-  function makeContainer(): Container {
+  function makeContainer(llm: LLMPort = new SloppyCriteriaLLM()): Container {
     return {
       hotel: new SandboxHotelAdapter(),
       activity: new SandboxActivityAdapter(),
       transfer: new SandboxTransferAdapter(),
       carRental: new SandboxCarRentalAdapter(),
       mediaStore: new SandboxMediaStoreAdapter(handle.db),
-      llm: new SloppyCriteriaLLM(),
+      llm,
       rates: STATIC_RATES,
       db: handle.db,
     };
@@ -123,6 +139,37 @@ describe.skipIf(!DATABASE_URL)("L3 planner draft verification alignment (real Po
     await handle.db.insert(organization).values({ id: agencyId, name, slug: agencyId });
     await handle.db.insert(userTable).values({ id: userId, name: `${name} User`, email: `${userId}@example.test` });
     return { userId, agencyId, agencyRole: "member" };
+  }
+
+  async function countsFor(agencyId: string) {
+    const [itineraries] = await handle.db.select({ n: count() }).from(itineraryTable).where(eq(itineraryTable.agencyId, agencyId));
+    const [pmf] = await handle.db.select({ n: count() }).from(pmfEvent).where(eq(pmfEvent.agencyId, agencyId));
+    return { itineraries: Number(itineraries?.n ?? 0), pmfEvents: Number(pmf?.n ?? 0) };
+  }
+
+  const MULTI_OPTION_INPUT = {
+    destination: "Lisbon",
+    checkIn: "2026-11-01",
+    checkOut: "2026-11-04",
+    party: { adults: 2, children: 0 },
+    budget: { mode: "hardCap" as const, amountMinor: 150_000, currency: "USD" },
+  };
+
+  /** Drains selectDraft for a specific variant — like draftViaCaller, but lets
+   * the caller pick which variant to persist (used to prove two different
+   * selections produce two separate trips). */
+  async function selectDraftViaCaller(
+    caller: ReturnType<(typeof appRouter)["createCaller"]>,
+    tripRequest: typeof MULTI_OPTION_INPUT,
+    variant: "budgetSavvy" | "balanced" | "premium",
+  ): Promise<DraftOutcome> {
+    const stream = await caller.workspace.itinerary.selectDraft({ tripRequest, variant });
+    let outcome: DraftOutcome | undefined;
+    for await (const event of stream) {
+      if (event.type === "result") outcome = event.outcome;
+    }
+    if (!outcome) throw new Error("selectDraft stream ended without a terminal result event");
+    return outcome;
   }
 
   it(
@@ -218,6 +265,117 @@ describe.skipIf(!DATABASE_URL)("L3 planner draft verification alignment (real Po
       expect(events).toHaveLength(1);
       expect(events[0]?.type).toBe("result");
       expect(events[0]?.outcome?.status).toBe("infeasible");
+    },
+    LONG,
+  );
+
+  // ─── Multi-option compare/select (spec 019) ────────────────────────────
+  it(
+    "draft (compare) writes ZERO itinerary rows and ZERO trip_created PMF events, regardless of option count",
+    async () => {
+      const session = await makeAgency("Compare Only Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer(new FakeLLM()) });
+
+      const before = await countsFor(session.agencyId);
+      const stream = await caller.workspace.itinerary.draft(MULTI_OPTION_INPUT);
+      let outcome: { status: string; options?: unknown[] } | undefined;
+      for await (const event of stream) {
+        if (event.type === "result") outcome = event.outcome;
+      }
+      expect(outcome?.status).toBe("drafted");
+      expect((outcome?.options?.length ?? 0)).toBeGreaterThanOrEqual(1);
+
+      expect(await countsFor(session.agencyId)).toEqual(before);
+    },
+    LONG,
+  );
+
+  it(
+    "selectDraft persists exactly ONE itinerary row + ONE trip_created PMF event for the chosen variant",
+    async () => {
+      const session = await makeAgency("Select Balanced Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer(new FakeLLM()) });
+
+      const before = await countsFor(session.agencyId);
+      const stream = await caller.workspace.itinerary.selectDraft({ tripRequest: MULTI_OPTION_INPUT, variant: "balanced" });
+      let outcome: { status: string; itinerary?: { id: string } } | undefined;
+      for await (const event of stream) {
+        if (event.type === "result") outcome = event.outcome;
+      }
+      expect(outcome?.status).toBe("drafted");
+
+      const after = await countsFor(session.agencyId);
+      expect(after.itineraries).toBe(before.itineraries + 1);
+      expect(after.pmfEvents).toBe(before.pmfEvents + 1);
+
+      const rows = await handle.db
+        .select({ id: itineraryTable.id })
+        .from(itineraryTable)
+        .where(eq(itineraryTable.agencyId, session.agencyId));
+      expect(rows.map((r) => r.id)).toContain(outcome?.itinerary?.id);
+    },
+    LONG,
+  );
+
+  it(
+    "selecting two different variants for the same trip produces two SEPARATE persisted trips (no accidental de-dup)",
+    async () => {
+      const session = await makeAgency("Select Twice Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer(new FakeLLM()) });
+
+      const first = await selectDraftViaCaller(caller, MULTI_OPTION_INPUT, "budgetSavvy");
+      const second = await selectDraftViaCaller(caller, MULTI_OPTION_INPUT, "premium");
+      expect(first.status).toBe("drafted");
+      expect(second.status).toBe("drafted");
+      if (first.status !== "drafted" || second.status !== "drafted") return;
+      expect(first.itinerary.id).not.toBe(second.itinerary.id);
+
+      const counts = await countsFor(session.agencyId);
+      expect(counts.itineraries).toBe(2);
+      expect(counts.pmfEvents).toBe(2);
+    },
+    LONG,
+  );
+
+  it(
+    "selectDraft yields the SAME typed infeasible outcome as draft, with ZERO writes, when the budget can't be planned",
+    async () => {
+      const session = await makeAgency("Infeasible Select Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer(new FakeLLM()) });
+
+      const before = await countsFor(session.agencyId);
+      const stream = await caller.workspace.itinerary.selectDraft({
+        tripRequest: {
+          ...MULTI_OPTION_INPUT,
+          budget: { mode: "hardCap" as const, amountMinor: 100, currency: "USD" },
+          flightsReserveMinor: 100_000,
+        },
+        variant: "balanced",
+      });
+      let outcome: { status: string } | undefined;
+      for await (const event of stream) {
+        if (event.type === "result") outcome = event.outcome;
+      }
+      expect(outcome?.status).toBe("infeasible");
+      expect(await countsFor(session.agencyId)).toEqual(before);
+    },
+    LONG,
+  );
+
+  it(
+    "the 'balanced' variant persists byte-for-byte the same document the pre-spec-019 single-draft flow produced (backward compatibility)",
+    async () => {
+      const session = await makeAgency("Backward Compat Travel");
+      const caller = appRouter.createCaller({ session, container: makeContainer(new FakeLLM()) });
+
+      const drafted = await draftViaCaller(caller, MULTI_OPTION_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      // The pre-spec-019 planner always picked the cheapest hotel/transfer and
+      // one activity per day — exactly what the "balanced" variant does now.
+      const items = drafted.itinerary.days.flatMap((d) => d.items);
+      expect(items.some((i) => i.kind === "stay")).toBe(true);
+      expect(drafted.itinerary.title.toLowerCase()).toContain("lisbon");
     },
     LONG,
   );

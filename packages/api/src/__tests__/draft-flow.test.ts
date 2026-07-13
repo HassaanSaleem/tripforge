@@ -26,6 +26,11 @@ const SOME_UUID = "3f0e8a52-70cf-4f8e-b6ad-53b1f0c72b3e";
 describe("RBAC ladder on every Build→Book procedure (INV-023/024)", () => {
   const cases: Array<[string, (ctx: TrpcContext) => Promise<unknown>]> = [
     ["itinerary.draft", (ctx) => appRouter.createCaller(ctx).workspace.itinerary.draft(VALID_DRAFT_INPUT)],
+    [
+      "itinerary.selectDraft",
+      (ctx) =>
+        appRouter.createCaller(ctx).workspace.itinerary.selectDraft({ tripRequest: VALID_DRAFT_INPUT, variant: "balanced" }),
+    ],
     ["itinerary.get", (ctx) => appRouter.createCaller(ctx).workspace.itinerary.get({ itineraryId: SOME_UUID })],
     [
       "booking.quote",
@@ -86,5 +91,22 @@ describe("boundary validation (zod at every boundary)", () => {
     await expect(caller.workspace.booking.quote({ itineraryId: SOME_UUID, markupBps: 10_001 })).rejects.toMatchObject({
       code: "BAD_REQUEST",
     });
+  });
+
+  it("rejects selectDraft with an unknown variant (spec 019 fixed vocabulary)", async () => {
+    const caller = appRouter.createCaller(ctxFor(agent));
+    await expect(
+      caller.workspace.itinerary.selectDraft({ tripRequest: VALID_DRAFT_INPUT, variant: "luxury" as never }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("rejects selectDraft with a malformed tripRequest (same checks as draft)", async () => {
+    const caller = appRouter.createCaller(ctxFor(agent));
+    await expect(
+      caller.workspace.itinerary.selectDraft({
+        tripRequest: { ...VALID_DRAFT_INPUT, checkIn: "2026-09-05", checkOut: "2026-09-01" },
+        variant: "balanced",
+      }),
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 });

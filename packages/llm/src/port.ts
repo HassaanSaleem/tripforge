@@ -16,7 +16,7 @@ import type {
   TransferOffer,
   TransferSearchCriteria,
 } from "@tripforge/supply-adapter";
-import type { PlannerDraft } from "./planner-draft.js";
+import type { NamedPlannerDraft } from "./planner-draft.js";
 
 /** The single allowed model. Widening this is an operator decision (INV-013). */
 export const LLM_MODEL = "claude-haiku-4-5" as const;
@@ -86,7 +86,7 @@ export interface DraftItineraryRequest {
 }
 
 export type DraftItineraryResult =
-  | { status: "drafted"; draft: PlannerDraft; usage: LlmUsage }
+  | { status: "drafted"; drafts: NamedPlannerDraft[]; usage: LlmUsage }
   | { status: "failed"; reason: "malformed_output" | "no_proposals" };
 
 // ─── Draft progress streaming (INV-028, spec 016) ────────────────────────────
@@ -103,8 +103,9 @@ export type DraftProgressEvent =
 
 export interface LLMPort {
   complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse>;
-  /** Draft a trip through tool-driven supply lookups. Proposals only — every
-   * price in the final itinerary is re-read from supply by the caller. Yields
-   * zero or more progress events followed by exactly one terminal result event. */
+  /** Draft 1-3 labeled trip options through tool-driven supply lookups (spec
+   * 019). Proposals only — every price in the final itinerary is re-read from
+   * supply by the caller. Yields zero or more progress events followed by
+   * exactly one terminal result event carrying every variant produced. */
   draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent>;
 }

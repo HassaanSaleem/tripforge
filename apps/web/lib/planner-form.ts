@@ -5,7 +5,7 @@
 // come from here (contract §2.3). The server stays authoritative — these checks
 // exist for immediate feedback, not enforcement (INV-023).
 import { transportErrorMessage } from "./transport-error.js";
-import type { DraftInput, DraftOutput } from "./trpc/client.js";
+import type { DraftInput, DraftOption, DraftOutput, SelectDraftOutput } from "./trpc/client.js";
 
 /** Raw controlled-input values (strings as the inputs hold them). */
 export interface PlannerFormValues {
@@ -186,14 +186,17 @@ export function toTripRequest(values: PlannerFormValues): TripRequestMapping {
   };
 }
 
-type NonDraftedOutcome = Exclude<DraftOutput, { status: "drafted" }>;
+/** The infeasible/planner_failed shapes are byte-identical between the
+ * compare-time DraftOutput and the persist-time SelectDraftOutput (spec 019
+ * contracts) — one message mapping covers both call sites. */
+type PlannerFailureOutcome = Exclude<DraftOutput, { status: "drafted" }> | Exclude<SelectDraftOutput, { status: "drafted" }>;
 
 /**
  * One distinct human-readable message per typed business failure (FR-006,
  * data-model mapping table). Exhaustive over the outcome union — a new server
  * reason fails compilation here instead of leaking raw text to the page.
  */
-export function draftFailureMessage(outcome: NonDraftedOutcome): string {
+export function draftFailureMessage(outcome: PlannerFailureOutcome): string {
   switch (outcome.status) {
     case "infeasible":
       return outcome.reason === "budget_below_reserve"
@@ -215,4 +218,22 @@ export function draftErrorMessage(error: unknown): string {
     forbidden: "Drafting requires an agency membership. Sign in with your agency account.",
     badRequest: "The server rejected the trip details. Please check the form values and try again.",
   });
+}
+
+/**
+ * One-line differentiator for a compare-view option card (spec 019 FR-003):
+ * which stay was picked and how many activities are included — server-derived
+ * display only, no client-side money arithmetic (FR-009 pattern, mirrors
+ * formatMinorAmount). Total functions: every option has at least one item
+ * (INV-014 — a zero-item draft never survives assembly), so a stay or an
+ * activity count is always available to report.
+ */
+export function optionHighlight(option: DraftOption): string {
+  const items = option.itinerary.days.flatMap((day) => day.items);
+  const stay = items.find((item) => item.kind === "stay");
+  const activityCount = items.filter((item) => item.kind === "activity").length;
+  const parts: string[] = [];
+  if (stay) parts.push(stay.title);
+  parts.push(activityCount === 1 ? "1 activity" : `${activityCount} activities`);
+  return parts.join(" · ");
 }

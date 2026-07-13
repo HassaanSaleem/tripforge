@@ -1,9 +1,13 @@
-// Draft orchestration (spec 005 US1; contracts §1): allocate (pure) → planner
-// via LLMPort (bounded, injected tool executors — research D7) → re-verify
-// every proposal against the supply ports (FR-003: verification defines truth;
-// unverified offers are dropped) → assemble to fit (pure) → persist the
-// canonical document + trip_created PMF event in ONE transaction (INV-021).
-// Business failures are values; nothing is persisted on any failure path.
+// Draft orchestration (spec 005 US1; contracts §1; spec 019 multi-option):
+// allocate (pure) → planner via LLMPort (bounded, injected tool executors —
+// research D7) → re-verify every proposal against the supply ports (FR-003:
+// verification defines truth; unverified offers are dropped) → assemble EACH
+// labeled variant to fit (pure). Comparison (`draftOptions`) stops there —
+// nothing is persisted. Selection (`selectDraftOption`) re-runs the SAME
+// pipeline for the chosen variant and persists the canonical document +
+// trip_created PMF event in ONE transaction (INV-021). Business failures are
+// values; nothing is persisted on any failure path, and nothing is persisted
+// for a variant the agent didn't pick (spec 019 FR-006).
 import { randomUUID } from "node:crypto";
 import {
   allocateBudget,
@@ -15,7 +19,13 @@ import {
 } from "@tripforge/domain";
 import type { Itinerary } from "@tripforge/itinerary-schema";
 import { itinerary as itineraryTable, recordPmfEvent } from "@tripforge/db";
-import type { DraftItineraryResult, DraftStep, PlannerToolDeps } from "@tripforge/llm";
+import {
+  DRAFT_VARIANT_LABELS,
+  type DraftItineraryResult,
+  type DraftStep,
+  type DraftVariant,
+  type PlannerToolDeps,
+} from "@tripforge/llm";
 import { z } from "zod";
 import type { AgentSessionContext, Container } from "../context.js";
 
@@ -40,9 +50,20 @@ export const tripRequestSchema = z
 
 export type TripRequest = z.infer<typeof tripRequestSchema>;
 
+// Selection input (spec 019 contracts/select-draft-subscription.md): the
+// client echoes back the ORIGINAL trip request plus which variant it picked
+// — never itinerary content or pricing (FR-012).
+export const selectDraftInputSchema = z.strictObject({
+  tripRequest: tripRequestSchema,
+  variant: z.enum(["budgetSavvy", "balanced", "premium"]),
+});
+export type SelectDraftInput = z.infer<typeof selectDraftInputSchema>;
+
 // Exported (spec 016): the draft procedure is now a subscription, so this
 // union is inference-load-bearing for the router's AsyncGenerator return type
-// (see routers/itinerary.ts) — no longer a premature export.
+// (see routers/itinerary.ts) — no longer a premature export. Unchanged shape
+// from before spec 019: this is what `selectDraft` yields on success, so the
+// existing DraftResult/BookingFlow/ShareControl UI needs zero changes.
 export type DraftOutcome =
   | { status: "drafted"; itinerary: Itinerary; fit: AssembleResult["fit"] }
   | { status: "infeasible"; reason: "budget_below_reserve" | "no_days" }
@@ -52,6 +73,24 @@ export type DraftOutcome =
  * DraftProgressEvent, terminated by exactly one result event carrying the
  * existing DraftOutcome (unchanged shape/meaning). */
 export type DraftEvent = { type: "progress"; step: DraftStep } | { type: "result"; outcome: DraftOutcome };
+
+// ─── Multi-option comparison (spec 019) ────────────────────────────────────
+
+/** A candidate itinerary shown during comparison — a fully assembled, live-
+ * priced canonical Itinerary that is NOT persisted (data-model.md "DraftOption"). */
+export interface DraftOption {
+  variant: DraftVariant;
+  label: string;
+  itinerary: Itinerary;
+  fit: AssembleResult["fit"];
+}
+
+export type CompareOutcome =
+  | { status: "drafted"; options: DraftOption[] }
+  | { status: "infeasible"; reason: "budget_below_reserve" | "no_days" }
+  | { status: "planner_failed"; reason: "malformed_output" | "no_proposals" };
+
+export type CompareEvent = { type: "progress"; step: DraftStep } | { type: "result"; outcome: CompareOutcome };
 
 function tripDayCount(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86_400_000));
@@ -139,16 +178,22 @@ export async function verifiedSupplyCatalog(
   ];
 }
 
-export async function* draftItinerary(
-  container: Container,
-  session: AgentSessionContext,
-  input: TripRequest,
-): AsyncGenerator<DraftEvent> {
-  const db = container.db;
-  if (!db) {
-    throw new Error("database not configured");
-  }
+type PlannerCoreOutcome =
+  | { status: "infeasible"; reason: "budget_below_reserve" | "no_days" }
+  | { status: "planner_failed"; reason: "malformed_output" | "no_proposals" }
+  | { status: "assembled"; options: DraftOption[] };
 
+type PlannerCoreEvent = { type: "progress"; step: DraftStep } | { type: "core"; outcome: PlannerCoreOutcome };
+
+/**
+ * The pipeline shared by comparison and selection (spec 019 plan.md Project
+ * Structure): budget allocation → LLMPort tool loop (1-3 labeled drafts) →
+ * fresh supply verification → pure assembly of EVERY variant. Never touches
+ * the database — persistence is the caller's decision (`selectDraftOption`
+ * only), so calling this twice (once to compare, once to select) never
+ * double-writes anything.
+ */
+async function* plannerCore(container: Container, session: AgentSessionContext, input: TripRequest): AsyncGenerator<PlannerCoreEvent> {
   const days = tripDayCount(input.checkIn, input.checkOut);
   const allocation = allocateBudget({
     totalMinor: input.budget.amountMinor,
@@ -159,7 +204,7 @@ export async function* draftItinerary(
     flightsReserveMinor: input.flightsReserveMinor,
   });
   if (allocation.status === "infeasible") {
-    yield { type: "result", outcome: { status: "infeasible", reason: allocation.reason } };
+    yield { type: "core", outcome: { status: "infeasible", reason: allocation.reason } };
     return;
   }
   const allocatedMinor = (category: string): number =>
@@ -194,7 +239,7 @@ export async function* draftItinerary(
   // guarantees exactly one terminal event, per data-model.md).
   if (!plannerResult || plannerResult.status === "failed") {
     yield {
-      type: "result",
+      type: "core",
       outcome: { status: "planner_failed", reason: plannerResult?.status === "failed" ? plannerResult.reason : "no_proposals" },
     };
     return;
@@ -202,52 +247,115 @@ export async function* draftItinerary(
   const drafted = plannerResult;
 
   const offers = await verifiedSupplyCatalog(container, input);
-  const id = randomUUID();
-  const assembled = assembleItinerary({
-    request: {
-      id,
-      agencyId: session.agencyId,
-      currency: input.budget.currency,
-      destination: input.destination,
-      checkIn: input.checkIn,
-      checkOut: input.checkOut,
-      party: input.party,
-      mode: input.budget.mode,
-    },
-    title: drafted.draft.title,
-    draftDays: drafted.draft.days.map<DraftDayProposal>((d) => ({ items: d.items })),
-    offers,
-    allocations: allocation.allocations,
-    rates: container.rates,
-  });
 
-  // A draft whose every proposal was dropped is not a plan (INV-014) — fail
-  // typed with zero writes rather than persist an empty shell.
-  const itemCount = assembled.itinerary.days.reduce((acc, d) => acc + d.items.length, 0);
-  if (itemCount === 0) {
-    yield { type: "result", outcome: { status: "planner_failed", reason: "no_proposals" } };
+  const options: DraftOption[] = [];
+  for (const named of drafted.drafts) {
+    const id = randomUUID();
+    const assembled = assembleItinerary({
+      request: {
+        id,
+        agencyId: session.agencyId,
+        currency: input.budget.currency,
+        destination: input.destination,
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+        party: input.party,
+        mode: input.budget.mode,
+      },
+      title: named.draft.title,
+      draftDays: named.draft.days.map<DraftDayProposal>((d) => ({ items: d.items })),
+      offers,
+      allocations: allocation.allocations,
+      rates: container.rates,
+    });
+    // A draft whose every proposal was dropped is not a plan (INV-014) — drop
+    // just this variant rather than fail the whole comparison, as long as at
+    // least one other variant survives (checked below).
+    const itemCount = assembled.itinerary.days.reduce((acc, d) => acc + d.items.length, 0);
+    if (itemCount === 0) continue;
+    options.push({ variant: named.variant, label: DRAFT_VARIANT_LABELS[named.variant], itinerary: assembled.itinerary, fit: assembled.fit });
+  }
+
+  if (options.length === 0) {
+    yield { type: "core", outcome: { status: "planner_failed", reason: "no_proposals" } };
     return;
   }
 
-  const document = stampProvenance(assembled.itinerary, session.agencyId);
+  yield { type: "core", outcome: { status: "assembled", options } };
+}
 
-  await db.transaction(async (tx) => {
-    await tx.insert(itineraryTable).values({
-      id,
-      agencyId: session.agencyId,
-      title: document.title,
-      currency: document.currency,
-      document,
-      tripRequest: input,
-    });
-    await recordPmfEvent(tx, {
-      type: "trip_created",
-      agencyId: session.agencyId,
-      itineraryId: id,
-      source: "self_built",
-      actorUserId: session.userId,
-    });
-  });
+/**
+ * Compare-time drafting (spec 019 US1/contracts/itinerary-draft-subscription.md):
+ * runs the shared pipeline and returns every labeled option it produced.
+ * ZERO persistence — no DB row, no trip_created PMF event, regardless of how
+ * many options come back or whether the caller ever picks one.
+ */
+export async function* draftOptions(container: Container, session: AgentSessionContext, input: TripRequest): AsyncGenerator<CompareEvent> {
+  if (!container.db) {
+    throw new Error("database not configured");
+  }
+  for await (const event of plannerCore(container, session, input)) {
+    if (event.type === "progress") {
+      yield { type: "progress", step: event.step };
+      continue;
+    }
+    if (event.outcome.status === "assembled") {
+      yield { type: "result", outcome: { status: "drafted", options: event.outcome.options } };
+    } else {
+      yield { type: "result", outcome: event.outcome };
+    }
+  }
+}
 
-  yield { type: "result", outcome: { status: "drafted", itinerary: document, fit: assembled.fit } };
+/**
+ * Selection (spec 019 US2/contracts/select-draft-subscription.md): re-runs the
+ * SAME pipeline for `input.tripRequest` (fresh supply verification per FR-008
+ * — inventory may have changed since comparison), then persists exactly the
+ * requested variant — identical persistence semantics to the pre-spec-019
+ * single-draft flow (one DB row + one trip_created PMF event, ONE transaction).
+ * If the requested variant doesn't reappear in the fresh regeneration, this is
+ * a typed planner_failed outcome — never a silent substitution of a different
+ * variant than the agent picked.
+ */
+export async function* selectDraftOption(container: Container, session: AgentSessionContext, input: SelectDraftInput): AsyncGenerator<DraftEvent> {
+  const db = container.db;
+  if (!db) {
+    throw new Error("database not configured");
+  }
+  for await (const event of plannerCore(container, session, input.tripRequest)) {
+    if (event.type === "progress") {
+      yield { type: "progress", step: event.step };
+      continue;
+    }
+    if (event.outcome.status !== "assembled") {
+      yield { type: "result", outcome: event.outcome };
+      return;
+    }
+    const chosen = event.outcome.options.find((option) => option.variant === input.variant);
+    if (!chosen) {
+      yield { type: "result", outcome: { status: "planner_failed", reason: "no_proposals" } };
+      return;
+    }
+
+    const document = stampProvenance(chosen.itinerary, session.agencyId);
+    await db.transaction(async (tx) => {
+      await tx.insert(itineraryTable).values({
+        id: document.id,
+        agencyId: session.agencyId,
+        title: document.title,
+        currency: document.currency,
+        document,
+        tripRequest: input.tripRequest,
+      });
+      await recordPmfEvent(tx, {
+        type: "trip_created",
+        agencyId: session.agencyId,
+        itineraryId: document.id,
+        source: "self_built",
+        actorUserId: session.userId,
+      });
+    });
+
+    yield { type: "result", outcome: { status: "drafted", itinerary: document, fit: chosen.fit } };
+  }
 }

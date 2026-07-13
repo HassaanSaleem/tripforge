@@ -286,6 +286,18 @@ label > input, label > select, label > textarea {
 .tf-spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--sea-tint); border-top-color: var(--sea); animation: tf-rotate .8s linear infinite; }
 @keyframes tf-rotate { to { transform: rotate(360deg); } }
 
+/* multi-option compare view (spec 019): a card per unpersisted candidate */
+.tf-compare { display: grid; gap: 16px; animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }
+.tf-compare h2 { margin: 0; }
+.tf-compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.tf-compare-card { padding: 0; overflow: hidden; display: grid; gap: 12px; align-content: start; }
+.tf-compare-card-header { padding: 20px 18px; color: #fff; display: grid; gap: 6px; }
+.tf-compare-card-header .tf-eyebrow { color: rgba(255,255,255,.85); }
+.tf-compare-card-header .tf-price { color: #fff; font-size: 20px; }
+.tf-compare-card .tf-state { margin: 0 18px; justify-self: start; }
+.tf-compare-highlight { margin: 0 18px; color: var(--ink-soft); font-size: 14px; }
+.tf-compare-card .tf-btn--cta { margin: 0 18px 18px; }
+
 .tf-draft { display: grid; gap: 18px; animation: tf-rise .45s cubic-bezier(.2,.8,.2,1); }
 @keyframes tf-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .tf-draft-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
