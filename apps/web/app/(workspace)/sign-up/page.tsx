@@ -16,13 +16,17 @@ export default async function SignUpPage() {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: 640 }}>
-      <h1>Create your account and agency</h1>
-      <p>Set up your agency workspace — you will be its owner.</p>
-      <SignUpForm />
-      <p>
-        Already have an account? <Link href="/sign-in">Sign in</Link>
-      </p>
+    <main className="tf-auth-shell">
+      <div className="tf-auth-card">
+        <p className="tf-brand">TripForge</p>
+        <p className="tf-auth-tagline">Set up your agency workspace — you will be its owner.</p>
+        <div className="tf-card">
+          <SignUpForm />
+        </div>
+        <p className="tf-auth-foot">
+          Already have an account? <Link href="/sign-in">Sign in</Link>
+        </p>
+      </div>
     </main>
   );
 }

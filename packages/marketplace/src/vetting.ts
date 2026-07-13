@@ -2,7 +2,7 @@
 // vetted iff its agency_vetting row exists. Rows are written ONLY by the
 // platform operator action (packages/db/scripts/vet-agency.mjs) — this module
 // only reads. Both sides of a marketplace transaction must pass at v0.
-import { agencyVetting, eq, type Db } from "@tripforge/db";
+import { agencyVetting, eq, inArray, type Db } from "@tripforge/db";
 
 /** The caller's read capability — a Db or a Drizzle transaction handle, so the
  * check can run INSIDE a money-path transaction (the PmfEventExecutor pattern). */
@@ -15,4 +15,16 @@ export async function isVetted(db: VettingReader, agencyId: string): Promise<boo
     .where(eq(agencyVetting.agencyId, agencyId))
     .limit(1);
   return rows.length === 1;
+}
+
+/** Batched read for a browse-style projection (demo-07): which of the given
+ * agency ids carry a vetted row, so a listing card can show a "Verified"
+ * badge without one isVetted round-trip per row. */
+export async function vettedAgencyIds(db: VettingReader, agencyIds: string[]): Promise<Set<string>> {
+  if (agencyIds.length === 0) return new Set();
+  const rows = await db
+    .select({ agencyId: agencyVetting.agencyId })
+    .from(agencyVetting)
+    .where(inArray(agencyVetting.agencyId, agencyIds));
+  return new Set(rows.map((r) => r.agencyId));
 }

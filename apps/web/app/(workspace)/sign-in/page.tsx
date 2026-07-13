@@ -16,13 +16,17 @@ export default async function SignInPage() {
   }
 
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: "2rem", maxWidth: 640 }}>
-      <h1>Sign in</h1>
-      <p>Sign in to your agency workspace.</p>
-      <SignInForm />
-      <p>
-        New here? <Link href="/sign-up">Create an account and agency</Link>
-      </p>
+    <main className="tf-auth-shell">
+      <div className="tf-auth-card">
+        <p className="tf-brand">TripForge</p>
+        <p className="tf-auth-tagline">Sign in to your agency workspace.</p>
+        <div className="tf-card">
+          <SignInForm />
+        </div>
+        <p className="tf-auth-foot">
+          New here? <Link href="/sign-up">Create an account and agency</Link>
+        </p>
+      </div>
     </main>
   );
 }

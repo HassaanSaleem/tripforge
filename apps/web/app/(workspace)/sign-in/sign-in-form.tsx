@@ -26,7 +26,7 @@ export function SignInForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "grid", gap: "0.75rem", maxWidth: 360 }}>
+    <form onSubmit={handleSubmit}>
       <CredentialsFields
         email={email}
         onEmailChange={setEmail}
@@ -35,7 +35,7 @@ export function SignInForm() {
         passwordAutoComplete="current-password"
       />
       {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="tf-btn--cta" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </button>
     </form>

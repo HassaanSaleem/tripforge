@@ -42,7 +42,7 @@ export function SignUpForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "grid", gap: "0.75rem", maxWidth: 360 }}>
+    <form onSubmit={handleSubmit}>
       <label htmlFor="name">
         Your name
         <input
@@ -53,7 +53,6 @@ export function SignUpForm() {
           autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          style={{ display: "block", width: "100%" }}
         />
       </label>
       <CredentialsFields
@@ -72,11 +71,10 @@ export function SignUpForm() {
           required
           value={agencyName}
           onChange={(e) => setAgencyName(e.target.value)}
-          style={{ display: "block", width: "100%" }}
         />
       </label>
       {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" disabled={pending}>
+      <button type="submit" className="tf-btn--cta" disabled={pending}>
         {pending ? "Creating…" : "Create account & agency"}
       </button>
     </form>

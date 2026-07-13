@@ -199,6 +199,7 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
         revenueShareBps: LISTING_INPUT.revenueShareBps,
         sellerAgencyId: seller.agencyId,
         sellerAgencyName: "Atlas DMC",
+        sellerVetted: true,
         ratingAverage: null,
         ratingCount: 0,
         mine: false,

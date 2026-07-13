@@ -17,7 +17,7 @@ import {
   type Db,
 } from "@tripforge/db";
 import { z } from "zod";
-import { isVetted } from "./vetting.js";
+import { isVetted, vettedAgencyIds } from "./vetting.js";
 import { isUniqueViolation } from "./pg-errors.js";
 import { ratingAggregates } from "./ratings.js";
 import { earningsAggregates } from "./earnings.js";
@@ -135,6 +135,8 @@ export interface BrowseListing {
   revenueShareBps: number;
   sellerAgencyId: string;
   sellerAgencyName: string;
+  /** Platform-vetted seller (demo-07): drives the "Verified" badge, read-only trust signal. */
+  sellerVetted: boolean;
   ratingAverage: number | null;
   ratingCount: number;
   mine: boolean;
@@ -169,6 +171,7 @@ export async function browseListings(db: Db, actor: MarketplaceActor): Promise<{
     db,
     rows.map((r) => r.listingId),
   );
+  const vetted = await vettedAgencyIds(db, [...new Set(rows.map((r) => r.sellerAgencyId))]);
   // Earnings are seller-only (research D2): scope the query itself to the
   // caller's own agency and own listing ids, so another agency's revenue is
   // never fetched by this call, let alone returned.
@@ -181,6 +184,7 @@ export async function browseListings(db: Db, actor: MarketplaceActor): Promise<{
       const earned = mine ? (earnings.get(r.listingId) ?? { licenseCount: 0, sellerCreditTotalMinor: 0 }) : null;
       return {
         ...r,
+        sellerVetted: vetted.has(r.sellerAgencyId),
         ratingAverage: agg?.average ?? null,
         ratingCount: agg?.count ?? 0,
         mine,

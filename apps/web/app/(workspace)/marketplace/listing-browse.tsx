@@ -38,7 +38,13 @@ export function ListingCard({
     <article className="tf-market-card" data-testid="listing-card">
       <h3>{listing.title}</h3>
       <p className="tf-market-seller">
-        by <b>{listing.sellerAgencyName}</b> · {formatRating(listing.ratingAverage, listing.ratingCount)}
+        by <b>{listing.sellerAgencyName}</b>{" "}
+        {listing.sellerVetted ? (
+          <span className="tf-badge tf-badge--verified" data-testid="seller-verified-badge">
+            Verified
+          </span>
+        ) : null}{" "}
+        · {formatRating(listing.ratingAverage, listing.ratingCount)}
       </p>
       <p className="tf-price tf-market-price">{formatMinorAmount(listing.priceMinor, listing.currency)}</p>
       <div className="tf-market-meta">

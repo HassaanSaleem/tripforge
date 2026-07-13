@@ -8,8 +8,6 @@
 import { useState } from "react";
 import type { AuthActionError } from "../../lib/auth-client.js";
 
-const FIELD_STYLE = { display: "block", width: "100%" } as const;
-
 export function CredentialsFields({
   email,
   onEmailChange,
@@ -36,7 +34,6 @@ export function CredentialsFields({
           autoComplete="email"
           value={email}
           onChange={(e) => onEmailChange(e.target.value)}
-          style={FIELD_STYLE}
         />
       </label>
       <label htmlFor="password">
@@ -50,7 +47,6 @@ export function CredentialsFields({
           autoComplete={passwordAutoComplete}
           value={password}
           onChange={(e) => onPasswordChange(e.target.value)}
-          style={FIELD_STYLE}
         />
       </label>
     </>
