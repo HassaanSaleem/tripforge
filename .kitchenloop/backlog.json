@@ -964,9 +964,10 @@
     "body": "OPERATOR (verbatim): 'AO should also recommend multiple options to the user not just one fixed.' Today PlannerDraftSchema returns exactly one plan (submit_itinerary_draft 'call exactly once'); to compare, the user must re-run.\n\nBUILD multi-option generation + compare/select:\n1. On generate, produce 2-3 DISTINCT itinerary options for the same inputs (e.g. differentiated by theme/pace/spend: 'Budget-savvy', 'Balanced', 'Premium' or 'Culture-forward' vs 'Relaxed'). FakeLLM must deterministically yield distinct-but-plausible variants for the keyless demo.\n2. A compare UI: option cards/tabs showing each option's headline, day count, total vs budget, and a highlight or two; user picks one to open in the builder (which then supports conversational editing from demo-03).\n3. Each option is a full canonical itinerary (so any can be booked/listed/shared).\n\nINVARIANTS: budget math integer minor units (INV-009/010); each option a valid canonical itinerary. Keyless FakeLLM deterministic. ACCEPTANCE: generate -> see 2-3 clearly-different options with budget comparison -> pick one -> it opens and is editable/bookable. PRD refs: \u00a79.1 'draft itineraries' (plural), 'resale-match recommendations'.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-13T08:45:29Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/59",
+    "merge_commit": "df49f8c"
   },
   {
     "id": "demo-05-planner-ux",
