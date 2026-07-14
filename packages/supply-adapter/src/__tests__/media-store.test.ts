@@ -60,6 +60,17 @@ describe("SandboxMediaStoreAdapter.upload (spec 027 US1)", () => {
     const outcome = await adapter.upload({ ...validInput, data: oversized });
     expect(outcome).toEqual({ status: "refused", reason: "file_too_large" });
   });
+
+  it("refuses a payload whose leading bytes don't match the declared mime type without touching the database", async () => {
+    const adapter = new SandboxMediaStoreAdapter(undefined);
+    const outcome = await adapter.upload({
+      ...validInput,
+      // validInput.data is a JPEG (FF D8 FF ...) signature; declaring PNG
+      // must be caught even though "image/png" is itself a valid allowlisted type.
+      mimeType: "image/png",
+    });
+    expect(outcome).toEqual({ status: "refused", reason: "mime_mismatch" });
+  });
 });
 
 describe("SandboxMediaStoreAdapter.getBytesById", () => {

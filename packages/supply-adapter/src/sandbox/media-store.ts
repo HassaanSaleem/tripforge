@@ -38,6 +38,32 @@ const VALID_UPLOAD_MIME_TYPES: ReadonlySet<string> = new Set<UploadMimeType>([
  * request-body ceiling (ADR-0004), not just what passes local Live Test. */
 const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 
+/**
+ * Magic-byte signature check (pr-auditor defense-in-depth follow-up to PR
+ * #72) — `input.mimeType` is a caller-supplied claim (the browser's
+ * `File.type`), never trustworthy on its own for what gets persisted and
+ * later served back with that same Content-Type. Verify the declared type
+ * against the file's actual leading bytes so a payload mislabeled as (say)
+ * `image/png` while carrying different content is rejected server-side
+ * regardless of caller. `Record<UploadMimeType, ...>` makes this exhaustive
+ * by construction — the compiler forces a new entry the day the closed
+ * allowlist above ever grows.
+ */
+const MAGIC_BYTE_CHECKS: Record<UploadMimeType, (data: Uint8Array) => boolean> = {
+  "image/jpeg": (data) => data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff,
+  "image/png": (data) =>
+    data.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, i) => data[i] === byte),
+  "image/gif": (data) =>
+    data.length >= 6 &&
+    [0x47, 0x49, 0x46, 0x38].every((byte, i) => data[i] === byte) &&
+    (data[4] === 0x37 || data[4] === 0x39) &&
+    data[5] === 0x61,
+  "image/webp": (data) =>
+    data.length >= 12 &&
+    [0x52, 0x49, 0x46, 0x46].every((byte, i) => data[i] === byte) &&
+    [0x57, 0x45, 0x42, 0x50].every((byte, i) => data[i + 8] === byte),
+};
+
 export class SandboxMediaStoreAdapter implements MediaStorePort {
   /**
    * `db` is optional at construction, matching `Container.db`'s own
@@ -122,6 +148,9 @@ export class SandboxMediaStoreAdapter implements MediaStorePort {
     }
     if (input.data.byteLength > MAX_UPLOAD_BYTES) {
       return { status: "refused", reason: "file_too_large" };
+    }
+    if (!MAGIC_BYTE_CHECKS[input.mimeType](input.data)) {
+      return { status: "refused", reason: "mime_mismatch" };
     }
     const rows = await this.requireDb()
       .insert(mediaAsset)

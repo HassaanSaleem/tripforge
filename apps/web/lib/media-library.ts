@@ -42,6 +42,7 @@ const UPLOAD_REFUSAL_MESSAGES: Record<string, string> = {
   invalid_source: "That media source isn't allowed. Pick one of the listed options.",
   invalid_mime_type: "Only JPEG, PNG, WebP, or GIF images can be uploaded.",
   file_too_large: "That file is larger than the 3 MB upload limit.",
+  mime_mismatch: "That file's contents don't match its file type. Try a different file.",
 };
 
 export function uploadMediaRefusalMessage(reason: string): string {

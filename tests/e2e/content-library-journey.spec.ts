@@ -41,8 +41,13 @@ async function openAnonymously(browser: Browser, url: string) {
 async function registerMedia(page: Page): Promise<void> {
   const panel = page.getByTestId("media-library-panel");
   await expect(panel).toBeVisible();
-  await panel.getByLabel("Media URL").fill(IMAGE_URL);
-  await panel.getByLabel("Alt text").fill(IMAGE_ALT);
+  // Scoped to the register form specifically: the upload form (added
+  // alongside it by spec 027 / PR #72) renders its OWN identically-labeled
+  // "Alt text" field in the same panel, so an unscoped getByLabel here is
+  // ambiguous (strict mode) the moment both forms are mounted together.
+  const form = panel.getByTestId("media-register-form");
+  await form.getByLabel("Media URL").fill(IMAGE_URL);
+  await form.getByLabel("Alt text").fill(IMAGE_ALT);
   await panel.getByTestId("media-register-submit").click();
   await expect(panel.getByTestId("media-card").filter({ hasText: IMAGE_ALT })).toBeVisible({ timeout: 15_000 });
 }
@@ -174,6 +179,11 @@ test("an agent uploads a real file, attaches it, and the client renders it via t
     const mediaResponse = await traveler.request.get(new URL(clientImgSrc ?? "", sharedUrl).toString());
     expect(mediaResponse.ok()).toBe(true);
     expect(mediaResponse.headers()["content-type"]).toBe("image/jpeg");
+    // Defense-in-depth (media-upload-serving-hardening): the serving route
+    // never lets a browser sniff a raster response into executable HTML, and
+    // always declares how to render the bytes it returns.
+    expect(mediaResponse.headers()["x-content-type-options"]).toBe("nosniff");
+    expect(mediaResponse.headers()["content-disposition"]).toContain("inline");
     // Only bytes + content-type cross this boundary — no agencyId/attribution
     // header, and the confidential attribution string never appears in the body.
     expect(Object.keys(mediaResponse.headers())).not.toContain("x-agency-id");

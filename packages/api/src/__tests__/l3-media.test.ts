@@ -338,6 +338,24 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
   );
 
   it(
+    "media-upload-serving-hardening: a payload whose bytes don't match the declared mime type is refused as a typed outcome — nothing persists",
+    async () => {
+      const agent = await makeAgency("Mislabeled Files Co");
+      const outcome = await callerFor(agent).workspace.media.upload({
+        ...VALID_UPLOAD,
+        // VALID_UPLOAD's dataBase64 is a JPEG signature; declaring PNG (a
+        // valid allowlisted type on its own) must still be refused server-side.
+        mimeType: "image/png",
+      });
+      expect(outcome).toEqual({ status: "refused", reason: "mime_mismatch" });
+
+      const list = await callerFor(agent).workspace.media.list();
+      expect(list.assets).toHaveLength(0);
+    },
+    LONG,
+  );
+
+  it(
     "spec 027 US2: an uploaded asset attaches to the gallery exactly like a URL-registered one, and survives detach",
     async () => {
       const agent = await makeAgency("Parity Travel");

@@ -51,7 +51,7 @@ export interface UploadMediaInput {
 
 export type UploadMediaOutcome =
   | { status: "uploaded"; asset: MediaAsset }
-  | { status: "refused"; reason: "invalid_source" | "invalid_mime_type" | "file_too_large" };
+  | { status: "refused"; reason: "invalid_source" | "invalid_mime_type" | "file_too_large" | "mime_mismatch" };
 
 /** The stored bytes behind an upload-backed asset, for the public serving
  * route (spec 027 contracts §2). */

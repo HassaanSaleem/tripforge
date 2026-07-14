@@ -11,6 +11,16 @@ export const dynamic = "force-dynamic";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// The 4-member raster allowlist mirrors SandboxMediaStoreAdapter's
+// VALID_UPLOAD_MIME_TYPES (spec 027) — only these mime types can ever be
+// stored, so this map is exhaustive for every byte this route can serve.
+const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
@@ -26,11 +36,17 @@ export async function GET(_req: Request, { params }: RouteParams): Promise<Respo
     return new Response(null, { status: 404 });
   }
 
+  const extension = EXTENSION_BY_MIME_TYPE[bytes.mimeType] ?? "bin";
   return new Response(Buffer.from(bytes.data), {
     status: 200,
     headers: {
       "Content-Type": bytes.mimeType,
       "Cache-Control": "public, max-age=31536000, immutable",
+      // Defense-in-depth (pr-auditor follow-up, PR #72): even though the
+      // allowlist above already locks Content-Type to raster image types,
+      // never let a browser sniff this response into executable HTML.
+      "X-Content-Type-Options": "nosniff",
+      "Content-Disposition": `inline; filename="${id}.${extension}"`,
     },
   });
 }
