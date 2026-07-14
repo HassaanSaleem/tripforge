@@ -50,8 +50,11 @@ export default tseslint.config(
     },
   },
   {
-    // Node scripts (L3 smoke, playwright config) run in Node with console output.
-    files: ["tests/**/*.{ts,mjs}", "*.config.{ts,mjs,cjs}", "**/*.config.{ts,mjs,cjs}"],
+    // Node scripts (L3 smoke, playwright config, operator/CLI ops scripts) run
+    // in Node with console output — apps/web/scripts/ mirrors the existing
+    // packages/db/scripts/ operator-script precedent (dependency-cruiser and
+    // knip both already exempt that class of file for the same reason).
+    files: ["tests/**/*.{ts,mjs}", "*.config.{ts,mjs,cjs}", "**/*.config.{ts,mjs,cjs}", "apps/web/scripts/**/*.ts"],
     rules: {
       "no-console": "off",
     },

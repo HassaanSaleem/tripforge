@@ -28,10 +28,12 @@ RUN pnpm install --frozen-lockfile
 # leaked in through `COPY . .` (now excluded via .dockerignore).
 # After the schema push, apply the PMF metric views (spec 004 FR-009) — kept in
 # a plain SQL file because drizzle-kit view push is uncertain on this toolchain.
+# Finally, seed the idempotent demo dataset (spec 017) so a fresh boot shows a
+# populated product — safe to re-run against an already-seeded database.
 FROM base AS migrate
 COPY --from=deps /app ./
 COPY . .
-CMD ["sh", "-c", "pnpm --filter @tripforge/db run db:push && pnpm --filter @tripforge/db run db:views"]
+CMD ["sh", "-c", "pnpm --filter @tripforge/db run db:push && pnpm --filter @tripforge/db run db:views && pnpm --filter @tripforge/web run db:seed"]
 
 # ─── build: compile the Next.js standalone output ────────────────────────────
 FROM base AS build

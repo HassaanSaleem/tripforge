@@ -27,6 +27,10 @@ export interface SupplyContent {
   title: string;
   description?: string;
   features?: string[];
+  /** Licensed stock photo source URL only — never scraped or AI-fabricated (Compliance & Content Sourcing). */
+  imageUrl?: string;
+  /** Required alongside `imageUrl` for curated content — image source credit. */
+  attribution?: string;
 }
 
 export type QuoteFailureReason = "unknown_offer";

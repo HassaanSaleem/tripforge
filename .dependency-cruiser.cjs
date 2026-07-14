@@ -61,6 +61,7 @@ module.exports = {
           "^apps/web/app/", // Next.js App Router pages/layouts/routes
           "\\.config\\.(js|cjs|mjs|ts)$", // next/vitest/playwright/drizzle configs
           "^packages/db/scripts/", // operator/CLI actions — entered via node (compose migrate, vet-agency)
+          "^apps/web/scripts/", // operator/CLI actions — entered via tsx (compose migrate, seed-demo)
         ],
       },
       to: {},

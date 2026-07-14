@@ -7,6 +7,7 @@
 import { money } from "@tripforge/domain";
 import type { HotelOffer, HotelPort, HotelSearchCriteria } from "../ports/hotel.js";
 import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxPortAdapter, SandboxSupplyEngine } from "./engine.js";
+import { lookupCuratedCity } from "./curated-catalog.js";
 
 // A hotel quote holds for this long before it must be re-quoted (INV-006).
 // Windows differ per component so nothing can assume a global TTL (research D6).
@@ -35,6 +36,21 @@ export class SandboxHotelAdapter extends SandboxPortAdapter<HotelOffer> implemen
       return []; // no inventory: empty list, never a throw
     }
     const base = criteria.destination.toLowerCase();
+    const curated = lookupCuratedCity(criteria.destination);
+    if (curated) {
+      return this.engine.register(
+        curated.hotels.map((hotel, i) => ({
+          offerId: `${base}-curated-hotel-${i + 1}`,
+          content: {
+            title: hotel.title,
+            description: hotel.description,
+            imageUrl: hotel.imageUrl,
+            attribution: hotel.attribution,
+          },
+          netRate: money(hotel.netRateMinor, hotel.currency),
+        })),
+      );
+    }
     return this.engine.register([
       {
         offerId: `${base}-001`,

@@ -5,6 +5,7 @@
 import { money } from "@tripforge/domain";
 import type { ActivityOffer, ActivityPort, ActivitySearchCriteria } from "../ports/activity.js";
 import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxPortAdapter, SandboxSupplyEngine } from "./engine.js";
+import { lookupCuratedCity } from "./curated-catalog.js";
 
 const QUOTE_HOLD_MS = 30 * 60 * 1000;
 
@@ -34,6 +35,22 @@ export class SandboxActivityAdapter
       return [];
     }
     const base = criteria.destination.toLowerCase();
+    const curated = lookupCuratedCity(criteria.destination);
+    if (curated) {
+      return this.engine.register(
+        curated.activities.map((activity, i) => ({
+          offerId: `${base}-curated-act-${i + 1}`,
+          content: {
+            title: activity.title,
+            description: activity.description,
+            imageUrl: activity.imageUrl,
+            attribution: activity.attribution,
+          },
+          netRate: money(activity.netRateMinor, activity.currency),
+          durationMinutes: activity.durationMinutes,
+        })),
+      );
+    }
     return this.engine.register([
       {
         offerId: `${base}-act-001`,

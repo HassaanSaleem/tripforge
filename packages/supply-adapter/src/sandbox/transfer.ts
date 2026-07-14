@@ -3,6 +3,7 @@
 import { money } from "@tripforge/domain";
 import type { TransferOffer, TransferPort, TransferSearchCriteria } from "../ports/transfer.js";
 import { SANDBOX_FAIL_BOOK_OFFER_ID, SandboxPortAdapter, SandboxSupplyEngine } from "./engine.js";
+import { lookupCuratedCity } from "./curated-catalog.js";
 
 const QUOTE_HOLD_MS = 10 * 60 * 1000;
 
@@ -42,6 +43,30 @@ export class SandboxTransferAdapter
     // different, correctly-directed offer for the departure leg instead of
     // reusing the arrival offer's id/title verbatim).
     const returnBase = slug(criteria.to, criteria.from);
+    // Curated content is keyed on the destination CITY (spec 017) — the
+    // planner always searches transfers as {from: "<city> Airport",
+    // to: "<city>"}, so `to` is the reliable match; `from` is a fallback for
+    // any other caller shape (transfers have no marketing imagery — see
+    // curated-catalog.ts's CuratedTransferFixture note).
+    const curated = lookupCuratedCity(criteria.to) ?? lookupCuratedCity(criteria.from);
+    if (curated) {
+      return this.engine.register(
+        curated.transfers.flatMap((transfer, i) => [
+          {
+            offerId: `${base}-curated-xfer-${i + 1}`,
+            content: { title: `${transfer.title} ${criteria.from} → ${criteria.to}` },
+            netRate: money(transfer.netRateMinor, transfer.currency),
+            mode: transfer.mode,
+          },
+          {
+            offerId: `${returnBase}-curated-xfer-${i + 1}-return`,
+            content: { title: `${transfer.title} ${criteria.to} → ${criteria.from}` },
+            netRate: money(transfer.netRateMinor, transfer.currency),
+            mode: transfer.mode,
+          },
+        ]),
+      );
+    }
     return this.engine.register([
       {
         offerId: `${base}-xfer-001`,

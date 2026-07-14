@@ -10,7 +10,11 @@
       ]
     },
     "apps/web": {
-      "entry": ["app/**/{page,layout,route,loading,error,not-found}.{ts,tsx}", "lib/**/*.ts"],
+      "entry": [
+        "app/**/{page,layout,route,loading,error,not-found}.{ts,tsx}",
+        "lib/**/*.ts",
+        "scripts/*.ts"
+      ],
       "project": ["**/*.{ts,tsx}"]
     },
     "packages/*": {
