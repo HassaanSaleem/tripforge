@@ -17,6 +17,7 @@ Rules for the loop:
 | CI-IMG-BUILD | `add ci image build` | Should CI build the compose image so hermetic-build breaks gate merges? | Yes — add a docker-build job to `.github/workflows/ci.yml` | 2026-07-07 | Nothing today (gap: BUG-1-class breaks stay invisible to `ci_pass`) |
 | ENV-PNPM-DENY | `pnpm perms fixed` | Why did the loop harness deny ALL `pnpm` commands in the iter-2 ideate session despite the `.claude/settings.json` allowlist? | Verify/repair the harness permission wiring so allowlisted `pnpm install`/`pnpm test`/`pnpm run lint` run inside loop sessions | 2026-07-07 | In-session L1/L2 + lint verification during ideate/execute (regress runs in its own runtime and is unaffected) |
 | UAT-PR14 | `waive uat pr14` | Waive the UAT-card gate for PR #14 (spec-gap-0001: docs-only sync of data-model.md to resolved D-006)? | Yes — waive: markdown-only spec amendment, no product behavior, no browser journey applies; every other merge gate is green | 2026-07-09 | Merging PR #14 (spec-gap-0001 stays open) |
+| UAT-PR72 | `waive uat pr72` | Waive the UAT-card gate for PR #72 (seed-0022a: media library real file upload) — the evaluator subagent hit ENVIRONMENT_BLOCKED (Bash denied) twice, same root cause as the still-open ENV-PNPM-DENY row? | Yes — waive: the implementer independently ran the ENTIRE sealed card's journey by hand via Playwright MCP against the same built stack (upload → attach → share → signed-out client-view → byte-for-byte curl verification of the serving route → header/log leak checks) and it PASSED every assertion with zero fix cycles; 571/571 automated tests + lint green; same waiver class as UAT-PR4/UAT-PR5/UAT-PR14 (ENVIRONMENT_BLOCKED, not a defect) | 2026-07-14 | Merging PR #72; seed-0022a stays `in_review` until answered |
 | ✅ PRM-SEAL-17 (resolved) | *(done)* | PR #17 changes a sealed loop gate (`.kitchenloop/uat-cards/seed-0006.md`); the loop may not merge it. | RESOLVED 2026-07-09 — operator reviewed by hand: legitimate NEW UAT card (not an edit of an evaluated card); money path codex-gated (INV-010/011/012, conservation, concurrency, RBAC, INV-028 all PASS); merged #17. Non-money follow-ups filed: seed-0006a (seller-vetting, high), seed-0006b (PMF payload, low). | 2026-07-09 | done |
 | ✅ UAT-PR18 (resolved) | *(done)* | Waive the UAT-card gate for PR #18 (QS3-1: remove/inline 20 knip-flagged unused exports — export-surface-only, no behavior change)? | RESOLVED 2026-07-09 — waived (export-surface-only, no runtime path, no browser journey applies); merged #18. | 2026-07-09 | done |
 | ✅ PRM-SEAL-20 (resolved) | *(done)* | PR #20 changes a sealed loop gate (`.kitchenloop/uat-cards/seed-0006a.md`); the loop may not merge it. | RESOLVED 2026-07-09 — operator reviewed: legit new UAT card; seller-vetting fix refuses a de-vetted seller (not_vetted, state conserved), falsifiable UAT card, L3-tested; merged #20. | 2026-07-09 | done |
@@ -89,6 +90,33 @@ merge-safety APPROVE; CI lint-and-test green on head fed673b1ba; zero file
 deletions; no `uat-failed` label. Precedent: UAT-PR4/UAT-PR5 waivers for non-UI
 PRs. Recommendation: waive (same class as UAT-PR4 — nothing for a browser journey
 to exercise). Blocked until answered: merging PR #14; spec-gap-0001 remains open.
+
+**UAT-PR72** — Iteration 6 execute (seed-0022a, media library real device file
+upload). Spawned the zero-context `uat-evaluator` (isolation: worktree, haiku)
+TWICE against the sealed card `.kitchenloop/uat-cards/seed-0022a.md`; both runs
+reported the same block before executing a single test-card step: Bash tool
+access was denied to the subagent, so it could not run `pnpm install`, the
+prerequisite curl/docker checks, or the browser automation. This is the SAME
+root cause as the still-open **ENV-PNPM-DENY** row (harness permission wiring
+for spawned/loop sessions), not a defect in the feature — the card itself was
+never reached. Rather than skip verification, I (the implementer) drove the
+ENTIRE sealed card's journey by hand via Playwright MCP against the same built
+compose stack the evaluator would have used: signed up a fresh agency, used the
+NEW "Upload a photo from your device" form (not the pre-existing URL form) to
+upload a real JPEG with no URL typed, confirmed a working preview, attached it
+to a drafted trip's gallery via the pre-existing attach picker (unmodified),
+shared the trip, opened the `/view/{token}` link in a fresh signed-out tab, and
+confirmed the identical photo renders there. Verified the new public
+`/api/media/[id]` serving route directly with `curl` (no cookies/session): 200
+`image/jpeg`, response bytes byte-for-byte identical to the uploaded file
+(`diff` clean), headers contain ONLY `content-type`/`cache-control` (no
+`agencyId`/`attribution` anywhere), and an unknown uuid at the same route
+404s. Compose-log scan and browser console: zero errors. Every assertion the
+sealed card makes was independently satisfied. Also green: 571/571 automated
+tests (`pnpm test` in the built image), lint clean, L3 smoke 45/45. Same
+waiver class as UAT-PR4/UAT-PR5/UAT-PR14 (ENVIRONMENT_BLOCKED, not a product
+defect) — recommend waiving. Blocked until answered: merging PR #72;
+seed-0022a stays `in_review`.
 A follow-up ticket spec-gap-0003 was filed for the stale pre-D-006 open-decision
 language remaining in sibling spec.md/plan.md (non-blocking, pr-auditor finding).
 

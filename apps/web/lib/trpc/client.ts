@@ -93,6 +93,9 @@ export type MediaListOutput = inferRouterOutputs<AppRouter>["workspace"]["media"
 export type MediaAsset = MediaListOutput["assets"][number];
 export type RegisterMediaInput = inferRouterInputs<AppRouter>["workspace"]["media"]["register"];
 export type RegisterMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["media"]["register"];
+/** Real upload (spec 027 contracts §1, seed-0022a). */
+export type UploadMediaInput = inferRouterInputs<AppRouter>["workspace"]["media"]["upload"];
+export type UploadMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["media"]["upload"];
 export type AttachMediaInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["attachMedia"];
 export type AttachMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["attachMedia"];
 

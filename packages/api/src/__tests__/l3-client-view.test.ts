@@ -297,6 +297,52 @@ describe.skipIf(!DATABASE_URL)("L3 client-view share (real Postgres)", () => {
   );
 
   it(
+    "spec 027 US3: an uploaded asset crosses the client-view allowlist exactly like a URL-registered one — no agencyId/attribution leak",
+    async () => {
+      const agent = await makeAgency("Snapshot Sharers");
+      const itineraryId = await draftItinerary(agent);
+      const uploaded = await callerFor(agent).workspace.media.upload({
+        source: "agent-upload",
+        kind: "image",
+        mimeType: "image/jpeg",
+        alt: "A photo from my phone",
+        attribution: "Photo by Jane Agent — internal-only, must never reach the client",
+        dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString("base64"),
+      });
+      expect(uploaded.status).toBe("uploaded");
+      if (uploaded.status !== "uploaded") return;
+      expect(uploaded.asset.url).toBe(`http://localhost:3000/api/media/${uploaded.asset.id}`);
+
+      await callerFor(agent).workspace.itinerary.attachMedia({
+        itineraryId,
+        mediaAssetId: uploaded.asset.id,
+        target: { scope: "gallery" },
+      });
+
+      const shared = await callerFor(agent).workspace.itinerary.share({ itineraryId });
+      expect(shared.status).toBe("shared");
+      if (shared.status !== "shared") return;
+      const resolved = await callerFor(null).clientView.itinerary({ token: shared.token });
+      expect(resolved.status).toBe("found");
+      if (resolved.status !== "found") return;
+
+      // Positive: the projected media is exactly {kind,url,alt} — the url IS
+      // the public serving path (`/api/media/{id}`), meant to be fetched with
+      // no session (research D3); unlike spec 015's URL-registered case, the
+      // asset id legitimately appears here (it addresses the serving route),
+      // so it is NOT a leak the way it would be for a registered asset.
+      expect(resolved.view.media).toEqual([{ kind: "image", url: uploaded.asset.url, alt: uploaded.asset.alt }]);
+
+      // Negative: agencyId and the confidential attribution string never
+      // leak — the one thing that WOULD be a real trust-boundary break.
+      const payload = JSON.stringify(resolved);
+      expect(payload).not.toContain(agent.agencyId);
+      expect(payload).not.toContain("internal-only");
+    },
+    LONG,
+  );
+
+  it(
     "spec 015: an itinerary with no attached media renders media: [] everywhere (SC-005, no regression)",
     async () => {
       const agent = await makeAgency("Text Only Travel");

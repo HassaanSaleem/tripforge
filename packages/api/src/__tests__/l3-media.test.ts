@@ -264,4 +264,111 @@ describe.skipIf(!DATABASE_URL)("L3 content library v0 (real Postgres)", () => {
     },
     LONG,
   );
+
+  // ─── spec 027 (seed-0022a): real file upload ───────────────────────────────
+
+  const TINY_JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  const VALID_UPLOAD = {
+    source: "agent-upload" as const,
+    kind: "image" as const,
+    mimeType: "image/jpeg" as const,
+    alt: "A photo from my phone",
+    dataBase64: TINY_JPEG_BYTES.toString("base64"),
+  };
+
+  it(
+    "spec 027 US1: upload persists a row scoped to the caller's agency — cross-tenant list/get never leak it",
+    async () => {
+      const a = await makeAgency("Device Upload Co");
+      const b = await makeAgency("Rival Uploads");
+
+      const uploaded = await callerFor(a).workspace.media.upload(VALID_UPLOAD);
+      expect(uploaded.status).toBe("uploaded");
+      if (uploaded.status !== "uploaded") return;
+      expect(uploaded.asset.url).toBe(`http://localhost:3000/api/media/${uploaded.asset.id}`);
+      expect(uploaded.asset.alt).toBe(VALID_UPLOAD.alt);
+
+      const ownList = await callerFor(a).workspace.media.list();
+      expect(ownList.assets.map((asset) => asset.id)).toContain(uploaded.asset.id);
+
+      const otherList = await callerFor(b).workspace.media.list();
+      expect(otherList.assets.map((asset) => asset.id)).not.toContain(uploaded.asset.id);
+
+      const ownGet = await callerFor(a).workspace.media.get({ mediaAssetId: uploaded.asset.id });
+      expect(ownGet).toEqual({ status: "found", asset: uploaded.asset });
+      const otherGet = await callerFor(b).workspace.media.get({ mediaAssetId: uploaded.asset.id });
+      expect(otherGet).toEqual({ status: "not_found" });
+    },
+    LONG,
+  );
+
+  it(
+    "spec 027 US1: a mime type outside the closed image allowlist is refused at the tRPC boundary — nothing persists",
+    async () => {
+      const agent = await makeAgency("Wrong Format Travel");
+      await expect(
+        callerFor(agent).workspace.media.upload({
+          ...VALID_UPLOAD,
+          // @ts-expect-error — deliberately outside the closed mime-type set
+          mimeType: "application/pdf",
+        }),
+      ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+      const list = await callerFor(agent).workspace.media.list();
+      expect(list.assets).toHaveLength(0);
+    },
+    LONG,
+  );
+
+  it(
+    "spec 027 US1: a payload over the 3 MB cap is refused as a typed outcome — nothing persists",
+    async () => {
+      const agent = await makeAgency("Oversized Snapshots");
+      const oversized = Buffer.alloc(3 * 1024 * 1024 + 100, 0xab);
+      const outcome = await callerFor(agent).workspace.media.upload({
+        ...VALID_UPLOAD,
+        dataBase64: oversized.toString("base64"),
+      });
+      expect(outcome).toEqual({ status: "refused", reason: "file_too_large" });
+
+      const list = await callerFor(agent).workspace.media.list();
+      expect(list.assets).toHaveLength(0);
+    },
+    LONG,
+  );
+
+  it(
+    "spec 027 US2: an uploaded asset attaches to the gallery exactly like a URL-registered one, and survives detach",
+    async () => {
+      const agent = await makeAgency("Parity Travel");
+      const itineraryId = await draftItinerary(agent);
+      const uploaded = await callerFor(agent).workspace.media.upload(VALID_UPLOAD);
+      expect(uploaded.status).toBe("uploaded");
+      if (uploaded.status !== "uploaded") return;
+
+      const attached = await callerFor(agent).workspace.itinerary.attachMedia({
+        itineraryId,
+        mediaAssetId: uploaded.asset.id,
+        target: { scope: "gallery" },
+      });
+      expect(attached).toEqual({ status: "attached", media: expect.objectContaining({ id: uploaded.asset.id }) });
+
+      const after = await callerFor(agent).workspace.itinerary.get({ itineraryId });
+      expect(after.status).toBe("found");
+      if (after.status !== "found") return;
+      expect(after.itinerary.media.map((m) => m.id)).toContain(uploaded.asset.id);
+
+      const detached = await callerFor(agent).workspace.itinerary.detachMedia({
+        itineraryId,
+        mediaRefId: uploaded.asset.id,
+        target: { scope: "gallery" },
+      });
+      expect(detached).toEqual({ status: "detached" });
+
+      // Detach never deletes the underlying asset (existing precedent).
+      const stillThere = await callerFor(agent).workspace.media.get({ mediaAssetId: uploaded.asset.id });
+      expect(stillThere).toEqual({ status: "found", asset: uploaded.asset });
+    },
+    LONG,
+  );
 });

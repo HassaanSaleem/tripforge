@@ -24,6 +24,11 @@ export interface BuildContainerOptions {
   llm?: LLMPort;
   /** Exchange-rate table override (tests); defaults to the fixed P0 table. */
   rates?: readonly ExchangeRate[];
+  /** The app's own public origin (spec 027 research D6) — an uploaded media
+   * asset's `url` must be absolute (`MediaRefSchema.url` is `z.string().url()`).
+   * Reuses the same origin concept as `BETTER_AUTH_URL`; defaults to the
+   * adapter's own `http://localhost:3000` default when omitted. */
+  publicBaseUrl?: string;
 }
 
 export function buildContainer(options: BuildContainerOptions = {}): Container {
@@ -32,7 +37,7 @@ export function buildContainer(options: BuildContainerOptions = {}): Container {
     activity: new SandboxActivityAdapter(),
     transfer: new SandboxTransferAdapter(),
     carRental: new SandboxCarRentalAdapter(),
-    mediaStore: new SandboxMediaStoreAdapter(options.db),
+    mediaStore: new SandboxMediaStoreAdapter(options.db, options.publicBaseUrl),
     llm: options.llm ?? new FakeLLM(),
     rates: options.rates ?? STATIC_RATES,
     db: options.db,

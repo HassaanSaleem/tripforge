@@ -36,11 +36,15 @@ export type {
 } from "./ports/car-rental.js";
 export type {
   MediaAsset,
+  MediaBytes,
   MediaKind,
   MediaSource,
   MediaStorePort,
   RegisterMediaInput,
   RegisterMediaOutcome,
+  UploadMediaInput,
+  UploadMediaOutcome,
+  UploadMimeType,
 } from "./ports/media-store.js";
 export { SandboxHotelAdapter } from "./sandbox/hotel.js";
 export { SandboxActivityAdapter } from "./sandbox/activity.js";

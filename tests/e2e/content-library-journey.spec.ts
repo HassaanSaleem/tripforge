@@ -1,16 +1,20 @@
 import { test, expect, type Browser, type Page } from "@playwright/test";
 import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency } from "./support.js";
 
-// L4 content library journey (spec 015, ticket seed-0022; INV-027). Runs
-// against the BUILT compose image. Covers: registering a media item (US1),
-// attaching it to the gallery AND to a specific item (US2), the client
-// seeing both with alt text and NO internal id/source leak (US3), an
-// unattached itinerary rendering unchanged (SC-005), and detach removing
-// only the targeted attachment (US2 edge case).
+// L4 content library journey (spec 015, ticket seed-0022; spec 027, ticket
+// seed-0022a; INV-027). Runs against the BUILT compose image. Covers:
+// registering a media item (US1), attaching it to the gallery AND to a
+// specific item (US2), the client seeing both with alt text and NO internal
+// id/source leak (US3), an unattached itinerary rendering unchanged (SC-005),
+// detach removing only the targeted attachment (US2 edge case), and (spec
+// 027) uploading a real file from disk and having it render through the
+// public `/api/media/[id]` serving route in both the workspace and the
+// client view.
 
 // KITCHENLOOP-COVERAGE-BEGIN
 // [
-//   { "feature": "content-library", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "agent registers a media asset via the workspace media-library panel, attaches it to the gallery and to a specific item, and the client's /view page renders both with alt text and no internal id/source leak (spec 015 US1-US3); durable regression coverage since PR #42" }
+//   { "feature": "content-library", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 3, "tier": "T2", "note": "agent registers a media asset via the workspace media-library panel, attaches it to the gallery and to a specific item, and the client's /view page renders both with alt text and no internal id/source leak (spec 015 US1-US3); durable regression coverage since PR #42" },
+//   { "feature": "content-library", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 6, "tier": "T2", "note": "agent uploads a real file from disk (no URL typed), attaches it to a trip's gallery, and the client's /view page renders it via the public /api/media/[id] serving route with no agencyId/attribution leak (spec 027 US1-US3, seed-0022a)" }
 // ]
 // KITCHENLOOP-COVERAGE-END
 
@@ -101,6 +105,80 @@ test("an agent registers media, attaches it to the gallery and an item, and the 
     // the client-view journey's field-name-leak pattern.
     const html = await traveler.content();
     expect(html, "client view leaked the agent-upload source label").not.toContain("agent-upload");
+  } finally {
+    await context.close();
+  }
+});
+
+test("an agent uploads a real file, attaches it, and the client renders it via the public serving route (spec 027 seed-0022a)", async ({
+  page,
+  browser,
+}) => {
+  test.setTimeout(DRAFT_TIMEOUT_MS + 90_000);
+  const uploadAgent = {
+    name: "Uma Uploader",
+    email: `uma-${runId}@example.test`,
+    password: agent.password,
+    agencyName: `Device Uploads ${runId.slice(-6)}`,
+  };
+  const UPLOAD_ALT = `Phone photo ${runId.slice(-6)}`;
+  await signUpAgency(page, uploadAgent);
+
+  // US1: upload a real file (no URL typed anywhere) — appears in the library.
+  await page.goto("/media");
+  const panel = page.getByTestId("media-library-panel");
+  await expect(panel).toBeVisible();
+  await panel.getByTestId("media-upload-file").setInputFiles({
+    name: "phone-photo.jpg",
+    mimeType: "image/jpeg",
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+  });
+  await panel.locator("#media-upload-alt").fill(UPLOAD_ALT);
+  await panel.getByTestId("media-upload-submit").click();
+  const uploadedCard = panel.getByTestId("media-card").filter({ hasText: UPLOAD_ALT });
+  await expect(uploadedCard).toBeVisible({ timeout: 15_000 });
+  const workspaceImgSrc = await uploadedCard.getByRole("img").getAttribute("src");
+  // Absolute url (spec 027 research D6: MediaRefSchema.url requires z.string().url()).
+  expect(workspaceImgSrc).toMatch(/\/api\/media\/[0-9a-f-]{36}$/);
+
+  // US2: attach it to a trip's gallery, exactly like a URL-registered asset.
+  await draftParisTrip(page);
+  await page.goto("/trips");
+  await expect(page.getByTestId("trip-row")).toHaveCount(1, { timeout: 15_000 });
+  await page.getByTestId("trip-open").click();
+  const opened = page.getByTestId("opened-trip");
+  await expect(opened).toBeVisible({ timeout: 15_000 });
+  const galleryPicker = opened.getByTestId("trip-gallery-picker");
+  await expect(galleryPicker).toBeVisible({ timeout: 15_000 });
+  await galleryPicker.selectOption({ label: UPLOAD_ALT });
+  await expect(opened.getByTestId("trip-gallery-list").getByRole("img", { name: UPLOAD_ALT })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // US3: share, open anonymously, confirm the client renders it via the
+  // public serving route with no session — and that the route itself
+  // exposes nothing beyond bytes + content type (research D3).
+  const shareControl = opened.getByTestId("share-control");
+  await shareControl.getByRole("button", { name: "Share with client" }).click();
+  const urlText = shareControl.getByTestId("share-url");
+  await expect(urlText).toBeVisible({ timeout: 15_000 });
+  const sharedUrl = (await urlText.textContent())?.trim() ?? "";
+
+  const { context, page: traveler } = await openAnonymously(browser, sharedUrl);
+  try {
+    const clientImg = traveler.getByTestId("client-gallery").getByRole("img", { name: UPLOAD_ALT });
+    await expect(clientImg).toBeVisible();
+    const clientImgSrc = await clientImg.getAttribute("src");
+    expect(clientImgSrc).toBe(workspaceImgSrc);
+
+    const mediaResponse = await traveler.request.get(new URL(clientImgSrc ?? "", sharedUrl).toString());
+    expect(mediaResponse.ok()).toBe(true);
+    expect(mediaResponse.headers()["content-type"]).toBe("image/jpeg");
+    // Only bytes + content-type cross this boundary — no agencyId/attribution
+    // header, and the confidential attribution string never appears in the body.
+    expect(Object.keys(mediaResponse.headers())).not.toContain("x-agency-id");
+    const body = await mediaResponse.body();
+    expect(body.toString("utf-8")).not.toContain("internal-only");
   } finally {
     await context.close();
   }

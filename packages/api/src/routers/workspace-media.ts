@@ -1,20 +1,40 @@
 // workspace.media.* — agent-gated media library procedures (spec 015
-// contracts §1-3). The closed MediaSource enum is enforced here via Zod
-// (belt) and again inside SandboxMediaStoreAdapter (suspenders) — never
-// trust one layer alone for a set this consequential (Compliance & Content
-// Sourcing).
+// contracts §1-3; spec 027 contracts §1: real upload, seed-0022a). The closed
+// MediaSource enum is enforced here via Zod (belt) and again inside
+// SandboxMediaStoreAdapter (suspenders) — never trust one layer alone for a
+// set this consequential (Compliance & Content Sourcing).
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, agentProcedure } from "../trpc.js";
-import { registerMedia, listMedia, getMedia } from "../services/media.js";
+import { registerMedia, listMedia, getMedia, uploadMedia } from "../services/media.js";
 
 const mediaSourceSchema = z.enum(["licensed-stock", "official-embed", "agent-upload", "traveler-ugc"]);
 const mediaKindSchema = z.enum(["image", "video", "embed"]);
+const uploadMimeTypeSchema = z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 const registerInputSchema = z.strictObject({
   source: mediaSourceSchema,
   kind: mediaKindSchema,
   url: z.string().url(),
+  alt: z.string().min(1),
+  attribution: z.string().optional(),
+});
+
+/**
+ * First-line defense on the base64 STRING length before any decoding, sized
+ * for the 3 MB raw-byte cap (spec 027 research D4: 3 MB * 4/3 base64
+ * inflation = 4,194,304 chars, exactly at the boundary since 3 MB is
+ * divisible by 3) plus a small margin. The authoritative check is the
+ * adapter's decoded byte-length comparison (`file_too_large`) — this is only
+ * a cheap early reject for grossly oversized payloads.
+ */
+const MAX_UPLOAD_BASE64_LENGTH = 4_200_000;
+
+const uploadInputSchema = z.strictObject({
+  source: mediaSourceSchema,
+  kind: z.literal("image"),
+  mimeType: uploadMimeTypeSchema,
+  dataBase64: z.string().min(1).max(MAX_UPLOAD_BASE64_LENGTH),
   alt: z.string().min(1),
   attribution: z.string().optional(),
 });
@@ -38,11 +58,40 @@ function parseRegisterInput(value: unknown): z.infer<typeof registerInputSchema>
   return registerInputSchema.parse(value);
 }
 
+/** Same belt-and-suspenders pattern as `parseRegisterInput`, for `upload`. */
+function parseUploadInput(value: unknown): z.infer<typeof uploadInputSchema> {
+  const candidate = (value ?? {}) as { source?: unknown; mimeType?: unknown };
+  const sourceCheck = mediaSourceSchema.safeParse(candidate.source);
+  if (!sourceCheck.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Media source must be one of: ${mediaSourceSchema.options.join(", ")}.`,
+    });
+  }
+  const mimeTypeCheck = uploadMimeTypeSchema.safeParse(candidate.mimeType);
+  if (!mimeTypeCheck.success) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `File type must be one of: ${uploadMimeTypeSchema.options.join(", ")}.`,
+    });
+  }
+  return uploadInputSchema.parse(value);
+}
+
 export const workspaceMediaRouter = router({
   /** Register a media item into the caller's own agency library (US1). */
   register: agentProcedure
     .input((value) => parseRegisterInput(value))
     .mutation(({ ctx, input }) => registerMedia(ctx.container, ctx.session, input)),
+
+  /** Upload a real file into the caller's own agency library (spec 027 US1). */
+  upload: agentProcedure.input((value) => parseUploadInput(value)).mutation(({ ctx, input }) => {
+    const { dataBase64, ...rest } = input;
+    return uploadMedia(ctx.container, ctx.session, {
+      ...rest,
+      data: new Uint8Array(Buffer.from(dataBase64, "base64")),
+    });
+  }),
 
   /** The agency's own media library, newest first (tenant-scoped, INV-004). */
   list: agentProcedure.query(({ ctx }) => listMedia(ctx.container, ctx.session)),

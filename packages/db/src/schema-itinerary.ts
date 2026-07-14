@@ -51,12 +51,17 @@ export const itineraryShareLink = pgTable("itinerary_share_link", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// ─── Content library (spec 015: content library v0) ───────────────────────
+// ─── Content library (spec 015: content library v0; spec 027: real upload) ──
 //
-// Agency-owned media asset metadata — v0 is URL-registration only (research
-// D2): no binary ever lands here or anywhere else (INV-025). Referenced by
-// `id` from `MediaRef`s inside itinerary documents (a plain string reference,
-// not an FK — the document is jsonb, same pattern as `supplyRef.externalId`).
+// Agency-owned media asset metadata. v0 was URL-registration only (research
+// D2). spec 027 (seed-0022a) adds a second, upload-backed row shape: bytes
+// live in `dataBase64`/`mimeType` (both NULL for a URL-registered row, both
+// populated for an uploaded one); `url` is NULL for an uploaded row — the
+// adapter derives its servable path (`/api/media/{id}`) at read time rather
+// than storing it literally (data-model.md). Postgres stays the single
+// system of record (INV-003) — no second datastore. Referenced by `id` from
+// `MediaRef`s inside itinerary documents (a plain string reference, not an
+// FK — the document is jsonb, same pattern as `supplyRef.externalId`).
 // `source` mirrors @tripforge/itinerary-schema's closed MediaSource enum,
 // enforced at the tRPC boundary (Zod) and defense-in-depth in the adapter.
 export const mediaAsset = pgTable(
@@ -66,9 +71,11 @@ export const mediaAsset = pgTable(
     agencyId: agencyFk(),
     source: text("source").notNull(),
     kind: text("kind").notNull(),
-    url: text("url").notNull(),
+    url: text("url"),
     alt: text("alt").notNull(),
     attribution: text("attribution"),
+    dataBase64: text("data_base64"),
+    mimeType: text("mime_type"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({

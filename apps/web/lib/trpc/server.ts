@@ -18,13 +18,19 @@ import { getSessionContext } from "../auth.js";
 
 let container: Container | undefined;
 
-function getContainer(): Container {
+/** Exported for the one non-tRPC caller that needs direct container access:
+ * the media-serving route (`app/api/media/[id]/route.ts`) streams raw bytes,
+ * a shape tRPC's JSON transport can't return — see spec 027 research D3. */
+export function getContainer(): Container {
   if (!container) {
     const { db } = getDb();
     const apiKey = optionalEnv("ANTHROPIC_API_KEY", "");
     container = buildContainer({
       db,
       llm: apiKey ? new AnthropicLLM({ apiKey }) : undefined,
+      // Same origin BETTER_AUTH_URL already uses (spec 027 research D6) — an
+      // uploaded media asset's url must match the browser's real origin.
+      publicBaseUrl: optionalEnv("BETTER_AUTH_URL", "http://localhost:3000"),
     });
   }
   return container;

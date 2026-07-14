@@ -1,12 +1,20 @@
-// Agency media library (spec 015 US1) — register licensed media and see it
-// listed, ready to attach to any itinerary. Presentation rides the seed-0009s
-// theme kit (.tf-*); every user-visible failure string comes from the pure
-// helpers in lib/media-library.ts.
+// Agency media library (spec 015 US1; spec 027 US1: real file upload,
+// seed-0022a) — register licensed media OR upload a local file, and see it
+// listed, ready to attach to any itinerary. Presentation rides the
+// seed-0009s theme kit (.tf-*); every user-visible failure string comes from
+// the pure helpers in lib/media-library.ts.
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { trpc, type MediaAsset, type RegisterMediaInput } from "../../../lib/trpc/client.js";
-import { mediaKindLabel, mediaSourceLabel, listMediaErrorMessage, registerMediaErrorMessage } from "../../../lib/media-library.js";
+import { trpc, type MediaAsset, type RegisterMediaInput, type UploadMediaInput } from "../../../lib/trpc/client.js";
+import {
+  mediaKindLabel,
+  mediaSourceLabel,
+  listMediaErrorMessage,
+  registerMediaErrorMessage,
+  uploadMediaErrorMessage,
+  uploadMediaRefusalMessage,
+} from "../../../lib/media-library.js";
 
 type ListState =
   | { phase: "loading" }
@@ -20,6 +28,20 @@ const INITIAL_FORM: RegisterMediaInput = {
   alt: "",
 };
 
+const UPLOAD_ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
+
+/** Browser-side ArrayBuffer → base64 (spec 027 research D2) — no `Buffer` in
+ * the browser, so this is the standard btoa/String.fromCharCode pattern. */
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
 /** Loads and renders the caller's own agency library (INV-004, tenant-scoped
  * server-side). `onChanged` lets a sibling panel (the opened trip's attach
  * picker) know a fresh item is available without polling. */
@@ -28,6 +50,13 @@ export function MediaLibraryPanel({ onChanged }: { onChanged?: () => void } = {}
   const [form, setForm] = useState<RegisterMediaInput>(INITIAL_FORM);
   const [registering, setRegistering] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const [uploadSource, setUploadSource] = useState<UploadMediaInput["source"]>("agent-upload");
+  const [uploadAlt, setUploadAlt] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadInputKey, setUploadInputKey] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function loadLibrary() {
     try {
@@ -64,6 +93,40 @@ export function MediaLibraryPanel({ onChanged }: { onChanged?: () => void } = {}
       setFormError(registerMediaErrorMessage(error));
     } finally {
       setRegistering(false);
+    }
+  }
+
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (uploading || !uploadFile) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      if (uploadFile.size > MAX_UPLOAD_BYTES) {
+        setUploadError(uploadMediaRefusalMessage("file_too_large"));
+        return;
+      }
+      const dataBase64 = await fileToBase64(uploadFile);
+      const outcome = await trpc.workspace.media.upload.mutate({
+        source: uploadSource,
+        kind: "image",
+        mimeType: uploadFile.type as UploadMediaInput["mimeType"],
+        dataBase64,
+        alt: uploadAlt,
+      });
+      if (outcome.status === "uploaded") {
+        setUploadAlt("");
+        setUploadFile(null);
+        setUploadInputKey((key) => key + 1);
+        await loadLibrary();
+        onChanged?.();
+      } else {
+        setUploadError(uploadMediaRefusalMessage(outcome.reason));
+      }
+    } catch (error) {
+      setUploadError(uploadMediaErrorMessage(error));
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -124,6 +187,47 @@ export function MediaLibraryPanel({ onChanged }: { onChanged?: () => void } = {}
         </button>
       </form>
       {formError ? <p role="alert">{formError}</p> : null}
+
+      <form onSubmit={handleUpload} className="tf-planner-form" data-testid="media-upload-form">
+        <label htmlFor="media-upload-source">
+          Source
+          <select
+            id="media-upload-source"
+            value={uploadSource}
+            onChange={(event) => setUploadSource(event.target.value as UploadMediaInput["source"])}
+          >
+            <option value="agent-upload">Your upload</option>
+            <option value="traveler-ugc">Traveler photo</option>
+          </select>
+        </label>
+        <label htmlFor="media-upload-file" className="span-2">
+          Upload a photo from your device
+          <input
+            id="media-upload-file"
+            key={uploadInputKey}
+            type="file"
+            accept={UPLOAD_ACCEPT}
+            required
+            onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+            data-testid="media-upload-file"
+          />
+        </label>
+        <label htmlFor="media-upload-alt" className="span-2">
+          Alt text
+          <input
+            id="media-upload-alt"
+            type="text"
+            required
+            placeholder="Describe the photo"
+            value={uploadAlt}
+            onChange={(event) => setUploadAlt(event.target.value)}
+          />
+        </label>
+        <button type="submit" className="tf-btn--cta" disabled={uploading} data-testid="media-upload-submit">
+          {uploading ? "Uploading…" : "Upload photo"}
+        </button>
+      </form>
+      {uploadError ? <p role="alert">{uploadError}</p> : null}
 
       {list.phase === "loading" ? (
         <p className="tf-trip-note" aria-live="polite">
