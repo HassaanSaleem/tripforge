@@ -9,11 +9,17 @@ import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency, vetAgencyByName } from 
 // SEPARATE departure removes it from browse. Assertions are structural/
 // numeric (never model-authored planner text), matching marketplace-journey.
 
-// KITCHENLOOP-COVERAGE-BEGIN
-// [
-//   { "feature": "group-travel", "platform": "web", "user_type": "agent", "result": "pass", "iteration": 6, "tier": "T2", "note": "agent posts a group departure with capacity 1, joins the only seat on behalf of a named client (seats-left 1->0 in place), a second join is refused sold-out, and cancelling a separate departure removes it from browse" }
-// ]
-// KITCHENLOOP-COVERAGE-END
+// No KITCHENLOOP-COVERAGE block: "group-travel" (feature) and "agent" (user_type)
+// are not in kitchenloop.yaml's spec.dimensions vocabulary (features:
+// itinerary-builder/content-library/booking/marketplace/trust/revenue-share;
+// user_types: agent-seller/agent-reseller/client) — the block this file
+// originally shipped with (PR #61) declared both anyway, which hard-crashes
+// derive-coverage.mjs's vocabulary guard the first time anyone runs it (every
+// run since PR #61 merged, including the regress phase's coverage-derivation
+// step). Removed rather than force-fit into a wrong existing dimension;
+// ticketed (17840666553970558336, iteration 6) for an operator decision on
+// whether "group-travel" becomes an official 7th feature dimension — this
+// test itself is untouched and still passes.
 
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const agent = {
