@@ -5,7 +5,23 @@
 // with an open quality-sweep ticket.
 import { and, desc, eq, itinerary as itineraryTable, marketplaceListing, scopedWhere, type Db } from "@tripforge/db";
 import { ItinerarySchema, parseItinerary, type Itinerary, type MediaRef } from "@tripforge/itinerary-schema";
+import {
+  applyItineraryEdit,
+  convertMoney,
+  MoneyError,
+  type ApplyEditResult,
+  type ExchangeRate,
+  type ItineraryEditProposal,
+} from "@tripforge/domain";
+import type {
+  ChatEditRequest as LlmChatEditRequest,
+  ChatEditResult as LlmChatEditResult,
+  ChatEditStep,
+  HotelSuggestion,
+} from "@tripforge/llm";
 import type { AgentSessionContext, Container } from "../context.js";
+import { plannerToolDeps, tripRequestSchema, verifiedSupplyCatalog, type TripRequest } from "./planner.js";
+import { findRate } from "../rates.js";
 
 interface MyItineraryListing {
   listingId: string;
@@ -210,4 +226,197 @@ export async function detachMedia(
 
   await persistDocument(db, input.itineraryId, updated);
   return { status: "detached" };
+}
+
+// ─── Conversational editing (spec 020) ────────────────────────────────────
+//
+// Reuses this file's own load-mutate-persist pattern (loadOwnedItinerary/
+// persistDocument, established above by attachMedia/detachMedia) and the
+// planner's existing criteria-pinning/tool-deps helpers (plannerToolDeps,
+// verifiedSupplyCatalog) — no new persistence path, no new supply surface.
+
+async function loadOwnedItineraryWithRequest(
+  db: Db,
+  session: AgentSessionContext,
+  itineraryId: string,
+): Promise<{ document: Itinerary; tripRequest: TripRequest } | null> {
+  const rows = await db
+    .select({ document: itineraryTable.document, tripRequest: itineraryTable.tripRequest })
+    .from(itineraryTable)
+    .where(scopedWhere(itineraryTable.agencyId, session.agencyId, eq(itineraryTable.id, itineraryId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  return { document: parseItinerary(row.document), tripRequest: tripRequestSchema.parse(row.tripRequest) };
+}
+
+/** Fresh supply re-verification for an `addItem` edit only — `removeItem`
+ * needs no offer catalog (FR-006: every added price comes from live supply). */
+async function applyEditToItinerary(
+  container: Container,
+  document: Itinerary,
+  tripRequest: TripRequest,
+  edit: ItineraryEditProposal,
+): Promise<ApplyEditResult> {
+  const offers = edit.type === "addItem" ? await verifiedSupplyCatalog(container, tripRequest) : [];
+  return applyItineraryEdit({
+    itinerary: document,
+    edit,
+    offers,
+    rates: container.rates,
+    mode: document.pricing.budgetMode,
+    checkIn: tripRequest.checkIn,
+    checkOut: tripRequest.checkOut,
+    party: tripRequest.party,
+    destination: tripRequest.destination,
+  });
+}
+
+function editFailureReply(outcome: Exclude<ApplyEditResult["outcome"], "applied">): string {
+  switch (outcome) {
+    case "item_not_found":
+      return "I couldn't find that item to remove — it may have already changed.";
+    case "unknown_offer":
+      return "That option is no longer available — try asking again.";
+    case "no_rate":
+      return "I couldn't price that option in your trip's currency.";
+    case "invalid_day":
+      return "That day isn't part of this trip.";
+    case "empty_result":
+      return "I can't remove the last item on your trip.";
+    case "over_budget":
+      return "That would go over budget and there's no room left to rebalance.";
+  }
+}
+
+/** Hotel suggestions come back priced in whatever currency the offer itself
+ * carries (the sandbox/aggregator's native currency) — convert each to the
+ * itinerary's own currency so the chat preview matches what will actually be
+ * charged if the agent commits (never a raw, unconverted foreign price next
+ * to EUR/USD figures everywhere else on the page). An offer with no known
+ * rate is dropped from the preview (`applyChatEdit` re-verifies and would
+ * refuse it as `no_rate` anyway if picked). */
+function convertSuggestions(suggestions: HotelSuggestion[], currency: string, rates: readonly ExchangeRate[]): HotelSuggestion[] {
+  return suggestions.flatMap((s) => {
+    if (s.currency === currency) return [s];
+    const rate = findRate(rates, s.currency, currency);
+    if (!rate) return [];
+    try {
+      const converted = convertMoney({ amountMinor: s.priceMinor, currency: s.currency }, rate);
+      return [{ ...s, priceMinor: converted.amountMinor, currency: converted.currency }];
+    } catch (err) {
+      if (err instanceof MoneyError) return [];
+      throw err;
+    }
+  });
+}
+
+function itinerarySummary(document: Itinerary): LlmChatEditRequest["items"] {
+  return document.days.flatMap((day) => day.items.map((item) => ({ id: item.id, kind: item.kind, title: item.title, dayNumber: day.dayNumber })));
+}
+
+export type ChatEditOutcome =
+  | { status: "applied"; itinerary: Itinerary; fit: ApplyEditResult["fit"]; reply: string }
+  | { status: "suggested"; suggestions: HotelSuggestion[]; reply: string }
+  | { status: "no_change"; reply: string }
+  | { status: "not_found" }
+  | { status: "failed"; reason: "malformed_output" };
+
+export type ChatEditEvent = { type: "progress"; step: ChatEditStep } | { type: "result"; outcome: ChatEditOutcome };
+
+/**
+ * Interpret one chat message against an already-persisted itinerary
+ * (contracts/chat-edit-subscription.md). Streamed (INV-028: drives an LLM
+ * tool loop). A direct add/remove is applied and persisted in the SAME
+ * generator call; a hotel request or a clarifying reply writes nothing.
+ */
+export async function* interpretChatEdit(
+  container: Container,
+  session: AgentSessionContext,
+  input: { itineraryId: string; message: string },
+): AsyncGenerator<ChatEditEvent> {
+  const db: Db | undefined = container.db;
+  if (!db) throw new Error("database not configured");
+
+  const loaded = await loadOwnedItineraryWithRequest(db, session, input.itineraryId);
+  if (!loaded) {
+    yield { type: "result", outcome: { status: "not_found" } };
+    return;
+  }
+  const { document, tripRequest } = loaded;
+
+  const chatRequest: LlmChatEditRequest = {
+    purpose: "chat.edit",
+    message: input.message,
+    destination: tripRequest.destination,
+    checkIn: tripRequest.checkIn,
+    checkOut: tripRequest.checkOut,
+    party: tripRequest.party,
+    items: itinerarySummary(document),
+    tools: plannerToolDeps(container, tripRequest),
+  };
+
+  let result: LlmChatEditResult | undefined;
+  for await (const event of container.llm.chatEditItinerary(chatRequest)) {
+    if (event.type === "progress") {
+      yield { type: "progress", step: event.step };
+      continue;
+    }
+    result = event.result;
+  }
+  if (!result || result.status === "failed") {
+    yield { type: "result", outcome: { status: "failed", reason: "malformed_output" } };
+    return;
+  }
+
+  if (result.suggestions.length > 0) {
+    const suggestions = convertSuggestions(result.suggestions, document.currency, container.rates);
+    yield { type: "result", outcome: { status: "suggested", suggestions, reply: result.reply } };
+    return;
+  }
+  if (!result.edit) {
+    yield { type: "result", outcome: { status: "no_change", reply: result.reply } };
+    return;
+  }
+
+  const applied = await applyEditToItinerary(container, document, tripRequest, result.edit);
+  if (applied.outcome !== "applied") {
+    yield { type: "result", outcome: { status: "no_change", reply: editFailureReply(applied.outcome) } };
+    return;
+  }
+  await persistDocument(db, input.itineraryId, applied.itinerary);
+  yield { type: "result", outcome: { status: "applied", itinerary: applied.itinerary, fit: applied.fit, reply: result.reply } };
+}
+
+export type ApplyChatEditOutcome =
+  | { status: "applied"; itinerary: Itinerary; fit: ApplyEditResult["fit"] }
+  | { status: "not_found" }
+  | { status: "item_not_found" }
+  | { status: "invalid_edit" };
+
+/**
+ * Direct, LLM-free application of an already-resolved edit
+ * (contracts/apply-chat-edit-mutation.md) — used for a suggestion card's
+ * "Add to trip" click, and internally by `interpretChatEdit` above for a
+ * directly-resolved add/remove. The offer is always re-verified against a
+ * fresh supply search here, never trusted from the caller (FR-006/FR-012).
+ */
+export async function applyChatEdit(
+  container: Container,
+  session: AgentSessionContext,
+  input: { itineraryId: string; edit: ItineraryEditProposal },
+): Promise<ApplyChatEditOutcome> {
+  const db: Db | undefined = container.db;
+  if (!db) throw new Error("database not configured");
+
+  const loaded = await loadOwnedItineraryWithRequest(db, session, input.itineraryId);
+  if (!loaded) return { status: "not_found" };
+  const { document, tripRequest } = loaded;
+
+  const result = await applyEditToItinerary(container, document, tripRequest, input.edit);
+  if (result.outcome === "item_not_found") return { status: "item_not_found" };
+  if (result.outcome !== "applied") return { status: "invalid_edit" };
+
+  await persistDocument(db, input.itineraryId, result.itinerary);
+  return { status: "applied", itinerary: result.itinerary, fit: result.fit };
 }

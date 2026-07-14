@@ -344,6 +344,21 @@ label > input, label > select, label > textarea {
 .tf-state--fits { background: var(--ok-tint); color: var(--ok); }
 .tf-state--overTarget { background: var(--warn-tint); color: var(--warn); }
 
+/* ---- chat panel (spec 020): conversational itinerary editing ---- */
+.tf-chat { display: grid; gap: 12px; }
+.tf-chat-messages { display: grid; gap: 10px; max-height: 360px; overflow-y: auto; padding-right: 2px; }
+.tf-chat-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.tf-chat-message { padding: 10px 14px; border-radius: var(--r); max-width: 85%; }
+.tf-chat-message p { margin: 0; }
+.tf-chat-message--agent { justify-self: end; background: var(--sea-deep); color: #fff; }
+.tf-chat-message--assistant { justify-self: start; background: var(--sand-2); color: var(--ink); }
+.tf-chat-thinking { display: flex; align-items: center; gap: 10px; color: var(--sea-deep); font-weight: 600; margin: 0; font-size: 14px; }
+.tf-chat-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
+.tf-chat-suggestion-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: grid; gap: 6px; color: var(--ink); }
+.tf-chat-suggestion-title { margin: 0; font-weight: 600; font-size: 14px; }
+.tf-chat-form { display: flex; gap: 10px; }
+.tf-chat-form input { flex: 1; }
+
 /* ---- booking flow (spec 009): markup control, quote review, confirmation ---- */
 .tf-booking { display: grid; gap: 14px; padding: 18px 20px; margin-top: 6px; }
 .tf-booking > p { margin: 0; }

@@ -25,6 +25,7 @@ import {
   type SelectDraftOutput,
 } from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
+import { ChatPanel } from "./chat-panel.js";
 import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
 import {
@@ -187,6 +188,16 @@ export function Planner() {
         );
       },
     });
+  }
+
+  // Reflect a chat-applied edit (spec 020) into the SAME drafted outcome the
+  // draft/selectDraft flow produced — the chat panel never replaces the view
+  // phase, only its itinerary/fit content, so DraftResult/BookingFlow/
+  // ShareControl keep rendering exactly as they do today.
+  function handleChatItineraryUpdated(itinerary: DraftedOutcome["itinerary"], fit: DraftedOutcome["fit"]) {
+    setView((current) =>
+      current.phase === "drafted" ? { phase: "drafted", outcome: { ...current.outcome, itinerary, fit } } : current,
+    );
   }
 
   // Persist the picked option (spec 019 US2) — re-verifies against fresh
@@ -404,6 +415,14 @@ export function Planner() {
           {/* Client-view share (spec 010 US2) — same composition rule, keyed the
               same way so a new draft resets the shared-link state. */}
           <ShareControl key={`share-${view.outcome.itinerary.id}`} itineraryId={view.outcome.itinerary.id} />
+          {/* Conversational editing (spec 020) — same composition rule: only
+              inside an already-drafted, persisted itinerary. */}
+          <ChatPanel
+            key={`chat-${view.outcome.itinerary.id}`}
+            itineraryId={view.outcome.itinerary.id}
+            currentStayDayNumber={findStayDayNumber(view.outcome.itinerary)}
+            onItineraryUpdated={handleChatItineraryUpdated}
+          />
         </>
       ) : null}
     </section>
@@ -455,6 +474,16 @@ function CompareOptions({
       </div>
     </section>
   );
+}
+
+/** Which day the current stay lives on, if any (spec 020 research.md D6) —
+ * a hotel suggestion's "Add to trip" replaces that stay, defaulting to day 1
+ * when the trip has no stay yet. */
+function findStayDayNumber(itinerary: DraftedOutcome["itinerary"]): number | null {
+  for (const day of itinerary.days) {
+    if (day.items.some((item) => item.kind === "stay")) return day.dayNumber;
+  }
+  return null;
 }
 
 function DraftResult({ outcome }: { outcome: DraftedOutcome }) {

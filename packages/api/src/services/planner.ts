@@ -128,7 +128,7 @@ function canonicalCriteria(req: Pick<TripRequest, "destination" | "checkIn" | "c
  * it, so model-authored criteria phrasing ("Paris, France" for a "Paris"
  * trip) can no longer drop tool-returned proposals at assembly.
  */
-function plannerToolDeps(container: Container, req: TripRequest): PlannerToolDeps {
+export function plannerToolDeps(container: Container, req: TripRequest): PlannerToolDeps {
   const criteria = canonicalCriteria(req);
   return {
     searchHotelRates: () => container.hotel.search(criteria.hotel),

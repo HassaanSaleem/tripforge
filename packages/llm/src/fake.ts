@@ -10,6 +10,8 @@
 // inject hallucinated offerIds, failures, or fail-book offers.
 import {
   LLM_MODEL,
+  type ChatEditProgressEvent,
+  type ChatEditRequest,
   type DraftItineraryRequest,
   type DraftItineraryResult,
   type DraftProgressEvent,
@@ -25,6 +27,7 @@ import {
   type PlannerDraft,
   type PlannerDraftItem,
 } from "./planner-draft.js";
+import type { ChatEditResult, HotelSuggestion } from "./chat-edit.js";
 
 export interface FakeLLMOptions {
   /** Canned complete() responses (consumed in order). */
@@ -214,5 +217,120 @@ export class FakeLLM implements LLMPort {
       type: "result",
       result: { status: "drafted", drafts, usage: { inputTokens: 0, outputTokens: 0 } },
     };
+  }
+
+  /** Deterministic keyword-rule chat-edit interpreter (spec 020, research.md
+   * D7) — zero `Math.random()`, zero wall-clock read, same guarantee as
+   * `draftItinerary` above. Runs the SAME injected tool executors real
+   * planner tool loops use; never invents an offer. */
+  async *chatEditItinerary(req: ChatEditRequest): AsyncGenerator<ChatEditProgressEvent> {
+    yield { type: "progress", step: "interpreting" };
+    const text = req.message.toLowerCase();
+    const guests = req.party.adults + req.party.children;
+    const usage = { inputTokens: 0, outputTokens: 0 };
+
+    const clarify = (reply: string): ChatEditResult => ({ status: "interpreted", reply, edit: null, suggestions: [], usage });
+    const CLARIFY_REPLY =
+      'I can add an activity or transfer, remove an existing item by name, or suggest hotels — try one of those.';
+
+    if (text.includes("remove") || text.includes("delete")) {
+      const stopwords = new Set(["remove", "delete", "the", "a", "an", "from", "day", "on", "please", "trip", "itinerary"]);
+      const words = text
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter((w) => w.length > 0 && !stopwords.has(w) && !/^\d+$/.test(w));
+      let bestMatch: (typeof req.items)[number] | undefined;
+      let bestScore = 0;
+      for (const item of req.items) {
+        const itemWords = item.title.toLowerCase().split(/\s+/);
+        const score = words.filter((w) => itemWords.some((iw) => iw.includes(w) || w.includes(iw))).length;
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = item;
+        }
+      }
+      if (!bestMatch) {
+        yield { type: "result", result: clarify(`I couldn't find an item matching "${words.join(" ")}" in this trip — try naming it exactly as it appears in the itinerary.`) };
+        return;
+      }
+      yield {
+        type: "result",
+        result: {
+          status: "interpreted",
+          reply: `Removed "${bestMatch.title}" from day ${bestMatch.dayNumber}.`,
+          edit: { type: "removeItem", itemId: bestMatch.id },
+          suggestions: [],
+          usage,
+        },
+      };
+      return;
+    }
+
+    const isHotelRequest = text.includes("hotel") || text.includes("stay") || (text.includes("swap") && !text.includes("activity"));
+    if (isHotelRequest) {
+      yield { type: "progress", step: "searchingOptions" };
+      const currentStayTitle = req.items.find((it) => it.kind === "stay")?.title;
+      const offers = await req.tools.searchHotelRates({ destination: req.destination, checkIn: req.checkIn, checkOut: req.checkOut, guests });
+      const ranked = [...offers]
+        .filter((o) => o.content.title !== currentStayTitle)
+        .sort((a, b) => a.netRate.amountMinor - b.netRate.amountMinor || a.offerId.localeCompare(b.offerId));
+      const suggestions: HotelSuggestion[] = ranked
+        .slice(0, 3)
+        .map((o) => ({ offerId: o.offerId, title: o.content.title, priceMinor: o.netRate.amountMinor, currency: o.netRate.currency }));
+      if (suggestions.length === 0) {
+        yield { type: "result", result: clarify("I couldn't find any other hotel options for this trip right now.") };
+        return;
+      }
+      yield {
+        type: "result",
+        result: { status: "interpreted", reply: 'Here are a few hotel options — click "Add to trip" on the one you\'d like.', edit: null, suggestions, usage },
+      };
+      return;
+    }
+
+    if (text.includes("add")) {
+      const dayCount = req.items.reduce((max, it) => Math.max(max, it.dayNumber), 1);
+      const dayMatch = text.match(/day\s*(\d+)/);
+      const requestedDay = dayMatch?.[1] ? Number.parseInt(dayMatch[1], 10) : undefined;
+      if (requestedDay !== undefined && (requestedDay < 1 || requestedDay > dayCount)) {
+        yield { type: "result", result: clarify(`This trip only has ${dayCount} day(s) — I can't add anything to day ${requestedDay}.`) };
+        return;
+      }
+      const dayNumber = requestedDay ?? 1;
+
+      yield { type: "progress", step: "searchingOptions" };
+      const isTransfer = text.includes("transfer") || text.includes("transport") || text.includes("taxi") || text.includes("car");
+      if (isTransfer) {
+        const airport = `${req.destination} Airport`;
+        const offers = await req.tools.quoteTransfer({ from: airport, to: req.destination, at: `${req.checkIn}T10:00:00Z`, passengers: guests });
+        const ranked = [...offers].sort((a, b) => a.netRate.amountMinor - b.netRate.amountMinor || a.offerId.localeCompare(b.offerId));
+        const pick = ranked[0];
+        if (!pick) {
+          yield { type: "result", result: clarify("I couldn't find any transfer options for this trip right now.") };
+          return;
+        }
+        yield {
+          type: "result",
+          result: { status: "interpreted", reply: `Added "${pick.content.title}" to day ${dayNumber}.`, edit: { type: "addItem", dayNumber, port: "transfer", offerId: pick.offerId }, suggestions: [], usage },
+        };
+        return;
+      }
+
+      const offers = await req.tools.searchActivities({ destination: req.destination, participants: guests });
+      const existingTitles = new Set(req.items.filter((it) => it.kind === "activity").map((it) => it.title));
+      const ranked = [...offers].sort((a, b) => a.netRate.amountMinor - b.netRate.amountMinor || a.offerId.localeCompare(b.offerId));
+      const pick = ranked.find((o) => !existingTitles.has(o.content.title)) ?? ranked[0];
+      if (!pick) {
+        yield { type: "result", result: clarify("I couldn't find any activities to add for this trip right now.") };
+        return;
+      }
+      yield {
+        type: "result",
+        result: { status: "interpreted", reply: `Added "${pick.content.title}" to day ${dayNumber}.`, edit: { type: "addItem", dayNumber, port: "activity", offerId: pick.offerId }, suggestions: [], usage },
+      };
+      return;
+    }
+
+    yield { type: "result", result: clarify(CLARIFY_REPLY) };
   }
 }

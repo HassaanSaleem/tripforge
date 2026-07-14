@@ -39,3 +39,5 @@ export type {
   VerifiedOffer,
 } from "./assemble.js";
 export { stampProvenance } from "./provenance.js";
+export { applyItineraryEdit } from "./edit.js";
+export type { ItineraryEditProposal, ApplyEditResult, ApplyEditOutcome } from "./edit.js";

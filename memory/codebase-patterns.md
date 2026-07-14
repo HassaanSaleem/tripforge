@@ -56,7 +56,8 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
 
 - The L1/L2 vitest suite is sub-second (17 tests → 0.34s iter 1; 51 tests →
   0.23s iter 2; 368 tests → 0.88s iter 3, 2.6s with the env-gated L3 specs
-  included against live Postgres). Cost is never a reason to skip or subset it.
+  included against live Postgres; 392 tests → iter 4; 483 tests → 1.3s (no
+  DB) / 2.9s (DB-inclusive) iter 5). Cost is never a reason to skip or subset it.
 
 ## Integration Patterns
 
@@ -66,19 +67,18 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
 
 <!-- Structural patterns, module organization, dependency flow -->
 
-- **Hand-maintained duplicate bookkeeping (coverage-matrix.yaml ↔
-  loop-state.md prose) silently drifts without a derivation link.**
-  `.kitchenloop/coverage-matrix.yaml` is appended by hand at ideate time and
-  independently hand-summarized into `loop-state.md`'s Coverage prose at
-  regress time — two representations of the same fact with no mechanism
-  keeping them in sync. Confirmed twice: iter 3 lost an in-progress matrix
-  update mid-iteration (the file's own header notes a "REGRESS-ARTIFACT-LOSS"
-  backfill) and loop-state.md separately claimed 30/36 that was never
-  committed to the matrix; iter 4's ideate pass independently rediscovered
-  the same disagreement (matrix showed 17/36, loop-state.md claimed 30/36,
-  neither matched the real scenario files) and had to hand-read all 6
-  `scenarios/incubating/*/scenario.mjs` files to find the true coverage gap.
-  Filed as seed-0031 with a fix (structured coverage-claim + derivation tool)
-  bundled in PR #46. Until that lands, treat `coverage-matrix.yaml`'s on-disk
-  number as the source of truth over any prose restatement, and expect it to
-  undercount.
+- **RESOLVED (confirmed iter 5): the coverage-matrix drift is fixed by the
+  seed-0031 derivation tool.** Previously (iter 3–4) `.kitchenloop/coverage-matrix.yaml`
+  was appended by hand at ideate time and independently hand-summarized into
+  `loop-state.md`'s Coverage prose at regress time — two representations of
+  the same fact with no mechanism keeping them in sync, confirmed drifting
+  twice (iter 3's REGRESS-ARTIFACT-LOSS backfill; iter 4's matrix showing
+  17/36 against loop-state.md's stale 30/36 claim). PR #46 landed
+  `scripts/kitchenloop/derive-coverage.mjs`, which regenerates the matrix's
+  `tested`/`tested_combos`/`coverage_pct` fields from each scenario file's own
+  `KITCHENLOOP-COVERAGE` declaration — it is now the sole writer, never
+  hand-edited. Iter 5 re-ran the derivation and got a byte-for-byte match
+  against the committed file (28/36, zero working-tree diff), confirming the
+  fix holds a second time. Regress should keep running
+  `derive-coverage.mjs` each iteration (its own exit code flags malformed
+  scenario blocks) rather than reconciling the matrix by hand.

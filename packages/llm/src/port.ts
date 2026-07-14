@@ -17,6 +17,12 @@ import type {
   TransferSearchCriteria,
 } from "@tripforge/supply-adapter";
 import type { NamedPlannerDraft } from "./planner-draft.js";
+import type { ChatEditResult } from "./chat-edit.js";
+import type { LlmUsage } from "./usage.js";
+
+// Re-exported from the leaf usage module so the metering type stays reachable
+// through the port boundary (index.ts / anthropic.ts import it from here).
+export type { LlmUsage } from "./usage.js";
 
 /** The single allowed model. Widening this is an operator decision (INV-013). */
 export const LLM_MODEL = "claude-haiku-4-5" as const;
@@ -33,11 +39,6 @@ export interface LlmCompleteRequest {
   system?: string;
   messages: LlmMessage[];
   maxTokens: number;
-}
-
-export interface LlmUsage {
-  inputTokens: number;
-  outputTokens: number;
 }
 
 export interface LlmCompleteResponse {
@@ -101,6 +102,37 @@ export type DraftProgressEvent =
   | { type: "progress"; step: DraftStep }
   | { type: "result"; result: DraftItineraryResult };
 
+// ─── Conversational editing (spec 020, INV-028) ──────────────────────────────
+// A single chat message, interpreted against an already-persisted itinerary's
+// summary (id/kind/title/dayNumber per item — never the full priced document,
+// FR-006/FR-012). May run a tool-driven supply search (hotel/activity/
+// transfer, same PlannerToolDeps the planner uses) to resolve an add or a
+// hotel-suggestion request, so it streams for the same INV-028 reason
+// draftItinerary does.
+
+export interface ChatEditRequest {
+  /** Why this call is being made — recorded in metering (INV-013). */
+  purpose: string;
+  message: string;
+  /** The trip's own canonical criteria (from its persisted trip request) —
+   * search tool calls are pinned to these, mirroring the planner's existing
+   * criteria-pinning discipline (spec 008 FR-011). */
+  destination: string;
+  checkIn: string;
+  checkOut: string;
+  party: { adults: number; children: number };
+  /** Current itinerary contents — id/kind/title/dayNumber only, never the
+   * full priced document (FR-006/FR-012). */
+  items: { id: string; kind: "stay" | "activity" | "transfer"; title: string; dayNumber: number }[];
+  tools: PlannerToolDeps;
+}
+
+export type ChatEditStep = "interpreting" | "searchingOptions";
+
+export type ChatEditProgressEvent =
+  | { type: "progress"; step: ChatEditStep }
+  | { type: "result"; result: ChatEditResult };
+
 export interface LLMPort {
   complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse>;
   /** Draft 1-3 labeled trip options through tool-driven supply lookups (spec
@@ -108,4 +140,8 @@ export interface LLMPort {
    * supply by the caller. Yields zero or more progress events followed by
    * exactly one terminal result event carrying every variant produced. */
   draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent>;
+  /** Interpret one conversational edit request against an already-persisted
+   * itinerary (spec 020). Yields zero or more progress events followed by
+   * exactly one terminal result event. */
+  chatEditItinerary(req: ChatEditRequest): AsyncGenerator<ChatEditProgressEvent>;
 }

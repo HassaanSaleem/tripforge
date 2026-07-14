@@ -6,6 +6,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { LLM_MODEL, type LLMPort, type LlmCompleteRequest, type LlmCompleteResponse } from "./port.js";
 import type {
+  ChatEditProgressEvent,
+  ChatEditRequest,
+  ChatEditStep,
   DraftItineraryRequest,
   DraftProgressEvent,
   DraftStep,
@@ -13,11 +16,13 @@ import type {
   PlannerTripRequest,
 } from "./port.js";
 import type { NamedPlannerDrafts } from "./planner-draft.js";
+import type { ChatEditPropose } from "./chat-edit.js";
 import { searchHotelRatesTool } from "./tools/search-hotel-rates.js";
 import { searchActivitiesTool } from "./tools/search-activities.js";
 import { quoteTransferTool } from "./tools/quote-transfer.js";
 import { quoteCarRentalTool } from "./tools/quote-car-rental.js";
 import { submitItineraryDraftsTool } from "./tools/submit-itinerary-drafts.js";
+import { proposeItineraryEditTool } from "./tools/propose-itinerary-edit.js";
 
 export interface AnthropicLLMOptions {
   apiKey: string;
@@ -56,6 +61,43 @@ const TOOL_NAME_TO_STEP: Record<string, DraftStep> = {
   quote_car_rental: "quotingCarRental",
   submit_itinerary_drafts: "assembling",
 };
+
+// Stable chat-edit instructions (spec 020) — kept free of per-request values
+// so the prompt prefix stays cacheable (INV-013), mirroring PLANNER_SYSTEM.
+const CHAT_EDIT_SYSTEM = [
+  "You are a travel-agency itinerary assistant helping refine an ALREADY-SAVED trip",
+  "through chat. You will be given the trip's current items (id/kind/title/day) and one",
+  "new message from the agent. Resolve it to exactly one of:",
+  "- A direct edit: removeItem (use an EXISTING item's id) for a removal request, or",
+  "  addItem (call search_activities or quote_transfer first, use ONLY an offerId it",
+  "  returned) for a request to add an activity or transfer to a specific day.",
+  "- Hotel suggestions: for anything about the hotel/stay (swap, replace, suggest,",
+  "  show options), call search_hotel_rates and propose 2-3 offers as `suggestions`",
+  "  instead of `edit` — never silently change the hotel yourself.",
+  "- A clarifying reply: if the request doesn't map to either of the above, leave `edit`",
+  "  null and `suggestions` empty, and explain in `reply` what you can help with.",
+  "Never invent an offerId or an item id — only ones the tools or the current itinerary",
+  "listing actually gave you. Finish by calling propose_itinerary_edit exactly once.",
+].join("\n");
+
+const CHAT_EDIT_TOOL_NAME_TO_STEP: Record<string, ChatEditStep> = {
+  search_hotel_rates: "searchingOptions",
+  search_activities: "searchingOptions",
+  quote_transfer: "searchingOptions",
+  propose_itinerary_edit: "searchingOptions",
+};
+
+function chatEditUserPrompt(req: ChatEditRequest): string {
+  const itemLines = req.items.length
+    ? req.items.map((it) => `- ${it.id} (${it.kind}, day ${it.dayNumber}): ${it.title}`).join("\n")
+    : "(no items yet)";
+  return [
+    `Trip: ${req.destination}, ${req.checkIn} to ${req.checkOut}, ${req.party.adults} adult(s) and ${req.party.children} child(ren).`,
+    "Current items:",
+    itemLines,
+    `Agent's message: "${req.message}"`,
+  ].join("\n");
+}
 
 function plannerUserPrompt(request: PlannerTripRequest): string {
   return [
@@ -143,5 +185,53 @@ export class AnthropicLLM implements LLMPort {
       return;
     }
     yield { type: "result", result: { status: "drafted", drafts: captured, usage } };
+  }
+
+  async *chatEditItinerary(req: ChatEditRequest): AsyncGenerator<ChatEditProgressEvent> {
+    yield { type: "progress", step: "interpreting" };
+    let captured: ChatEditPropose | undefined;
+    const runner = this.client.beta.messages.toolRunner({
+      model: LLM_MODEL,
+      max_tokens: PLANNER_MAX_TOKENS,
+      max_iterations: MAX_TOOL_ITERATIONS,
+      system: CHAT_EDIT_SYSTEM,
+      messages: [{ role: "user", content: chatEditUserPrompt(req) }],
+      tools: [
+        searchHotelRatesTool((c) => req.tools.searchHotelRates(c)),
+        searchActivitiesTool((c) => req.tools.searchActivities(c)),
+        quoteTransferTool((c) => req.tools.quoteTransfer(c)),
+        proposeItineraryEditTool((propose) => {
+          captured = propose;
+        }),
+      ],
+      // NOTE: no `effort` param — unsupported on Haiku 4.5 (INV-013).
+    });
+
+    const usage: LlmUsage = { inputTokens: 0, outputTokens: 0 };
+    try {
+      for await (const message of runner) {
+        usage.inputTokens += message.usage.input_tokens;
+        usage.outputTokens += message.usage.output_tokens;
+        for (const block of message.content) {
+          if (block.type === "tool_use") {
+            const step = CHAT_EDIT_TOOL_NAME_TO_STEP[block.name];
+            if (step) {
+              yield { type: "progress", step };
+            }
+          }
+        }
+      }
+    } catch {
+      this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
+      yield { type: "result", result: { status: "failed", reason: "malformed_output" } };
+      return;
+    }
+    this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
+
+    if (!captured) {
+      yield { type: "result", result: { status: "failed", reason: "malformed_output" } };
+      return;
+    }
+    yield { type: "result", result: { status: "interpreted", ...captured, usage } };
   }
 }

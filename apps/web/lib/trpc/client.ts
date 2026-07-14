@@ -43,6 +43,18 @@ export type SelectDraftEvent = inferSubscriptionOutput<AppRouter["workspace"]["i
 export type SelectDraftOutput = Extract<SelectDraftEvent, { type: "result" }>["outcome"];
 
 /**
+ * Chat-edit input/outcome types via the same inference (spec 020): the
+ * server's ChatEditOutcome/ApplyChatEditOutcome unions stay un-exported;
+ * inference keeps the browser exactly in sync with the deployed contract.
+ */
+export type ChatEditInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["chatEdit"];
+export type ChatEditEvent = inferSubscriptionOutput<AppRouter["workspace"]["itinerary"]["chatEdit"]>;
+export type ChatEditOutput = Extract<ChatEditEvent, { type: "result" }>["outcome"];
+export type HotelSuggestion = Extract<ChatEditOutput, { status: "suggested" }>["suggestions"][number];
+export type ApplyChatEditInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["applyChatEdit"];
+export type ApplyChatEditOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["applyChatEdit"];
+
+/**
  * Booking input/outcome types via the same inference (spec 009 research D1):
  * the server's quote/book outcome unions stay un-exported; inference keeps the
  * browser exactly in sync with the deployed money-path contract.

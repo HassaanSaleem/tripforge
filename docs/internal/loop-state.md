@@ -2,10 +2,10 @@
 
 ## Current Status
 
-**Iteration**: 4
+**Iteration**: 5
 **Mode**: strategy
-**Status**: CONTINUE (all gates green — lint, L1/L2+L3 vitest 392/392, L3 smoke 41/41 against the live built stack)
-**Last Updated**: 2026-07-12 02:49 PKT
+**Status**: CONTINUE (all gates green — lint, L1/L2+L3 vitest 483/483, L3 smoke 46/46 against the live built stack)
+**Last Updated**: 2026-07-14 00:52 PKT
 
 ## Blocked Combos
 
@@ -27,6 +27,37 @@
 | 2 | 2026-07-07 | strategy | ideate→triage→execute→regress | CONTINUE | Lint PASS; L1/L2 51/51 (100%); L3 smoke 5/5 vs live compose stack (first exercisable run — REG-L3-STACK Option 2); PRs #6 (seed-0010 hermetic Docker build) and #7 (seed-0011/0012 INV-020 /view title fix + title-negative e2e) merged; seed-0013 (favicon) in_review; coverage 3/36; quality sweep skipped (not 3rd iter) |
 | 3 | 2026-07-11 | strategy | 6x(ideate→triage)→many execute cycles→regress→quality-sweep | CONTINUE | Lint PASS; L1/L2 326/326 (100%, 42 env-gated L3 skipped without DB) — same suite 368/368 (100%) against the live Postgres network; L3 smoke 41/41 vs live compose stack; PRs #10–#40 merged/landed (supply-adapter, L3 harness, budget allocator + AI planner + booking money path, marketplace trade layer v0, premium UI, workspace itinerary list, booked-price fidelity, seller earnings surface); coverage 30/36 (83.3%, pending commit); quality sweep ran — 1 new ticket filed (2 knip-flagged unexported types), deduped against 10 pre-existing open QS3-series tickets from an earlier squash-merged sweep lineage; depcruise clean, no TODO/stub debt, specs 012-014 (28 FRs) fully implemented+tested |
 | 4 | 2026-07-12 | strategy | ideate→execute cycles→regress | CONTINUE | Lint PASS; L1/L2+L3 vitest 392/392 (100%, DB-inclusive run, 39 files); L3 smoke 41/41 vs live compose stack; PRs #42 (seed-0022 content-library v0) and #44 (marketplace-copy/picker/typed-errors/demo-plan polish bundle) merged; PR #46 (coverage-matrix derivation tool, scenario hardening, markup prefill, auth-form dedup bundle) open/in-review; coverage 17/36 (47.2%) per `coverage-matrix.yaml` on disk — this iteration's ideate scenario (reseller-builds-fresh, itinerary-builder × web/api × agent-reseller) not yet reflected in the matrix, a known drift tracked by seed-0031 (fix pending in PR #46); quality sweep skipped (iter 4 not a multiple of 3) |
+| 5 | 2026-07-14 | strategy | many execute cycles (quality-sweep drain + Friday demo-drive UI bundle)→regress | CONTINUE | Lint PASS; L1/L2+L3 vitest 483/483 (100%, DB-inclusive run, 48 files, up from 392); L3 smoke 46/46 vs live compose stack; PRs #46–#57 and #59 merged (seed-0031 coverage-derivation tool landed; seed-0014 SSE streaming closed INV-028; three quality-sweep drain bundles #48–#50, #52–#53 reaching the operator's 🎯 90% backlog-ratio goal at #53; Friday demo-drive UI bundle: dashboard shell #56, planner UX redesign #57, auth/trust-badge restyle #55, multi-option AI itinerary #59); PR #60 (conversational AI itinerary editing, demo-03-chat-builder) in_review, not yet merged; demo-01-seed deferred (heavy seed-script cycle killed at 55m); coverage 28/36 (77.8%) per regenerated `coverage-matrix.yaml` — zero drift against `derive-coverage.mjs` (working tree clean after regen), confirming the seed-0031 fix now holds for a 2nd iteration; quality sweep skipped (iter 5 not a multiple of 3) |
+
+## Regression — Iteration 5
+
+- **Date**: 2026-07-14 00:52 PKT
+- **Branch**: kitchen/fix-demo-03-chat-builder-conversational-editing (iteration-5 worktree tip; carries merged PRs #46–#57/#59 plus in-flight PR #60)
+- **Lint**: PASS (`eslint .` inside the build-stage verify image, no findings, exit 0) — `.kitchenloop/logs/regress-iter-5-lint.log`
+- **Pass rate**: 100% (483/483, DB-inclusive run, fresh compose boot)
+- **Previous pass rate**: 100% (392/392)
+- **Delta**: ±0%
+- **Skip rate**: 0% (0 skipped) in the DB-inclusive run; 14.9% (72/483) in the plain L1/L2 run (env-gated `l3-*.test.ts` specs skip cleanly without `DATABASE_URL`, not silent test loss) — `.kitchenloop/logs/regress-iter-5.log`
+- **Test count**: 483 (previous: 392) — 48 test files (up from 39); growth driven by the quality-sweep drain bundles (#48–#53) and the demo UI bundles (#55–#57, #59)
+- **Duration**: 2.90s (vitest run, DB-inclusive, `--network tripforge_default -e DATABASE_URL=...`) — `.kitchenloop/logs/regress-iter-5-l3vitest.log`
+- **L3 smoke (`node tests/integration/smoke.mjs`)**: PASS 46/46 — health/auth/PMF-view/build→book/client-view checks all green against a freshly booted compose stack (postgres/mailpit/web Healthy, migrate exited 0) — `.kitchenloop/logs/regress-iter-5-smoke.log`
+- **Consecutive failures**: 0
+- **Status**: CONTINUE
+
+### Failing Tests
+None.
+
+### New Patterns
+See `memory/codebase-patterns.md` — updated the coverage-matrix-drift architecture pattern to record it as resolved (2nd consecutive iteration of zero drift, seed-0031's derivation tool confirmed durable). No other pattern met the 2+-iteration confirmation bar this iteration.
+
+### Warnings
+- Host `pnpm` remained denied in this loop session (consistent with iter 1–4 — desk row ENV-PNPM-DENY); lint + tests ran inside the built image (`docker build -f apps/web/Dockerfile --target build` → `docker run --rm tripforge-verify pnpm test`/`pnpm run lint`), DB-inclusive run added `--network tripforge_default -e DATABASE_URL=...` per the verified in-image recipe.
+- Compose-log scan (fresh boot, `.kitchenloop/logs/regress-iter-5-compose.log`) found **zero** `ERROR`/`FATAL`/`Unhandled` lines — cleaner than iterations 3–4, which each logged the one documented-benign concurrent-booking-race duplicate-key line. That line comes from the in-image `docker run ... pnpm test` process's own stdout (`l3-booking.test.ts`'s losing racer), not from the compose `web`/`postgres` container logs, so its absence here is expected, not a regression.
+- No new blocked combos (`.kitchenloop/blocked-combos.yaml` is empty).
+- `.kitchenloop/backlog.json` reflects PR #60's ticket transitioned to `in_review` (per the latest commit, `90f0715`) — left as-is for the orchestrator's post-phase auto-commit convention; regress did not commit it.
+
+### Coverage
+28/36 combos tested (77.8%) per the regenerated `.kitchenloop/coverage-matrix.yaml` (`node scripts/kitchenloop/derive-coverage.mjs` — 28 unique combos from 35 declared entries across 10 sources). Working tree showed zero diff after regeneration, meaning the on-disk matrix already matched the scenario files' own declarations exactly — no hand-authored drift this iteration.
 
 ## Regression — Iteration 4
 

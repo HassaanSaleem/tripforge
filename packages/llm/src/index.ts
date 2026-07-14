@@ -13,7 +13,12 @@ export type {
   DraftItineraryResult,
   DraftStep,
   DraftProgressEvent,
+  ChatEditRequest,
+  ChatEditStep,
+  ChatEditProgressEvent,
 } from "./port.js";
+export { ChatEditProposalSchema, HotelSuggestionSchema, ChatEditProposeSchema } from "./chat-edit.js";
+export type { ChatEditProposal, HotelSuggestion, ChatEditPropose, ChatEditResult } from "./chat-edit.js";
 export {
   PlannerDraftSchema,
   PlannerDraftItemSchema,

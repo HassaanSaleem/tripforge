@@ -4,10 +4,11 @@
 // typed values; NOT_FOUND covers cross-tenant probes (no existence oracle).
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { ChatEditProposalSchema } from "@tripforge/llm";
 import { router, agentProcedure } from "../trpc.js";
 import { draftOptions, selectDraftInputSchema, selectDraftOption, tripRequestSchema } from "../services/planner.js";
 import { itineraryOverview } from "../services/booking.js";
-import { attachMedia, detachMedia, listItineraries } from "../services/itineraries.js";
+import { applyChatEdit, attachMedia, detachMedia, interpretChatEdit, listItineraries } from "../services/itineraries.js";
 import { createShareLink, shareInputSchema } from "../services/client-view.js";
 
 const getInputSchema = z.strictObject({ itineraryId: z.uuid() });
@@ -18,6 +19,10 @@ const mediaTargetSchema = z.discriminatedUnion("scope", [
   z.strictObject({ scope: z.literal("gallery") }),
   z.strictObject({ scope: z.literal("item"), itemId: z.string().min(1) }),
 ]);
+
+const chatEditInputSchema = z.strictObject({ itineraryId: z.uuid(), message: z.string().min(1) });
+
+const applyChatEditInputSchema = z.strictObject({ itineraryId: z.uuid(), edit: ChatEditProposalSchema });
 
 const attachMediaInputSchema = z.strictObject({
   itineraryId: z.uuid(),
@@ -75,6 +80,23 @@ export const itineraryRouter = router({
       }
       return result;
     }),
+
+  /** Interpret one chat message against an already-persisted itinerary (spec
+   * 020 contracts/chat-edit-subscription.md). Streamed (INV-028): may run an
+   * LLM tool loop to resolve a direct add/remove or hotel suggestions. A
+   * cross-tenant/unknown itineraryId yields a typed not_found outcome (no
+   * oracle), never a thrown error, so the client always gets a terminal event. */
+  chatEdit: agentProcedure
+    .input((value) => chatEditInputSchema.parse(value))
+    .subscription(({ ctx, input }) => interpretChatEdit(ctx.container, ctx.session, input)),
+
+  /** Apply an already-resolved edit directly, with no LLM call (spec 020
+   * contracts/apply-chat-edit-mutation.md) — the suggestion card's "Add to
+   * trip" action. The offer is re-verified server-side, never trusted from
+   * the client's suggestion-card copy (FR-006/FR-012). */
+  applyChatEdit: agentProcedure
+    .input((value) => applyChatEditInputSchema.parse(value))
+    .mutation(({ ctx, input }) => applyChatEdit(ctx.container, ctx.session, input)),
 
   /** Attach a library media asset to the gallery or a specific item (spec 015
    * contracts §4). Cross-tenant itinerary/media and unknown ids are NOT_FOUND
