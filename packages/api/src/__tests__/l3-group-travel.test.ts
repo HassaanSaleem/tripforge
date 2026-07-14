@@ -235,11 +235,11 @@ describe.skipIf(!DATABASE_URL)("L3 group travel (real Postgres)", () => {
         .where(eq(groupDeparture.id, posted.departureId));
       expect(remaining?.seatsRemaining).toBe(0);
 
-      const [{ n: seatCount }] = await handle.db
+      const [seatCountRow] = await handle.db
         .select({ n: count() })
         .from(groupDepartureSeat)
         .where(eq(groupDepartureSeat.groupDepartureId, posted.departureId));
-      expect(Number(seatCount)).toBe(1);
+      expect(Number(seatCountRow?.n)).toBe(1);
     },
     LONG,
   );

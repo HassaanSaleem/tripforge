@@ -29,6 +29,8 @@ import {
 } from "@tripforge/supply-adapter";
 import {
   FakeLLM,
+  type ChatEditProgressEvent,
+  type ChatEditRequest,
   type DraftItineraryRequest,
   type DraftProgressEvent,
   type LlmCompleteRequest,
@@ -53,6 +55,10 @@ const LONG = 30_000;
  */
 class SloppyCriteriaLLM implements LLMPort {
   async complete(_req: LlmCompleteRequest): Promise<LlmCompleteResponse> {
+    throw new Error("not used by the planner draft path");
+  }
+
+  chatEditItinerary(_req: ChatEditRequest): AsyncGenerator<ChatEditProgressEvent> {
     throw new Error("not used by the planner draft path");
   }
 

@@ -6,8 +6,9 @@ import { describe, it, expect } from "vitest";
 import type { ActivityOffer, HotelOffer, TransferOffer, CarRentalOffer } from "@tripforge/supply-adapter";
 import { FakeLLM } from "../fake.js";
 import { ChatEditProposeSchema } from "../chat-edit.js";
+import type { ChatEditResult } from "../chat-edit.js";
 import { proposeItineraryEditTool } from "../tools/propose-itinerary-edit.js";
-import type { ChatEditProgressEvent, ChatEditRequest, ChatEditResult, ChatEditStep, PlannerToolDeps } from "../port.js";
+import type { ChatEditProgressEvent, ChatEditRequest, ChatEditStep, PlannerToolDeps } from "../port.js";
 
 const usd = (amountMinor: number) => ({ amountMinor, currency: "USD" });
 
@@ -77,7 +78,8 @@ describe("FakeLLM.chatEditItinerary — direct add/remove (US1)", () => {
     if (result.status !== "interpreted") return;
     expect(result.edit?.type).toBe("removeItem");
     if (result.edit?.type !== "removeItem") return;
-    expect(BASE_ITEMS.some((i) => i.id === result.edit?.itemId && i.title === "Louvre")).toBe(true);
+    const removedItemId = result.edit.itemId;
+    expect(BASE_ITEMS.some((i) => i.id === removedItemId && i.title === "Louvre")).toBe(true);
   });
 
   it("a removal request that matches nothing yields a clarifying reply, no edit", async () => {

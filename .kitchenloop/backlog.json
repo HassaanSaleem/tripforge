@@ -1062,8 +1062,8 @@
     "body": "Discovered incidentally during Live Test & Fix for e2e-planner-journey-compare-step-stale (iteration 6). `pnpm run typecheck` (in-image, tripforge-verify:build target) fails: packages/llm/src/__tests__/chat-edit.test.ts(10,55) TS2724 '\"../port.js\"' has no exported member named 'ChatEditResult'. Did you mean 'ChatEditRequest'? and (114,38) TS7006 implicit any on parameter s. This cascades turbo failures to @tripforge/marketplace, @tripforge/api, and @tripforge/web typecheck tasks (dependency graph), though `next build` and `pnpm test` (vitest) both pass unaffected \u2014 vitest type-checks loosely and the Next.js build did not surface it. Confirmed pre-existing and unrelated to the e2e fix: `git diff origin/main -- packages/llm/` on the fix branch is empty; the file was last touched by the conversational-editing feature (demo-03-chat-builder, PR #60, commit e8649e2).\n\nFILE POINTERS: packages/llm/src/__tests__/chat-edit.test.ts:10,114; packages/llm/src/port.ts (exports ChatEditRequest, ChatEditStep, ChatEditProgressEvent, PlannerToolDeps \u2014 no ChatEditResult; ChatEditProposeSchema/type likely the intended import from ../chat-edit.js instead).\n\nBug-sized: direct fix (import correction + explicit param type) + confirm `pnpm run typecheck` clean repo-wide.",
     "type": "bug",
     "priority": "medium",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-14T07:30:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/63"
   }
 ]
