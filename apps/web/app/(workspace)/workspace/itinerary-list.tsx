@@ -24,6 +24,7 @@ import {
 } from "../../../lib/itinerary-list.js";
 import { attachMediaErrorMessage } from "../../../lib/media-library.js";
 import { BookingFlow } from "./booking-flow.js";
+import { FlightsCard } from "./flights-card.js";
 import { ItineraryDays, type ItemMediaControls } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
 
@@ -168,7 +169,7 @@ function OpenedTrip({
   onBack: () => void;
 }) {
   const [itinerary, setItinerary] = useState(overview.itinerary);
-  const { bookings, bookedItemIds, latestBookedMarkupBps } = overview;
+  const { bookings, bookedItemIds, latestBookedMarkupBps, tripRequest } = overview;
   // The booked set + realized markup come from the ORIGINAL overview read
   // (seed-0027): same reopen-to-refresh cadence the `bookings` note above
   // already has — a booking made in this open session shows once the trip
@@ -329,6 +330,14 @@ function OpenedTrip({
       </div>
 
       <ItineraryDays days={itinerary.days} mediaControls={itemMediaControls} bookedItemIds={bookedItemIdSet} />
+
+      <FlightsCard
+        destination={tripRequest.destination}
+        checkIn={tripRequest.checkIn}
+        checkOut={tripRequest.checkOut}
+        currency={itinerary.currency}
+        flightsBudget={itinerary.pricing.categories.find((c) => c.category === "flightsTransport")?.allocated}
+      />
       {/* Same composition rule as the planner's drafted state (spec 009 D2,
           extended by spec 012 D4): booking + share render only inside a
           verified agent's workspace surface; keyed so opening another trip

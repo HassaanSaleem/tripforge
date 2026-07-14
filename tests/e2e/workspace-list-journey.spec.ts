@@ -52,6 +52,14 @@ test("trips panel: empty state, draft appears without reload, survives reload, o
   // the fresh mount fetches current data (spec 017 research D2), which is
   // what previously needed the same-page onDrafted signal.
   await draftParisTrip(page, "2026-09-03");
+  // Flights card (spec 026, ticket demo-10-flights-deeplink): capture the
+  // draft-time indicative options text so US3 (below) can prove reopening the
+  // trip renders the SAME options — deterministic per trip, not re-rolled.
+  const draftedFlightsOptions = await page
+    .getByTestId("flights-card")
+    .getByTestId("flights-options")
+    .locator("li")
+    .allTextContents();
   await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Trips" }).click();
   await expect(page).toHaveURL(/\/trips$/);
   const rows = page.getByTestId("trip-row");
@@ -73,6 +81,14 @@ test("trips panel: empty state, draft appears without reload, survives reload, o
   await expect(page.getByTestId("booking-flow")).toBeVisible();
   await expect(page.getByRole("button", { name: "Quote live prices" })).toBeVisible();
   await expect(page.getByTestId("share-control")).toBeVisible();
+
+  // Flights card (spec 026 US3, SC-003): reopening the trip renders the
+  // SAME indicative options shown right after drafting it — deterministic
+  // across the draft-time and reopen-time render paths, not re-randomized.
+  const reopenedFlightsCard = page.getByTestId("flights-card");
+  await expect(reopenedFlightsCard).toBeVisible();
+  const reopenedFlightsOptions = await reopenedFlightsCard.getByTestId("flights-options").locator("li").allTextContents();
+  expect(reopenedFlightsOptions).toEqual(draftedFlightsOptions);
   await expect(page.getByRole("button", { name: "Share with client" })).toBeVisible();
 
   // Back returns to the intact list (contract §3).

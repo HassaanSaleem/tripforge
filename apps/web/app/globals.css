@@ -348,6 +348,15 @@ label > input, label > select, label > textarea {
 .tf-state--fits { background: var(--ok-tint); color: var(--ok); }
 .tf-state--overTarget { background: var(--warn-tint); color: var(--warn); }
 
+/* ---- flights card (spec 026): indicative options + deep-link, never a booking ---- */
+.tf-flights-card h3 { margin: 4px 0 0; }
+.tf-flights-note { color: var(--muted); font-size: 13.5px; margin: 6px 0 14px; }
+.tf-flights-options { list-style: none; margin: 0 0 16px; padding: 0; }
+.tf-flights-option { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.tf-flights-option:last-child { border-bottom: none; }
+.tf-flights-airline { font-weight: 640; color: var(--ink); }
+.tf-flights-times { color: var(--muted); font-size: 13px; }
+
 /* ---- chat panel (spec 020): conversational itinerary editing ---- */
 .tf-chat { display: grid; gap: 12px; }
 .tf-chat-messages { display: grid; gap: 10px; max-height: 360px; overflow-y: auto; padding-right: 2px; }

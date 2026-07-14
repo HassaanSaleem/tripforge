@@ -106,6 +106,26 @@ test("an agent drafts a trip and sees the rendered itinerary + budget fit (US1)"
   await expect(fit).toBeVisible();
   await expect(fit.getByRole("row", { name: /accommodation/ })).toBeVisible();
   await expect(fit.getByText(/fits|underFilled|overTarget/).first()).toBeVisible();
+
+  // Flights card (spec 026, ticket demo-10-flights-deeplink): 2-3 indicative
+  // options render alongside the drafted result (US1) — display only, never
+  // an in-platform booking (Constitution V / PRD §9.3).
+  const flightsCard = page.getByTestId("flights-card");
+  await expect(flightsCard).toBeVisible();
+  const optionCount = await flightsCard.getByTestId("flights-options").locator("li").count();
+  expect(optionCount === 2 || optionCount === 3).toBe(true);
+
+  // The deep-link action hands off to an EXTERNAL tab, never an in-platform
+  // booking (US2/FR-004/FR-006/FR-007) — the original drafted-result view is
+  // untouched by the handoff.
+  const deepLink = flightsCard.getByTestId("flights-deep-link");
+  await expect(deepLink).toBeVisible();
+  await expect(deepLink).toHaveAttribute("target", "_blank");
+  const [popup] = await Promise.all([page.waitForEvent("popup"), deepLink.click()]);
+  await popup.waitForLoadState("domcontentloaded").catch(() => undefined);
+  expect(new URL(popup.url()).origin).not.toBe(new URL(page.url()).origin);
+  await popup.close();
+  await expect(result).toBeVisible();
 });
 
 test("a hopeless budget maps to one human-readable message and keeps the form (US2)", async ({

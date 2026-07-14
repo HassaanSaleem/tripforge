@@ -26,6 +26,7 @@ import {
 } from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
 import { ChatPanel } from "./chat-panel.js";
+import { FlightsCard } from "./flights-card.js";
 import { ItineraryDays } from "./itinerary-days.js";
 import { ShareControl } from "./share-control.js";
 import {
@@ -63,7 +64,10 @@ type PlannerViewState =
   // client sends back the ORIGINAL request, never itinerary content).
   | { phase: "comparing"; options: DraftOption[]; tripRequest: DraftInput }
   | { phase: "selecting"; step?: DraftStep }
-  | { phase: "drafted"; outcome: DraftedOutcome }
+  // tripRequest is retained from selection (mirrors the "comparing" phase)
+  // so the drafted result can render a destination/dates-derived flights
+  // card (spec 026) without a second round trip or title-string parsing.
+  | { phase: "drafted"; outcome: DraftedOutcome; tripRequest: DraftInput }
   | { phase: "failed"; message: string };
 
 const INITIAL_VALUES: PlannerFormValues = {
@@ -198,7 +202,7 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
   // ShareControl keep rendering exactly as they do today.
   function handleChatItineraryUpdated(itinerary: DraftedOutcome["itinerary"], fit: DraftedOutcome["fit"]) {
     setView((current) =>
-      current.phase === "drafted" ? { phase: "drafted", outcome: { ...current.outcome, itinerary, fit } } : current,
+      current.phase === "drafted" ? { ...current, outcome: { ...current.outcome, itinerary, fit } } : current,
     );
   }
 
@@ -219,7 +223,7 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
           }
           const outcome = selectEvent.outcome;
           if (outcome.status === "drafted") {
-            setView({ phase: "drafted", outcome });
+            setView({ phase: "drafted", outcome, tripRequest });
           } else {
             setView({ phase: "failed", message: draftFailureMessage(outcome) });
           }
@@ -408,7 +412,7 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
       ) : null}
       {view.phase === "drafted" ? (
         <>
-          <DraftResult outcome={view.outcome} />
+          <DraftResult outcome={view.outcome} tripRequest={view.tripRequest} />
           {/* Booking controls exist only inside a verified agent's drafted plan
               (spec 009 FR-009, research D2); keyed so a new draft resets the flow. */}
           {/* A just-drafted itinerary has no booking history yet — always the
@@ -488,9 +492,10 @@ function findStayDayNumber(itinerary: DraftedOutcome["itinerary"]): number | nul
   return null;
 }
 
-function DraftResult({ outcome }: { outcome: DraftedOutcome }) {
+function DraftResult({ outcome, tripRequest }: { outcome: DraftedOutcome; tripRequest: DraftInput }) {
   const { itinerary, fit } = outcome;
   const treatment = resolveDestinationTreatment(itinerary.title);
+  const flightsCategory = fit.categories.find((c) => c.category === "flightsTransport");
   return (
     <section data-testid="draft-result" className="tf-draft" style={{ marginTop: "1.5rem" }}>
       <header className="tf-draft-hero-header" data-testid="draft-hero-header" style={{ background: treatment.gradient }}>
@@ -508,6 +513,14 @@ function DraftResult({ outcome }: { outcome: DraftedOutcome }) {
       </header>
 
       <ItineraryDays days={itinerary.days} />
+
+      <FlightsCard
+        destination={tripRequest.destination}
+        checkIn={tripRequest.checkIn}
+        checkOut={tripRequest.checkOut}
+        currency={itinerary.currency}
+        flightsBudget={flightsCategory ? { amountMinor: flightsCategory.allocatedMinor, currency: itinerary.currency } : undefined}
+      />
 
       <h3>Budget summary</h3>
       <table data-testid="budget-fit" className="tf-fit-table">
