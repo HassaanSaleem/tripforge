@@ -82,6 +82,13 @@ test("an agent drafts a trip and sees the rendered itinerary + budget fit (US1)"
   await expect(page.getByRole("button", { name: "Drafting…" })).toBeDisabled();
   expect((await draftResponse).headers()["content-type"]).toContain("text/event-stream");
 
+  // Draft now returns 1-3 unpersisted OPTIONS to compare (spec 019 US1) —
+  // picking one is the only way an option becomes a real, saved trip (US2).
+  // Mirrors support.ts draftParisTrip(), which every OTHER e2e spec already
+  // uses; this spec keeps its own inline flow because drafting IS its subject.
+  await expect(page.getByTestId("compare-options")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
+  await page.getByTestId("compare-option").first().getByRole("button", { name: "Choose this option" }).click();
+
   // Rendered canonical draft (FR-004): title, days, priced items. The title
   // and day-split are planner-authored (vary under the real model) — assert
   // the structure, not the prose.
