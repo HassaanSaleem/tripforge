@@ -1130,5 +1130,75 @@
     "state": "backlog",
     "created": "2026-07-14T22:04:15Z",
     "pr_url": ""
+  },
+  {
+    "id": "17840669434037957747",
+    "title": "No shared draft-helper for Node-script (scenarios/incubating/) scenarios",
+    "body": "## Description\nEvery L3-style Node-script scenario under `scenarios/incubating/` currently\nre-implements sign-up/org-create/draft/share from scratch by copy-pasting from\na prior scenario file. `tests/e2e/support.ts` already solves this for\nPlaywright specs (a shared `draftParisTrip()` helper), but there is no\nequivalent for the Node-script family, so a planner-flow change silently\nbreaks every future copy until someone hits it manually.\n\nDiscovered in iteration 6's ideate phase (fresh-draft-client-view scenario):\nspec 019 (compare-then-choose) changed `workspace.itinerary.draft` from a\nsingle-shot persist into a two-step flow (`draft` returns 1-3 unpersisted\n`DraftOption`s; a separate `selectDraft` subscription persists the chosen\none). `scenarios/incubating/partially-booked-client-view/scenario.mjs`\n(iteration 3) was written against the old single-shot flow; the new\n`fresh-draft-client-view/scenario.mjs` copied that same pattern and failed at\n\"AI draft persists an itinerary\" until the two-step flow was added manually.\nThis is the same root-cause class as the already-fixed `tests/e2e/support.ts`\nstaleness (ticket `e2e-planner-journey-compare-step-stale`), just on the\nNode-script side, which has no shared helper to fix once.\n\n## Root Cause Hypothesis\n`scenarios/incubating/` has no `_lib/support.mjs` equivalent to\n`tests/e2e/support.ts`. Each scenario file hand-rolls its own\nsign-up/org-create/draft/selectDraft/share sequence, so there is no single\nplace to update when the planner flow changes shape.\n\n## File Pointers\n- `scenarios/incubating/partially-booked-client-view/scenario.mjs` — iter-3\n  scenario written against the old single-shot draft flow (the pattern being\n  copied)\n- `scenarios/incubating/fresh-draft-client-view/scenario.mjs` — iter-6\n  scenario that hit this exact staleness and fixed it locally (reference\n  implementation for the draft→selectDraft two-step)\n- `tests/e2e/support.ts` — the Playwright-side equivalent already fixed for\n  the same class of staleness (`draftParisTrip()`)\n- No `scenarios/incubating/_lib/` directory currently exists\n\n## Acceptance Criteria\n- [ ] A shared `scenarios/incubating/_lib/support.mjs` (or equivalent) exists,\n      exposing at minimum the cookie-jar / tRPC helpers\n      (`trpcMutate`/`trpcSubscribe`/`trpcQuery`) and a\n      `draftAndPersist(jar, tripRequest, variant?)` convenience that wraps the\n      current `draft` → pick variant → `selectDraft` two-step\n- [ ] At least the two existing scenarios that hand-roll this sequence\n      (`partially-booked-client-view`, `fresh-draft-client-view`) are migrated\n      to use the shared helper, proving it generalizes\n- [ ] A future planner-flow change only requires updating the shared helper,\n      not every scenario file individually\n\n## Reproduction Steps\n1. Read `scenarios/incubating/partially-booked-client-view/scenario.mjs` and\n   `scenarios/incubating/fresh-draft-client-view/scenario.mjs` side by side —\n   both hand-roll the same sign-up/org-create/draft sequence independently\n2. Compare against `tests/e2e/support.ts`'s single shared `draftParisTrip()`\n   to see the pattern this ticket proposes mirroring\n\n## Source\n- Iteration: 6\n- Report: docs/internal/reports/iteration-6-report.md (IMP-1)\n- Tier: T1\n\n## Priority Score\n- Severity: 1 (no live defect today — this is a maintainability/latent-risk gap)\n- Frequency: 2 (this is the first Node-script-side occurrence; the same class\n  of staleness has already recurred twice on the Playwright-support.ts side)\n- Fix effort: 2 (small extraction from two existing scenario files)\n- Total: 5/9 -> low. Per the Clean Code Policy extraction threshold, this is\n  arguably premature until a third scenario needs the exact same fix — filed\n  now for visibility per the iteration-6 report's own recommendation, not as\n  an immediate priority.",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-14T22:09:03Z",
+    "pr_url": ""
+  },
+  {
+    "id": "typecheck-break-agency-admin-booking-l3",
+    "title": "pnpm run typecheck fails again: l3-agency-admin.test.ts + l3-booking.test.ts (noUncheckedIndexedAccess, possibly-undefined)",
+    "type": "bug",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-14T21:36:49Z",
+    "pr_url": "",
+    "body": "Discovered during iteration-6 regress (in-image `docker run --rm tripforge-verify pnpm run typecheck`, tsc --noEmit via turbo). Repo-wide typecheck is currently BROKEN again, hours after PR #63 fixed a different instance of the same bug class in packages/llm. `pnpm test` (vitest) and the regression oracle both stay green because vitest does not enforce the full tsconfig (specifically noUncheckedIndexedAccess) the way `tsc --noEmit` does -- these errors are invisible to every gate the loop currently runs.\n\nERRORS (packages/api):\n1. src/__tests__/l3-agency-admin.test.ts:83,101,114,115 (TS2345) -- sessions[name] on Record<string, SessionContext> returns SessionContext | undefined under noUncheckedIndexedAccess, but callerFor(session: SessionContext | null) does not accept undefined. Fix: add an explicit undefined guard before passing to callerFor (the session was just created by the same helper, so this is a real narrowing gap, not a runtime risk) -- mirror the existing narrowing pattern PR #63 already applied elsewhere.\n2. src/__tests__/l3-booking.test.ts:396,405 (TS18048) -- const [toBook, ...rest] = heldItems destructures a possibly-empty array; toBook is HeldItem | undefined per strict TS even though the immediately-preceding expect(heldItems.length).toBeGreaterThan(1) assertion proves it is defined at runtime. Fix: capture into a local const with an explicit undefined-check (throw) before use, same pattern PR #63 applied to l3-planner-verification.test.ts/chat-edit.test.ts.\n\nBug-sized: direct fix (import/narrowing corrections only, zero behavior change) + confirm `pnpm run typecheck` clean repo-wide in-image before closing. Not a regression-oracle stop condition today (oracle is lint+test only) -- see OPERATOR-DESK row TYPECHECK-GATE-GAP for the broader ask on whether typecheck should join the oracle."
+  },
+  {
+    "id": "17840622283032853687",
+    "title": "quality-sweep: extract shared group-travel/marketplace primitives (router+service+panel+form 4-layer clone)",
+    "body": "jscpd flagged 6 clone pairs between the group-travel feature (PR #61) and the pre-existing marketplace feature it was modeled on, spanning all 4 layers: packages/api/src/routers/group-travel.ts vs marketplace.ts (requireDb/actorOf helper + imports, 16 lines verbatim); packages/marketplace/src/group-departures.ts vs listings.ts (scoped-itinerary-ownership-check query, 7-8 lines); apps/web group-travel-panel.tsx vs marketplace-panel.tsx (loadItineraries try/catch + currencyOf lookup, 2 clusters, 9+12 lines); apps/web group-departure-form.tsx vs listing-form.tsx (form-field read util + loading/failed/empty picker states, 2 clusters, 10+17 lines). Extract a shared router helper (requireDb/actorOf) into packages/api/src/routers/shared.ts, a shared scoped-ownership-lookup helper into packages/marketplace/src/shared.ts, and a shared itinerary-picker hook/component plus form-value-read util consumed by both features. Found by iteration-6 quality sweep (jscpd --min-tokens 50).",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-14T20:50:28Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17840622283032856099",
+    "title": "quality-sweep: extract shared Claude tool-streaming loop in packages/llm/anthropic.ts (3x internal clone)",
+    "body": "jscpd flagged 3 clone pairs within packages/llm/src/anthropic.ts (lines ~149-232 vs ~149-184 region): the tool list construction and the for-await streaming loop that turns tool_use blocks into progress/result events is duplicated between two of the module's streaming entry points (draft-stream and chat-edit-stream). Extract a shared helper that takes the tool list + a block-to-step mapper and yields progress/result events, so both call sites compose it instead of repeating the loop. Found by iteration-6 quality sweep (jscpd --min-tokens 50).",
+    "type": "improvement",
+    "priority": "medium",
+    "state": "backlog",
+    "created": "2026-07-14T20:50:28Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17840622283032829563",
+    "title": "quality-sweep: dedupe SSE-subscription-cleanup pattern in apps/web/workspace/planner.tsx + chat-panel.tsx",
+    "body": "jscpd flagged the activeSubscription useRef + useEffect-unmount-unsubscribe idiom duplicated 3 times: twice within planner.tsx itself (draft-stream subscription at ~178-188 and a second at ~226-236) and once shared verbatim with chat-panel.tsx (~147-155). Extract a small shared hook (e.g. useStreamSubscription) that owns the ref + cleanup effect and returns a setter, so all 3 call sites stop hand-rolling the unsubscribe-on-unmount logic. Found by iteration-6 quality sweep (jscpd --min-tokens 50).",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-14T20:50:28Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17840622283032862499",
+    "title": "quality-sweep: small internal clones — itineraries.ts item-update, workspace-media.ts source validation, domain/edit.ts category mapping, itinerary-days/list media-thumb",
+    "body": "4 small (5-9 line) jscpd clusters, each duplicated once within/across 2 files: packages/api/src/services/itineraries.ts (216-224 vs 193-201, item-in-place update after a day/items map); packages/api/src/routers/workspace-media.ts (63-71 vs 50-58, media-source safeParse-or-throw validation repeated for two mutations); packages/domain/src/edit.ts (127-136 vs 81-90, category-allocation-to-fit-state mapping repeated across two functions); apps/web itinerary-days.tsx vs itinerary-list.tsx (112-121 vs 284-293, media-thumbnail img/link rendering). Each is a small single-function extraction within its own package/component — bundle as one low-priority cleanup pass since none individually crosses the extraction-threshold bar alone. Found by iteration-6 quality sweep (jscpd --min-tokens 50).",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-14T20:50:28Z",
+    "pr_url": ""
+  },
+  {
+    "id": "17840622283032850078",
+    "title": "quality-sweep: seed-demo.ts self-clone in demo-fixture booking loop",
+    "body": "apps/web/scripts/seed-demo.ts has an 8-line clone (550-558 vs 518-527) — the per-itinerary demo-booking loop (look up itinerary+id, look up agency/user, build caller, then book) is duplicated between the group-departure seat-join seeding pass and the direct-booking seeding pass. Extract a small local helper (e.g. callerForItinerary(fixture)) and call it from both loops. Dev/demo-only script, no production runtime path — low priority. Found by iteration-6 quality sweep (jscpd --min-tokens 50).",
+    "type": "improvement",
+    "priority": "low",
+    "state": "backlog",
+    "created": "2026-07-14T20:50:28Z",
+    "pr_url": ""
   }
 ]

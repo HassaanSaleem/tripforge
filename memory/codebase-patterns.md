@@ -30,9 +30,26 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   that every unit in isolation got right and `pnpm test` stayed green through.
   iter 4's live scenario (reseller-builds-fresh) was the first clean pass —
   it specifically re-proved the iter-3 booked-price fix generalizes to a third
-  code path (reseller-self-built) rather than finding a new defect. The rule
-  still holds (never skip the INV-027 live gate for product-behavior changes)
-  even though it doesn't guarantee a bug every time.
+  code path (reseller-self-built) rather than finding a new defect. Iter 6's
+  live scenario (fresh-draft-client-view: itinerary-builder×{api,web}×client,
+  cross-checked against Postgres ground truth) was a second consecutive clean
+  pass — zero product defects, only a test-tooling crash (coverage-matrix
+  vocabulary guard) and a test-writing pitfall (SSR comment-split text). The
+  rule still holds (never skip the INV-027 live gate for product-behavior
+  changes) even though it doesn't guarantee a bug every time.
+
+- **Shared test-flow helpers go stale silently when the underlying flow
+  changes shape — confirmed 3 times now.** `tests/e2e/support.ts`'s
+  `draftParisTrip()` broke after spec 018's SegmentedControl redesign, broke
+  again after spec 019's compare-then-choose `draft`→`selectDraft` split, and
+  iter 6 hit the identical staleness a third time on the unrelated Node-script
+  side (`scenarios/incubating/*/scenario.mjs` has no shared helper at all, so
+  `fresh-draft-client-view` had to rediscover the `selectDraft` step by hand
+  before it would pass). Rule: any change to a canonical UI/API flow
+  (planner draft, booking, auth) must grep every hand-rolled copy of that flow
+  — shared or not — not just the one shared helper file; a missing shared
+  helper on one side of the test suite is a standing risk, not just a papercut
+  (ticket `17840669434037957747` proposes the Node-script-side fix).
 
 - **State-delta assertions (not just response codes) are the load-bearing
   check on money-conservation scenarios.** L3-style scenarios that assert
@@ -57,7 +74,8 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
 - The L1/L2 vitest suite is sub-second (17 tests → 0.34s iter 1; 51 tests →
   0.23s iter 2; 368 tests → 0.88s iter 3, 2.6s with the env-gated L3 specs
   included against live Postgres; 392 tests → iter 4; 483 tests → 1.3s (no
-  DB) / 2.9s (DB-inclusive) iter 5). Cost is never a reason to skip or subset it.
+  DB) / 2.9s (DB-inclusive) iter 5; 573 tests → 1.55s (no DB) / 3.0s
+  (DB-inclusive) iter 6). Cost is never a reason to skip or subset it.
 
 ## Integration Patterns
 
