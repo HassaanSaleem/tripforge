@@ -151,6 +151,15 @@ interface LicenseFixture {
   comment: string;
 }
 
+interface GroupDepartureFixture {
+  itineraryIndex: number; // index into ITINERARIES
+  capacity: number;
+  pricePerSeatMinor: number;
+  /** If set, this agency joins one seat right after posting (spec 021 US2), so at least one card shows "X of N seats left". */
+  joinerAgencySlug?: string;
+  joinerTravelerName?: string;
+}
+
 // 4 completed licenses across 3 distinct listings/sellers (FR-006/007) — more
 // than the 3 required, and distributed so at least two sellers (Azure,
 // Meridian) show non-zero earnings.
@@ -178,6 +187,29 @@ const LICENSES: LicenseFixture[] = [
     resellerSlug: "demo-lisbon-and-co",
     stars: 5,
     comment: "Fantastic Atlas Mountains day trip inclusion.",
+  },
+];
+
+// 3 departures across 3 distinct posting agencies (demo-polish-seed-group-and-booking):
+// /group-travel's cross-tenant browse shows a populated grid instead of the
+// empty state, and one seat is joined so a card shows "X of N seats left".
+const GROUP_DEPARTURES: GroupDepartureFixture[] = [
+  {
+    itineraryIndex: 1, // demo-azure-travel-co — Tokyo balanced trip
+    capacity: 12,
+    pricePerSeatMinor: 139_900,
+    joinerAgencySlug: "demo-lisbon-and-co",
+    joinerTravelerName: "Marta Oliveira",
+  },
+  {
+    itineraryIndex: 4, // demo-kaido-journeys — Tokyo balanced trip
+    capacity: 8,
+    pricePerSeatMinor: 159_500,
+  },
+  {
+    itineraryIndex: 6, // demo-meridian-dmc — Reykjavik balanced trip
+    capacity: 10,
+    pricePerSeatMinor: 189_000,
   },
 ];
 
@@ -352,6 +384,82 @@ async function ensureRating(caller: AppCaller, listingId: string, stars: number,
   }
 }
 
+/**
+ * `postGroupDeparture` always inserts a new row (research D1: no uniqueness
+ * constraint) — idempotency here is the seed script's own responsibility, so
+ * this is gated on a read-first check: the poster's own active departures
+ * (`mine`) for the itinerary's predicted title, the same idempotency-key
+ * pattern `ensureSeededItinerary` already uses for drafts.
+ */
+async function ensureGroupDeparture(
+  caller: AppCaller,
+  itineraryId: string,
+  predictedTitle: string,
+  input: { departureDate: string; capacity: number; pricePerSeatMinor: number },
+): Promise<{ departureId: string; created: boolean }> {
+  const { departures } = await caller.workspace.groupTravel.browse();
+  const existing = departures.find((d) => d.mine && d.itineraryTitle === predictedTitle);
+  if (existing) return { departureId: existing.departureId, created: false };
+
+  const result = await caller.workspace.groupTravel.post({ itineraryId, ...input });
+  if (result.status !== "posted") {
+    throw new Error(`ensureGroupDeparture: post failed for "${predictedTitle}" — ${result.status}`);
+  }
+  return { departureId: result.departureId, created: true };
+}
+
+/**
+ * Joins exactly one seat, once — idempotency reads the departure's LIVE
+ * seatsRemaining (no separate "did we already join" query exists), so a
+ * re-run correctly skips once any seat has been claimed.
+ */
+async function ensureSeatJoined(
+  caller: AppCaller,
+  departureId: string,
+  capacity: number,
+  travelerName: string,
+): Promise<boolean> {
+  const { departures } = await caller.workspace.groupTravel.browse();
+  const departure = departures.find((d) => d.departureId === departureId);
+  if (!departure) throw new Error(`ensureSeatJoined: departure ${departureId} not found in browse`);
+  if (departure.seatsRemaining < capacity) return false;
+
+  const result = await caller.workspace.groupTravel.join({ departureId, travelerName });
+  if (result.status !== "joined") {
+    throw new Error(`ensureSeatJoined: join failed for departure ${departureId} — ${result.status}`);
+  }
+  return true;
+}
+
+/**
+ * Completes the real quote->book flow (the same audited money path
+ * l3-booking.test.ts exercises) on an already-drafted itinerary, so the
+ * agency's dashboard GBV stat has a real booked trip behind it. Idempotent:
+ * `itinerary.get` already projects booking history (research D-seed-0026).
+ */
+async function ensureBooking(caller: AppCaller, itineraryId: string): Promise<{ created: boolean }> {
+  const overview = await caller.workspace.itinerary.get({ itineraryId });
+  if (overview.status !== "found") {
+    throw new Error(`ensureBooking: itinerary ${itineraryId} not found`);
+  }
+  if (overview.bookings.length > 0) return { created: false };
+
+  const quoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+  if (quoted.status !== "quoted") {
+    throw new Error(`ensureBooking: quote failed for itinerary ${itineraryId}`);
+  }
+  const quoteRowIds = quoted.items.flatMap((item) => (item.outcome === "held" ? [item.quote.quoteRowId] : []));
+  if (quoteRowIds.length === 0) {
+    throw new Error(`ensureBooking: no held quotes for itinerary ${itineraryId}`);
+  }
+
+  const booked = await caller.workspace.booking.book({ itineraryId, quoteRowIds });
+  if (booked.status === "failed") {
+    throw new Error(`ensureBooking: book failed for itinerary ${itineraryId}`);
+  }
+  return { created: true };
+}
+
 async function main(): Promise<void> {
   const handle = getDb();
   const db = handle.db;
@@ -401,6 +509,40 @@ async function main(): Promise<void> {
       const caller = callerFor(container, sessionFor(agencyId, userId));
       const attached = await ensureGalleryMedia(caller, firstItineraryId);
       console.log(`seed-demo: gallery media for itinerary ${firstItineraryId} — ${attached ? "attached" : "already present, skipping"}`);
+
+      const { created: booked } = await ensureBooking(caller, firstItineraryId);
+      console.log(`seed-demo: booking for itinerary ${firstItineraryId} — ${booked ? "BOOKED" : "already booked, skipping"}`);
+    }
+  }
+
+  for (const fixture of GROUP_DEPARTURES) {
+    const itinerary = ITINERARIES[fixture.itineraryIndex];
+    const itineraryId = itineraryIds[fixture.itineraryIndex];
+    if (!itinerary || !itineraryId) throw new Error(`main: unknown itinerary index ${fixture.itineraryIndex}`);
+    const agencyId = agencyIds.get(itinerary.agencySlug);
+    const userId = ownerUserIds.get(itinerary.agencySlug);
+    if (!agencyId || !userId) throw new Error(`main: unknown agency slug "${itinerary.agencySlug}"`);
+    const caller = callerFor(container, sessionFor(agencyId, userId));
+
+    const predictedTitle = `${itinerary.destination} balanced trip`;
+    const { departureId, created } = await ensureGroupDeparture(caller, itineraryId, predictedTitle, {
+      departureDate: itinerary.checkIn,
+      capacity: fixture.capacity,
+      pricePerSeatMinor: fixture.pricePerSeatMinor,
+    });
+    console.log(
+      `seed-demo: group departure "${predictedTitle}" (agency ${itinerary.agencySlug}) — ${created ? "POSTED" : "already posted, skipping"}`,
+    );
+
+    if (fixture.joinerAgencySlug && fixture.joinerTravelerName) {
+      const joinerAgencyId = agencyIds.get(fixture.joinerAgencySlug);
+      const joinerUserId = ownerUserIds.get(fixture.joinerAgencySlug);
+      if (!joinerAgencyId || !joinerUserId) {
+        throw new Error(`main: unknown joiner agency slug "${fixture.joinerAgencySlug}"`);
+      }
+      const joinerCaller = callerFor(container, sessionFor(joinerAgencyId, joinerUserId));
+      const joined = await ensureSeatJoined(joinerCaller, departureId, fixture.capacity, fixture.joinerTravelerName);
+      console.log(`seed-demo: seat join (departure ${departureId}) — ${joined ? "JOINED" : "already joined, skipping"}`);
     }
   }
 
@@ -435,7 +577,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `seed-demo: done — ${AGENCIES.length} agencies, ${ITINERARIES.length} itineraries, ${LISTINGS.length} listings, ${LICENSES.length} licenses, ${LICENSES.length} ratings`,
+    `seed-demo: done — ${AGENCIES.length} agencies, ${ITINERARIES.length} itineraries, ${LISTINGS.length} listings, ${LICENSES.length} licenses, ${LICENSES.length} ratings, ${GROUP_DEPARTURES.length} group departures, 1 booking`,
   );
   await handle.close();
 }
