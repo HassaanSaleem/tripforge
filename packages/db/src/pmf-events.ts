@@ -68,6 +68,25 @@ export type PmfEvent =
       /** The rated listing's source itinerary. */
       itineraryId: string;
       actorUserId?: string;
+    }
+  // Group travel (spec 021 FR-013) — no-money post event mirrors listing_created;
+  // seat-joined mirrors booking_confirmed's money shape (GBV contribution).
+  | {
+      type: "group_departure_posted";
+      agencyId: string;
+      /** The posted departure's underlying itinerary. */
+      itineraryId: string;
+      actorUserId?: string;
+    }
+  | {
+      type: "group_departure_seat_joined";
+      /** The departure-owning agency. */
+      agencyId: string;
+      itineraryId: string;
+      /** Seat price in integer minor units (INV-009) — GBV contribution. */
+      amountMinor: number;
+      currency: string;
+      actorUserId?: string;
     };
 
 export type PmfEventValidationReason =
@@ -102,8 +121,14 @@ const PMF_EVENT_TYPES = [
   "take_rate_accrued",
   "listing_created",
   "listing_rated",
+  "group_departure_posted",
+  "group_departure_seat_joined",
 ] as const;
-const MONETARY_TYPES: ReadonlySet<string> = new Set(["booking_confirmed", "take_rate_accrued"]);
+const MONETARY_TYPES: ReadonlySet<string> = new Set([
+  "booking_confirmed",
+  "take_rate_accrued",
+  "group_departure_seat_joined",
+]);
 const CURRENCY_RE = /^[A-Z]{3}$/;
 
 function isNonEmptyString(value: unknown): value is string {
@@ -127,7 +152,9 @@ export function validatePmfEvent(event: unknown): PmfEventValidationError | null
     (type === "trip_created" ||
       type === "booking_confirmed" ||
       type === "listing_created" ||
-      type === "listing_rated") &&
+      type === "listing_rated" ||
+      type === "group_departure_posted" ||
+      type === "group_departure_seat_joined") &&
     !isNonEmptyString(e.itineraryId)
   ) {
     return new PmfEventValidationError("missing_itinerary", `${type} requires itineraryId`);

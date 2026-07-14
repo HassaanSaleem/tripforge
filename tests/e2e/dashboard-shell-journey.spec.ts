@@ -43,7 +43,7 @@ test("a fresh agency lands on a fully-rendered zero-state dashboard (US1 SC-003)
   await expect(page.getByTestId("quick-action-marketplace")).toBeVisible();
 });
 
-test("all six sidebar destinations are reachable with correct active marking (US2)", async ({ page }) => {
+test("all seven sidebar destinations are reachable with correct active marking (US2; spec 021 added Group Travel)", async ({ page }) => {
   await signInAgency(page, { email: seller.email, password: seller.password });
   const nav = page.getByRole("navigation", { name: "Main navigation" });
 
@@ -52,6 +52,7 @@ test("all six sidebar destinations are reachable with correct active marking (US
     ["AI Builder", "/workspace"],
     ["Trips", "/trips"],
     ["Marketplace", "/marketplace"],
+    ["Group Travel", "/group-travel"],
     ["Media", "/media"],
     ["Discover", "/discover"],
   ];

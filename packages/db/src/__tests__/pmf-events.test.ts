@@ -48,6 +48,22 @@ const validListingRated: PmfEvent = {
   itineraryId: "itin-1",
 };
 
+const validGroupDeparturePosted: PmfEvent = {
+  type: "group_departure_posted",
+  agencyId: "agency-1",
+  itineraryId: "itin-1",
+  actorUserId: "user-1",
+};
+
+const validGroupDepartureSeatJoined: PmfEvent = {
+  type: "group_departure_seat_joined",
+  agencyId: "agency-1",
+  itineraryId: "itin-1",
+  amountMinor: 15_000,
+  currency: "USD",
+  actorUserId: "user-2",
+};
+
 /** Stub executor capturing insert(table).values(row) calls. */
 function stubExecutor() {
   const calls: { table: unknown; row: unknown }[] = [];
@@ -62,12 +78,14 @@ function stubExecutor() {
 }
 
 describe("validatePmfEvent", () => {
-  it("accepts all five valid event types", () => {
+  it("accepts all seven valid event types", () => {
     expect(validatePmfEvent(validTripCreated)).toBeNull();
     expect(validatePmfEvent(validBookingConfirmed)).toBeNull();
     expect(validatePmfEvent(validTakeRateAccrued)).toBeNull();
     expect(validatePmfEvent(validListingCreated)).toBeNull();
     expect(validatePmfEvent(validListingRated)).toBeNull();
+    expect(validatePmfEvent(validGroupDeparturePosted)).toBeNull();
+    expect(validatePmfEvent(validGroupDepartureSeatJoined)).toBeNull();
   });
 
   // Marketplace types (spec 006 research D4) inherit the full matrix: they are
@@ -79,6 +97,21 @@ describe("validatePmfEvent", () => {
     ["unexpected_money_fields", { ...validListingRated, currency: "USD" }],
     ["unexpected_source", { ...validListingCreated, source: "licensed" }],
   ])("rejects marketplace events with reason %s", (reason, event) => {
+    const err = validatePmfEvent(event);
+    expect(err).toBeInstanceOf(PmfEventValidationError);
+    expect(err?.reason).toBe(reason);
+  });
+
+  // Group travel types (spec 021 FR-013): posted mirrors listing_created's
+  // no-money shape; seat_joined mirrors booking_confirmed's money shape.
+  it.each([
+    ["missing_itinerary", { ...validGroupDeparturePosted, itineraryId: undefined }],
+    ["unexpected_money_fields", { ...validGroupDeparturePosted, amountMinor: 100, currency: "USD" }],
+    ["missing_itinerary", { ...validGroupDepartureSeatJoined, itineraryId: "" }],
+    ["missing_amount", { ...validGroupDepartureSeatJoined, amountMinor: undefined }],
+    ["negative_amount", { ...validGroupDepartureSeatJoined, amountMinor: -1 }],
+    ["missing_currency", { ...validGroupDepartureSeatJoined, currency: undefined }],
+  ])("rejects group-travel events with reason %s", (reason, event) => {
     const err = validatePmfEvent(event);
     expect(err).toBeInstanceOf(PmfEventValidationError);
     expect(err?.reason).toBe(reason);

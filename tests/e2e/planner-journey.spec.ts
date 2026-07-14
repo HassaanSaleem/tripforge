@@ -43,9 +43,12 @@ async function fillTripForm(page: Page): Promise<void> {
   await page.getByLabel("Check-out").fill("2026-09-04");
   await page.getByLabel("Adults").fill("2");
   await page.getByLabel("Children").fill("0");
-  await page.getByLabel("Trip style").selectOption("balanced");
+  // Trip style / Budget mode are SegmentedControls (radiogroups of buttons),
+  // not <select> elements (spec 018 research.md Decision 1 — accessible
+  // "choose exactly one").
+  await page.getByRole("radiogroup", { name: "Trip style" }).getByRole("radio", { name: "Balanced" }).click();
   await page.getByLabel("Budget", { exact: true }).fill("1000");
-  await page.getByLabel("Budget mode").selectOption("hardCap");
+  await page.getByRole("radiogroup", { name: "Budget mode" }).getByRole("radio", { name: "Hard cap" }).click();
   await page.getByLabel("Currency").fill("USD");
 }
 

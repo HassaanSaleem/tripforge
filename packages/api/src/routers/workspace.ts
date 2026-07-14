@@ -6,6 +6,7 @@ import { bookingRouter } from "./booking.js";
 import { marketplaceRouter } from "./marketplace.js";
 import { workspaceMediaRouter } from "./workspace-media.js";
 import { dashboardRouter } from "./dashboard.js";
+import { groupTravelRouter } from "./group-travel.js";
 
 export const workspaceRouter = router({
   /**
@@ -35,4 +36,7 @@ export const workspaceRouter = router({
 
   /** Agent Home dashboard aggregate — GBV/earnings/counts/recent activity (spec 017). */
   dashboard: dashboardRouter,
+
+  /** Group travel: post/cancel/browse/join group departures (spec 021). */
+  groupTravel: groupTravelRouter,
 });

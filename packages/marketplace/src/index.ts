@@ -24,4 +24,22 @@ export { licenseListing, licenseListingInputSchema } from "./licensing.js";
 export type { LicenseListingInput, LicenseListingOutcome } from "./licensing.js";
 export { rateListing, rateListingInputSchema } from "./ratings.js";
 export type { RateListingInput, RateListingOutcome } from "./ratings.js";
+export {
+  postGroupDeparture,
+  postGroupDepartureInputSchema,
+  cancelGroupDeparture,
+  cancelGroupDepartureInputSchema,
+  browseGroupDepartures,
+  joinGroupDeparture,
+  joinGroupDepartureInputSchema,
+} from "./group-departures.js";
+export type {
+  PostGroupDepartureInput,
+  PostGroupDepartureOutcome,
+  CancelGroupDepartureInput,
+  CancelGroupDepartureOutcome,
+  BrowseGroupDeparture,
+  JoinGroupDepartureInput,
+  JoinGroupDepartureOutcome,
+} from "./group-departures.js";
 export type { MarketplaceActor } from "./types.js";

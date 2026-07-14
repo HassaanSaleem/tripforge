@@ -53,6 +53,15 @@ function NavIcon({ kind }: { kind: NavIconKind }) {
           <path d="M4 9v10a1 1 0 0 0 1 1h4v-6h6v6h4a1 1 0 0 0 1-1V9" />
         </svg>
       );
+    case "users":
+      return (
+        <svg {...common}>
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+          <circle cx="17" cy="9" r="2.3" />
+          <path d="M17.5 12c2.2.4 4 2.3 4 4.6" />
+        </svg>
+      );
     case "image":
       return (
         <svg {...common}>

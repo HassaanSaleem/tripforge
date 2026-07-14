@@ -102,3 +102,15 @@ export type AttachMediaOutput = inferRouterOutputs<AppRouter>["workspace"]["itin
  * inference keeps the browser exactly in sync.
  */
 export type DashboardStatsOutput = inferRouterOutputs<AppRouter>["workspace"]["dashboard"]["stats"];
+
+/**
+ * Group travel types via the same inference (spec 021 contracts §1-4): the
+ * post/browse/join outcome unions stay un-exported server-side; inference
+ * keeps the browser exactly in sync with the deployed contract.
+ */
+export type PostGroupDepartureInput = inferRouterInputs<AppRouter>["workspace"]["groupTravel"]["post"];
+export type PostGroupDepartureOutput = inferRouterOutputs<AppRouter>["workspace"]["groupTravel"]["post"];
+export type CancelGroupDepartureOutput = inferRouterOutputs<AppRouter>["workspace"]["groupTravel"]["cancel"];
+export type BrowseGroupDeparturesOutput = inferRouterOutputs<AppRouter>["workspace"]["groupTravel"]["browse"];
+export type JoinGroupDepartureInput = inferRouterInputs<AppRouter>["workspace"]["groupTravel"]["join"];
+export type JoinGroupDepartureOutput = inferRouterOutputs<AppRouter>["workspace"]["groupTravel"]["join"];

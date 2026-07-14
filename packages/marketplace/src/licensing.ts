@@ -14,6 +14,7 @@ import { parseItinerary } from "@tripforge/itinerary-schema";
 import {
   and,
   eq,
+  groupDeparture,
   itinerary as itineraryTable,
   marketplaceLicense,
   marketplaceListing,
@@ -110,6 +111,24 @@ export async function licenseListing(
       // Boundary re-validation before the write (INV-001).
       const validatedCopy = parseItinerary(copyDocument);
 
+      // Group travel (spec 021 FR-010, research D4): if the LISTED itinerary
+      // is a group departure, seed an INDEPENDENT seat pool for the
+      // reseller's copy — scoped per-offer, not shared with the original.
+      // A no-op (and therefore invisible to callers) when the source
+      // itinerary carries no group-departure row — zero behavior change for
+      // ordinary listings.
+      const sourceDepartures = await tx
+        .select({
+          departureDate: groupDeparture.departureDate,
+          capacity: groupDeparture.capacity,
+          pricePerSeatMinor: groupDeparture.pricePerSeatMinor,
+          currency: groupDeparture.currency,
+        })
+        .from(groupDeparture)
+        .where(and(eq(groupDeparture.itineraryId, listing.itineraryId), eq(groupDeparture.status, "active")))
+        .limit(1);
+      const sourceDeparture = sourceDepartures[0];
+
       const split = splitTakeRate(money(listing.priceMinor, listing.currency), DEFAULT_PLATFORM_TAKE_RATE_BPS);
 
       // Copy first (the license FK-references it), then license, then ledger.
@@ -122,6 +141,18 @@ export async function licenseListing(
         // Inherited so the reseller can re-quote supply on the copy (D8).
         tripRequest: source.tripRequest,
       });
+      if (sourceDeparture) {
+        await tx.insert(groupDeparture).values({
+          agencyId: actor.agencyId,
+          itineraryId: copyId,
+          departureDate: sourceDeparture.departureDate,
+          capacity: sourceDeparture.capacity,
+          seatsRemaining: sourceDeparture.capacity,
+          pricePerSeatMinor: sourceDeparture.pricePerSeatMinor,
+          currency: sourceDeparture.currency,
+          status: "active",
+        });
+      }
       const insertedLicenses = await tx
         .insert(marketplaceLicense)
         .values({

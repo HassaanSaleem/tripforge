@@ -101,11 +101,17 @@ export async function draftParisTrip(page: Page, checkOut = "2026-09-04"): Promi
   await page.getByLabel("Check-out").fill(checkOut);
   await page.getByLabel("Adults").fill("2");
   await page.getByLabel("Children").fill("0");
-  await page.getByLabel("Trip style").selectOption("balanced");
+  // Trip style is a SegmentedControl (radiogroup of buttons), not a <select>
+  // (spec 018 research.md Decision 1 — accessible "choose exactly one").
+  await page.getByRole("radiogroup", { name: "Trip style" }).getByRole("radio", { name: "Balanced" }).click();
   await page.getByLabel("Budget", { exact: true }).fill("1000");
-  await page.getByLabel("Budget mode").selectOption("hardCap");
+  await page.getByRole("radiogroup", { name: "Budget mode" }).getByRole("radio", { name: "Hard cap" }).click();
   await page.getByLabel("Currency").fill("USD");
   await page.getByRole("button", { name: "Draft itinerary" }).click();
+  // Draft now returns 1-3 unpersisted OPTIONS to compare (spec 019 US1) —
+  // picking one is the only way an option becomes a real, saved trip (US2).
+  await expect(page.getByTestId("compare-options")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
+  await page.getByTestId("compare-option").first().getByRole("button", { name: "Choose this option" }).click();
   await expect(page.getByTestId("draft-result")).toBeVisible({ timeout: DRAFT_TIMEOUT_MS });
 }
 
