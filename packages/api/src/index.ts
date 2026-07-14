@@ -62,6 +62,9 @@ export type {
   AcceptTripHandoffRequestInput,
   AcceptTripHandoffOutcome,
 } from "./services/trip-handoffs.js";
+// Agency admin member roster surfaced the same way (seed-0009, TS4023):
+// workspace.agencyAdmin.members rides the inferred AppRouter type.
+export type { AgencyMemberSummary } from "./services/agency-members.js";
 export { buildContainer } from "./container.js";
 export type { BuildContainerOptions } from "./container.js";
 export {

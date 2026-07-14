@@ -8,6 +8,7 @@ import { workspaceMediaRouter } from "./workspace-media.js";
 import { dashboardRouter } from "./dashboard.js";
 import { groupTravelRouter } from "./group-travel.js";
 import { tripHandoffsRouter } from "./trip-handoffs.js";
+import { agencyAdminRouter } from "./agency-admin.js";
 
 export const workspaceRouter = router({
   /**
@@ -43,4 +44,7 @@ export const workspaceRouter = router({
 
   /** Trip requests: the "have an agent arrange this" inbox (spec 022). */
   tripHandoffs: tripHandoffsRouter,
+
+  /** Agency administration (owner/admin only) — member roster (seed-0009). */
+  agencyAdmin: agencyAdminRouter,
 });
