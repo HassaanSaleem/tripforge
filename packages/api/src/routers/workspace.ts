@@ -7,6 +7,7 @@ import { marketplaceRouter } from "./marketplace.js";
 import { workspaceMediaRouter } from "./workspace-media.js";
 import { dashboardRouter } from "./dashboard.js";
 import { groupTravelRouter } from "./group-travel.js";
+import { tripHandoffsRouter } from "./trip-handoffs.js";
 
 export const workspaceRouter = router({
   /**
@@ -39,4 +40,7 @@ export const workspaceRouter = router({
 
   /** Group travel: post/cancel/browse/join group departures (spec 021). */
   groupTravel: groupTravelRouter,
+
+  /** Trip requests: the "have an agent arrange this" inbox (spec 022). */
+  tripHandoffs: tripHandoffsRouter,
 });

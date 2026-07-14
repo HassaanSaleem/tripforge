@@ -51,6 +51,17 @@ export type {
 // Agent Home dashboard aggregate surfaced the same way (spec 017, TS4023):
 // DashboardStats rides the inferred AppRouter type via workspace.dashboard.stats.
 export type { DashboardStats, CurrencyTotal, RecentActivityEntry } from "./services/dashboard-stats.js";
+// Trip handoff request outcome types surfaced the same way (spec 022, TS4023):
+// requestHandoff/tripHandoffs.list/tripHandoffs.accept all ride the inferred
+// AppRouter type.
+export type {
+  SubmitTripHandoffRequestInput,
+  SubmitTripHandoffOutcome,
+  TripHandoffRequestSummary,
+  ListTripHandoffRequestsOutcome,
+  AcceptTripHandoffRequestInput,
+  AcceptTripHandoffOutcome,
+} from "./services/trip-handoffs.js";
 export { buildContainer } from "./container.js";
 export type { BuildContainerOptions } from "./container.js";
 export {

@@ -1019,9 +1019,9 @@
     "body": "OPERATOR must-have: 'Clients should be able to request agents to host/arrange their itinerary for them if not available.' PRD \u00a79.5 fork: self-drive (traveler books the assembled cart) vs request-agent (hand the plan to a marketplace agent who refines/executes; platform earns take-rate) \u2014 this keeps the consumer surface feeding the B2B marketplace. Nothing like it exists today (no consumer surface / handoff).\n\nBUILD a lightweight fork on the client-facing trip view (/view/[token]): two clear paths \u2014 'Book it myself' (self-drive, links into the existing booking flow / or a request-quote) and 'Have an agent arrange this for me' (request-agent). The request-agent path captures the client's contact + notes and creates a handoff/request record visible to the agent (a simple agent-side 'Trip requests' inbox with status: new/accepted). Keep it demo-simple (no full consumer auth): the value is showing the fork + the agent receiving the request. \n\nINVARIANTS: tenant scoping (INV-004) \u2014 requests route to the owning agency; provenance/client-ownership respected. ACCEPTANCE: on a shared client trip, the client can choose self-drive or request-an-agent; a request appears in the agent's inbox. PRD refs: \u00a79.5 agent-vs-self-drive fork, Pillar 4.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-13T08:45:29Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/64"
   },
   {
     "id": "demo-10-flights-deeplink",
@@ -1066,5 +1066,15 @@
     "created": "2026-07-14T07:30:00Z",
     "pr_url": "https://github.com/disrupt-gt/tripforge/pull/63",
     "merge_commit": "64557b4"
+  },
+  {
+    "id": "e2e-fullyparallel-signup-rate-limit",
+    "title": "e2e: fullyParallel + real Better Auth rate limiting intermittently fails unrelated sign-up journeys",
+    "body": "Bug-sized -- infra/flake, not a product defect. Found live during demo-09-request-agent (spec 022) Live Test & Fix: a full `npx playwright test` run (default fullyParallel: true, playwright.config.ts, retries: 0 locally) failed 4 unrelated tests -- marketplace-journey.spec.ts, planner-journey.spec.ts, sign-in.spec.ts, and dashboard-shell-journey.spec.ts -- all at `signUpAgency`'s terminal `expect(page).toHaveURL(/\\/dashboard$/)` assertion (support.ts:46), landing on /sign-up instead after exhausting its existing 3-attempt/11s-wait retry loop. Re-running the IDENTICAL suite with `--workers=2` passed all 34 tests, including the new trip-handoffs-journey.spec.ts (which itself performs 2 sign-ups) -- confirming the failures are real-provider rate-limiting under contention from too many concurrent sign-up requests sharing the compose stack's one client IP, not a regression from this ticket's change (support.ts's own comments already document this exact class from a prior iteration).\n\nROOT CAUSE: `playwright.config.ts` sets `fullyParallel: true` with no worker cap, so every spec file's sign-up runs in its own worker simultaneously; Better Auth's real per-endpoint rate limiter (intentionally not mocked, per architecture) has a fixed budget shared by the single container IP. As the suite grows (each new feature typically adds 1-2 more `signUpAgency` calls), the probability of tripping the limiter within the existing retry window rises -- this is likely to recur and worsen on every future ticket that adds an e2e spec with a sign-up.\n\nFIX DIRECTION (test-infra, not touched by this ticket per the 'do not modify test infrastructure unless the ticket is about test infra' guardrail): either cap `workers` in playwright.config.ts to a small fixed number for local/loop runs (trades wall-clock time for reliability), or extend support.ts's existing retry budget (more attempts / longer backoff), or serialize sign-up-heavy specs via `test.describe.configure({ mode: 'serial' })` suite-wide. Whichever direction is chosen must not weaken any assertion (the retry-and-still-fail behavior should stay a real failure, not silently swallowed).\n\nACCEPTANCE CRITERIA:\n  1. A full `npx playwright test` run at the suite's current (or larger) size passes reliably across repeated runs at the DEFAULT worker/parallelism settings (no manual --workers override needed).\n  2. No existing assertion is weakened; retries stay bounded and visible if a genuine failure occurs.\n\nEvidence: this run's default-parallelism failure output + the immediate --workers=2 clean pass (34/34), both captured in demo-09-request-agent's PR discussion.\n\nPRIORITY SCORE: Severity 1 (test-infra flake, not a product defect; CI does not run e2e today -- see OPERATOR-DESK CI-IMG-BUILD -- so this only affects loop-internal Live Test runs) + Frequency 2 (recurs on any run near/at current suite size, worsens as more sign-up-using specs are added) + Fix effort 3 (config/retry-budget change, no product code) = 6/9 -> low.",
+    "type": "improvement",
+    "priority": "low",
+    "state": "todo",
+    "created": "2026-07-14T00:00:00Z",
+    "pr_url": ""
   }
 ]

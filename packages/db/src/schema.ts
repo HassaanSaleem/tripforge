@@ -26,6 +26,7 @@ export {
   listingRating,
 } from "./schema-marketplace";
 export { groupDeparture, groupDepartureSeat } from "./schema-group-travel";
+export { tripHandoffRequest } from "./schema-trip-handoffs";
 
 import { user, session, account, verification, organization, member, invitation } from "./schema-auth";
 import { itinerary, itineraryShareLink, mediaAsset } from "./schema-itinerary";
@@ -39,6 +40,7 @@ import {
   listingRating,
 } from "./schema-marketplace";
 import { groupDeparture, groupDepartureSeat } from "./schema-group-travel";
+import { tripHandoffRequest } from "./schema-trip-handoffs";
 
 export const schema = {
   user,
@@ -63,6 +65,7 @@ export const schema = {
   mediaAsset,
   groupDeparture,
   groupDepartureSeat,
+  tripHandoffRequest,
 };
 
 export type Schema = typeof schema;

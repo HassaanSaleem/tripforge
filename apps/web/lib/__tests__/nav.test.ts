@@ -1,6 +1,7 @@
 // L1 tests for the sidebar nav map (spec 017 T002, contract §6; spec 021
-// added "groupTravel"): exactly seven destinations, ids exhaustive over
-// WorkspacePageShell's activeNav union, href/label pairs stable.
+// added "groupTravel"; spec 022 added "tripHandoffs"): exactly eight
+// destinations, ids exhaustive over WorkspacePageShell's activeNav union,
+// href/label pairs stable.
 import { describe, it, expect } from "vitest";
 import { NAV_DESTINATIONS, type NavDestinationId } from "../nav.js";
 
@@ -12,11 +13,12 @@ const EXPECTED_IDS: NavDestinationId[] = [
   "groupTravel",
   "media",
   "discover",
+  "tripHandoffs",
 ];
 
 describe("NAV_DESTINATIONS (research D8, data-model Nav Destination)", () => {
-  it("has exactly seven destinations", () => {
-    expect(NAV_DESTINATIONS).toHaveLength(7);
+  it("has exactly eight destinations", () => {
+    expect(NAV_DESTINATIONS).toHaveLength(8);
   });
 
   it("ids match the expected set exactly (no drift, no duplicates)", () => {
@@ -41,5 +43,6 @@ describe("NAV_DESTINATIONS (research D8, data-model Nav Destination)", () => {
     expect(byId.get("groupTravel")).toBe("/group-travel");
     expect(byId.get("media")).toBe("/media");
     expect(byId.get("discover")).toBe("/discover");
+    expect(byId.get("tripHandoffs")).toBe("/trip-requests");
   });
 });

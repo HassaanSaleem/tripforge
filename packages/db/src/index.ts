@@ -25,6 +25,7 @@ export {
   mediaAsset,
   groupDeparture,
   groupDepartureSeat,
+  tripHandoffRequest,
 } from "./schema.js";
 export type { Schema } from "./schema.js";
 export { tenantScope, scopedWhere } from "./tenant.js";

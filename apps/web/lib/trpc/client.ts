@@ -114,3 +114,10 @@ export type CancelGroupDepartureOutput = inferRouterOutputs<AppRouter>["workspac
 export type BrowseGroupDeparturesOutput = inferRouterOutputs<AppRouter>["workspace"]["groupTravel"]["browse"];
 export type JoinGroupDepartureInput = inferRouterInputs<AppRouter>["workspace"]["groupTravel"]["join"];
 export type JoinGroupDepartureOutput = inferRouterOutputs<AppRouter>["workspace"]["groupTravel"]["join"];
+
+/**
+ * Trip handoff request types via the same inference (spec 022 contracts
+ * §1-3): the "Trip requests" inbox.
+ */
+export type ListTripHandoffsOutput = inferRouterOutputs<AppRouter>["workspace"]["tripHandoffs"]["list"];
+export type AcceptTripHandoffOutput = inferRouterOutputs<AppRouter>["workspace"]["tripHandoffs"]["accept"];

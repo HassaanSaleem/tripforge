@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { router, publicProcedure } from "../trpc.js";
 import { resolveShareLink } from "../services/client-view.js";
+import { submitTripHandoffRequest, submitTripHandoffRequestInputSchema } from "../services/trip-handoffs.js";
 
 const getInputSchema = z.strictObject({ token: z.uuid() });
 
@@ -14,4 +15,9 @@ export const clientViewRouter = router({
   itinerary: publicProcedure
     .input((value) => getInputSchema.parse(value))
     .query(({ ctx, input }) => resolveShareLink(ctx.container, input.token)),
+
+  /** The request-an-agent fork choice (spec 022 contract §1). */
+  requestHandoff: publicProcedure
+    .input((value) => submitTripHandoffRequestInputSchema.parse(value))
+    .mutation(({ ctx, input }) => submitTripHandoffRequest(ctx.container, input)),
 });

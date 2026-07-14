@@ -43,7 +43,7 @@ test("a fresh agency lands on a fully-rendered zero-state dashboard (US1 SC-003)
   await expect(page.getByTestId("quick-action-marketplace")).toBeVisible();
 });
 
-test("all seven sidebar destinations are reachable with correct active marking (US2; spec 021 added Group Travel)", async ({ page }) => {
+test("all eight sidebar destinations are reachable with correct active marking (US2; spec 021 added Group Travel, spec 022 added Trip Requests)", async ({ page }) => {
   await signInAgency(page, { email: seller.email, password: seller.password });
   const nav = page.getByRole("navigation", { name: "Main navigation" });
 
@@ -54,6 +54,9 @@ test("all seven sidebar destinations are reachable with correct active marking (
     ["Marketplace", "/marketplace"],
     ["Group Travel", "/group-travel"],
     ["Media", "/media"],
+    ["Trip Requests", "/trip-requests"],
+    // Discover stays LAST — the assertion right after this loop checks the
+    // page it lands on.
     ["Discover", "/discover"],
   ];
 

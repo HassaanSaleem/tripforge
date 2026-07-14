@@ -462,4 +462,12 @@ label > input, label > select, label > textarea {
 .tf-client-unavailable p { margin: 0 auto; }
 .tf-client-foot { text-align: center; color: var(--muted); padding: 18px 0 6px; }
 
+/* ---- request-agent fork (spec 022): self-drive vs. hand off to an agent ---- */
+.tf-client-fork { margin-top: 22px; max-width: 560px; }
+.tf-client-fork-choices { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+.tf-client-fork-choices button { min-width: 220px; }
+.tf-client-fork form { display: grid; gap: 6px; margin-top: 12px; }
+.tf-client-fork form label { display: grid; gap: 6px; }
+.tf-client-fork form button[type="submit"] { justify-self: start; min-width: 200px; margin-top: 4px; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

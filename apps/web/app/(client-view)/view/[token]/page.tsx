@@ -18,6 +18,7 @@ import {
   scheduleLine,
   totalIncludesEstimates,
 } from "../../../../lib/client-view.js";
+import { TripFork } from "./trip-fork.js";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,8 @@ export default async function SharedItineraryPage({ params }: PageProps) {
             </article>
           ))
         )}
+
+        <TripFork token={token} />
 
         <footer className="tf-client-foot">
           <small>Shared with you by {view.agencyName}.</small>

@@ -11,10 +11,11 @@ export type NavDestinationId =
   | "marketplace"
   | "groupTravel"
   | "media"
-  | "discover";
+  | "discover"
+  | "tripHandoffs";
 
 /** Which local icon `AppSidebar` renders for this destination (D8 — no icon library). */
-export type NavIconKind = "grid" | "sparkle" | "suitcase" | "storefront" | "users" | "image" | "compass";
+export type NavIconKind = "grid" | "sparkle" | "suitcase" | "storefront" | "users" | "image" | "compass" | "inbox";
 
 export interface NavDestination {
   id: NavDestinationId;
@@ -37,4 +38,8 @@ export const NAV_DESTINATIONS: readonly NavDestination[] = [
   { id: "groupTravel", label: "Group Travel", href: "/group-travel", icon: "users" },
   { id: "media", label: "Media", href: "/media", icon: "image" },
   { id: "discover", label: "Discover", href: "/discover", icon: "compass" },
+  // "Trip Requests", not "Trips": does not contain "Trips" as a substring
+  // (matches the getByRole substring-matching caution documented above for
+  // "Group Travel"/"Trips").
+  { id: "tripHandoffs", label: "Trip Requests", href: "/trip-requests", icon: "inbox" },
 ];

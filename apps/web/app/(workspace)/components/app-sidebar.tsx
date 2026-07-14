@@ -77,6 +77,13 @@ function NavIcon({ kind }: { kind: NavIconKind }) {
           <path d="M15 9l-2 6-6 2 2-6z" />
         </svg>
       );
+    case "inbox":
+      return (
+        <svg {...common}>
+          <path d="M3 12h4.5l1.5 3h6l1.5-3H21" />
+          <path d="M5.5 5h13l2.5 7v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z" />
+        </svg>
+      );
   }
 }
 
