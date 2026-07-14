@@ -1,13 +1,13 @@
-// Discover PLACEHOLDER (spec 017 research D7) — route group (workspace),
-// INV-024. The sidebar names Discover as a destination (operator ask), but
-// the actual "What's Hot" feed is roadmap-gated at P2 (kitchenloop.yaml
-// spec.blocked: whats-hot-feed) and separately ticketed (demo-08-discover).
-// This page is a static, honestly-labeled coming-soon card — no data fetch,
-// no feed logic. Server component: same verified-agent gate as every other
-// destination.
+// Discover / "What's Hot" feed (spec 023, ticket demo-08-discover) — route
+// group (workspace), INV-024. Replaces the prior "coming soon" placeholder
+// (spec 017 research D7) with the real curated feed; the operator-authorized
+// P2 scope decision for this build is recorded in spec 023's plan.md
+// Constitution Check. Server component: same verified-agent gate as every
+// other destination — only the body changed.
 import { headers } from "next/headers";
 import { getWorkspaceIdentity } from "../../../lib/auth.js";
 import { WorkspacePageShell } from "../components/workspace-page-shell.js";
+import { DiscoverFeedView } from "./discover-feed-view.js";
 
 export const dynamic = "force-dynamic";
 
@@ -18,14 +18,10 @@ export default async function DiscoverPage() {
     <WorkspacePageShell identity={identity} activeNav="discover" guardTitle="Discover" guardVerb="use Discover">
       <header>
         <p className="tf-eyebrow">Discover</p>
-        <h1>Coming soon</h1>
+        <h1>What&apos;s hot</h1>
+        <p>Pick a destination for trending places and experiences — tap any card to start planning it.</p>
       </header>
-      <section className="tf-card" data-testid="discover-placeholder">
-        <p>
-          A "What's Hot" inspiration feed — trending places and experiences by destination, one tap from a plannable,
-          budget-priced itinerary — is on the roadmap. It isn't built yet.
-        </p>
-      </section>
+      <DiscoverFeedView />
     </WorkspacePageShell>
   );
 }

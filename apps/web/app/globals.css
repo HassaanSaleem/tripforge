@@ -470,4 +470,46 @@ label > input, label > select, label > textarea {
 .tf-client-fork form label { display: grid; gap: 6px; }
 .tf-client-fork form button[type="submit"] { justify-self: start; min-width: 200px; margin-top: 4px; }
 
+/* ---- Discover / "What's Hot" feed (spec 023): editorial, image-forward cards —
+   the first cards in the app to render a real photo rather than a gradient
+   swatch (.tf-dest-card stays gradient-only elsewhere by design). */
+.tf-discover-picker { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.tf-discover-picker button {
+  display: flex; align-items: center; gap: 8px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px 8px 10px;
+  font-weight: 600; font-size: 14px; color: var(--ink-soft); box-shadow: none;
+}
+.tf-discover-picker button:hover { border-color: var(--sea); color: var(--sea-deep); }
+.tf-discover-picker button[aria-pressed="true"] {
+  background: var(--sea-tint); border-color: var(--sea); color: var(--sea-deep);
+}
+.tf-discover-picker .tf-discover-picker-flag { font-size: 18px; }
+
+.tf-discover-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; margin-top: 18px; }
+.tf-discover-card {
+  display: grid; gap: 0; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--shadow-sm);
+  animation: tf-rise .45s cubic-bezier(.2,.8,.2,1);
+}
+.tf-discover-card-media {
+  position: relative; height: 190px; background: var(--sand-2) center / cover no-repeat;
+}
+.tf-discover-card-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tf-discover-card-media-fallback {
+  width: 100%; height: 100%; display: grid; place-items: center; color: var(--muted);
+  background: linear-gradient(135deg, var(--sand-2), var(--sea-tint)); font-size: 13px;
+}
+.tf-discover-card-attribution {
+  position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.55); color: #fff;
+  font-size: 10.5px; padding: 2px 8px; border-radius: 999px; letter-spacing: .01em;
+}
+.tf-discover-card-body { padding: 16px 18px 18px; display: grid; gap: 10px; }
+.tf-discover-card-body h3 { margin: 0; }
+.tf-discover-card-blurb { color: var(--ink-soft); font-size: 13.5px; margin: 0; }
+.tf-discover-hotel { background: var(--sand); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 10px 12px; display: grid; gap: 2px; }
+.tf-discover-hotel-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--sea-deep); }
+.tf-discover-hotel b { font-size: 13.5px; }
+.tf-discover-hotel span { color: var(--muted); font-size: 12.5px; }
+.tf-discover-card-body a.tf-btn--cta { justify-self: start; text-decoration: none; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

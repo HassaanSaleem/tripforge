@@ -8,6 +8,10 @@
 // route now hosts only the planner — Trips and Media moved to their own nav
 // destinations, so the same-page draft→list refresh signal is gone (a route
 // change already gives Trips a fresh fetch on mount).
+// Optional ?destination= search param (spec 023 contracts/discover-to-
+// builder-handoff.md): the Discover feed's "Plan this" action pre-seeds the
+// planner's destination field via this param — absent/empty is byte-identical
+// to prior behavior.
 import { headers } from "next/headers";
 import { getWorkspaceIdentity } from "../../../lib/auth.js";
 import { WorkspacePageShell } from "../components/workspace-page-shell.js";
@@ -15,8 +19,14 @@ import { Planner } from "./planner.js";
 
 export const dynamic = "force-dynamic";
 
-export default async function WorkspacePage() {
+interface WorkspacePageProps {
+  searchParams: Promise<{ destination?: string | string[] }>;
+}
+
+export default async function WorkspacePage({ searchParams }: WorkspacePageProps) {
   const identity = await getWorkspaceIdentity(await headers());
+  const { destination } = await searchParams;
+  const initialDestination = typeof destination === "string" && destination.trim() ? destination : undefined;
 
   return (
     <WorkspacePageShell
@@ -34,7 +44,7 @@ export default async function WorkspacePage() {
           book, and share under your brand.
         </p>
       </header>
-      <Planner />
+      <Planner initialDestination={initialDestination} />
     </WorkspacePageShell>
   );
 }

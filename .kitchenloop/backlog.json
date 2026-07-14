@@ -1009,9 +1009,9 @@
     "body": "OPERATOR must-have: \"What's new/hot in a country ... Discover / 'What's Hot' inspiration feed ... country selection.\" No discover/explore surface exists today (specs/006 explicitly excluded it). BUILD a top-of-funnel Discover page (new nav destination):\n1. Country/destination selection (reuse the hero cities + countries), then a scrollable inspiration feed of trending places/experiences for that destination \u2014 image-forward cards (licensed imagery from demo-01 catalog / Unsplash source URLs; INV-025 licensed-only, no scraped/fabricated), a 'what's happening' blurb, and hotel highlights (B10 discovery-side hotel recommendations).\n2. HARD RULE (PRD \u00a79.7): every feed item is ACTIONABLE \u2014 a 'Plan this' / 'Add to trip' action opens the AI builder pre-seeded with that place/destination (a feed that only shows pretty pictures is engagement with no conversion).\n3. Seeded content is fine for the demo (no live events-API integration required) but must be labeled/real, not fabricated.\n\nUI BAR: this is a wow surface \u2014 editorial, magazine-grade, premium. ACCEPTANCE: pick a country -> see a populated 'what's hot' feed with real imagery -> tap an item -> the builder opens seeded with it. PRD refs: \u00a79.7 Discover feed + content sourcing, Pillar 4.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-13T08:45:29Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/65"
   },
   {
     "id": "demo-09-request-agent",

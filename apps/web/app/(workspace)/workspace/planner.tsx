@@ -117,8 +117,10 @@ function SegmentedControl({
   );
 }
 
-export function Planner() {
-  const [values, setValues] = useState<PlannerFormValues>(INITIAL_VALUES);
+export function Planner({ initialDestination }: { initialDestination?: string } = {}) {
+  const [values, setValues] = useState<PlannerFormValues>(() =>
+    initialDestination ? { ...INITIAL_VALUES, destination: initialDestination } : INITIAL_VALUES,
+  );
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
   const [destinationOpen, setDestinationOpen] = useState(false);
   const drafting = view.phase === "drafting";

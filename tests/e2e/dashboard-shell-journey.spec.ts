@@ -73,9 +73,10 @@ test("all eight sidebar destinations are reachable with correct active marking (
     await expect(page.getByText(seller.name, { exact: true })).toBeVisible();
   }
 
-  // Discover is an honest placeholder, not a broken link (research D7).
-  await expect(page.getByTestId("discover-placeholder")).toBeVisible();
-  await expect(page.getByText(/coming soon/i)).toBeVisible();
+  // Discover now shows the real "what's hot" feed (spec 023), not the
+  // former placeholder — a destination is preselected and its feed populated.
+  await expect(page.getByTestId("discover-destination-picker")).toBeVisible();
+  await expect(page.getByTestId("discover-feed-grid").getByTestId("discover-feed-card").first()).toBeVisible();
 });
 
 test("the sidebar collapses on a narrow viewport and stays operable (US2 FR-008)", async ({ page }) => {
