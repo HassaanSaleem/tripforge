@@ -1019,9 +1019,10 @@
     "body": "OPERATOR must-have: 'Clients should be able to request agents to host/arrange their itinerary for them if not available.' PRD \u00a79.5 fork: self-drive (traveler books the assembled cart) vs request-agent (hand the plan to a marketplace agent who refines/executes; platform earns take-rate) \u2014 this keeps the consumer surface feeding the B2B marketplace. Nothing like it exists today (no consumer surface / handoff).\n\nBUILD a lightweight fork on the client-facing trip view (/view/[token]): two clear paths \u2014 'Book it myself' (self-drive, links into the existing booking flow / or a request-quote) and 'Have an agent arrange this for me' (request-agent). The request-agent path captures the client's contact + notes and creates a handoff/request record visible to the agent (a simple agent-side 'Trip requests' inbox with status: new/accepted). Keep it demo-simple (no full consumer auth): the value is showing the fork + the agent receiving the request. \n\nINVARIANTS: tenant scoping (INV-004) \u2014 requests route to the owning agency; provenance/client-ownership respected. ACCEPTANCE: on a shared client trip, the client can choose self-drive or request-an-agent; a request appears in the agent's inbox. PRD refs: \u00a79.5 agent-vs-self-drive fork, Pillar 4.",
     "type": "feature",
     "priority": "high",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-13T08:45:29Z",
-    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/64"
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/64",
+    "merge_commit": "1d8c471"
   },
   {
     "id": "demo-10-flights-deeplink",
