@@ -1037,9 +1037,10 @@
     "body": "OPERATOR lists 'Flights' among must-haves. PRD is explicit (Non-goals + \u00a79.3 bookable map + Risks): DO NOT be merchant-of-record for flights early; MVP = DEEP-LINK. So build DISPLAY + DEEP-LINK only, never in-platform flight booking/payment. BUILD a flights card in the builder/booking context: given the trip's origin/destination/dates, show 2-3 indicative flight options (seeded/sandbox: airline, times, indicative price as budget anchor) with a 'Search flights' / 'Book on partner' DEEP-LINK button that hands off (opens an external/partner URL). Make clear it is a deep-link, not an in-platform booking. Do NOT add flight items to the canonical bookable cart or create a flights merchant/payment path (respects the constitution / non-goal). Flights remain the budget anchor (domain/budget.ts) only. ACCEPTANCE: a flights card shows indicative options + a deep-link handoff; no flight is booked in-platform; no merchant-of-record path added. PRD refs: \u00a79.3 (Flights = deep-link), Non-goals, Risks 'flights ops & thin margin'.",
     "type": "feature",
     "priority": "low",
-    "state": "in_progress",
+    "state": "done",
     "created": "2026-07-13T08:45:29Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/71",
+    "merge_commit": "07b4ed5"
   },
   {
     "id": "demo-11-group-travel",
