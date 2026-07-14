@@ -129,6 +129,7 @@ button:active, .tf-btn:active { transform: translateY(1px); }
 .tf-badge--verified { background: var(--ok-tint); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); }
 .tf-badge--verified::before { content: "✓"; }
 .tf-badge--sold-out { background: var(--warn-tint); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, var(--line)); }
+.tf-badge--licensed, .tf-market-resale { background: var(--sand-2); color: var(--ink-soft); border-color: var(--line); }
 .tf-price { font-variant-numeric: tabular-nums; font-weight: 640; }
 
 /* ---- white-label opt-out: /view shows agency brand only, no platform theme --- */

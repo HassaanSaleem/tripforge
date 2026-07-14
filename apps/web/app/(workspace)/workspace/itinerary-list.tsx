@@ -13,7 +13,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { trpc, type GetItineraryOutput, type MediaAsset, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
-import { formatCreatedDate, formatListedBadge, listErrorMessage, openErrorMessage } from "../../../lib/itinerary-list.js";
+import {
+  formatCreatedDate,
+  formatLicensedCopyBadge,
+  formatListedBadge,
+  listErrorMessage,
+  openErrorMessage,
+} from "../../../lib/itinerary-list.js";
 import { attachMediaErrorMessage } from "../../../lib/media-library.js";
 import { BookingFlow } from "./booking-flow.js";
 import { ItineraryDays, type ItemMediaControls } from "./itinerary-days.js";
@@ -122,6 +128,11 @@ export function ItineraryList() {
             <li key={trip.id} className="tf-trip-row" data-testid="trip-row">
               <b>{trip.title}</b>
               <span className="tf-badge">{trip.currency}</span>
+              {trip.licensedCopy ? (
+                <span className="tf-badge tf-badge--licensed" data-testid="trip-licensed-copy">
+                  {formatLicensedCopyBadge(trip.licensedCopy)}
+                </span>
+              ) : null}
               {trip.listing ? (
                 <span className="tf-badge tf-badge--listed" data-testid="trip-listed">
                   {formatListedBadge(trip.listing)}

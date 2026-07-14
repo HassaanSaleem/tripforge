@@ -36,7 +36,14 @@ const buyer = {
   password: "marketplace-pass-9",
   agencyName: `Nomad Collective ${runId.slice(-6)}`,
 };
+const thirdAgency = {
+  name: "Cara Curator",
+  email: `cara-${runId}@example.test`,
+  password: "marketplace-pass-9",
+  agencyName: `Third Horizon ${runId.slice(-6)}`,
+};
 const listingTitle = `Paris weekender ${runId.slice(-6)}`;
+const resaleListingTitle = `Paris weekender resale ${runId.slice(-6)}`;
 
 test.describe.configure({ mode: "serial" });
 
@@ -146,6 +153,17 @@ test("another agency licenses it cross-tenant and sees the recorded split (US3)"
   await expect(pickerAfterLicense).toBeVisible();
   await expect(pickerAfterLicense.locator("option")).toHaveCount(2); // placeholder + the new copy
 
+  // Licensed-copy marker (spec 024 US1): the picker option for the new copy
+  // is attributed to the original author, not shown as an indistinguishable
+  // "already listed"-style option.
+  const copyOption = pickerAfterLicense.locator("option:not([value=''])").first();
+  await expect(copyOption).toHaveText(new RegExp(`Licensed copy · original by ${seller.agencyName}$`));
+
+  // The same marker on the workspace trip list (US1) — no reload needed.
+  await page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Trips" }).click();
+  await expect(page.getByTestId("trip-licensed-copy")).toHaveText(`Licensed copy · original by ${seller.agencyName}`);
+  await page.goto("/marketplace");
+
   // Re-license: benign typed refusal, no second charge pretended.
   await card.getByRole("button", { name: /License this trip/i }).click();
   await expect(card.getByText(/already licensed this trip/)).toBeVisible({ timeout: 15_000 });
@@ -157,6 +175,44 @@ test("another agency licenses it cross-tenant and sees the recorded split (US3)"
   await card.getByRole("button", { name: /Submit rating/i }).click();
   await expect(card.getByTestId("rate-listing-confirmed")).toBeVisible({ timeout: 15_000 });
   await expect(card.getByText("★ 4.0 (1)")).toBeVisible();
+});
+
+test("a re-listed licensed copy carries a platform resale marker for third-party buyers (spec 024 US2)", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await signInAgency(page, { email: buyer.email, password: buyer.password });
+  await page.goto("/marketplace");
+
+  // The buyer re-lists the licensed copy it holds (its only itinerary).
+  await page.getByLabel("Itinerary").selectOption({ index: 1 });
+  await page.getByLabel("Listing title").fill(resaleListingTitle);
+  await page.getByLabel(/License fee/).fill("200");
+  await page.getByLabel("License terms").fill("Resold under license from the original author.");
+  await page.getByLabel("Revenue share %").fill("5");
+  await page.getByRole("button", { name: /List it on the marketplace/i }).click();
+  await expect(page.getByTestId("listing-created")).toBeVisible({ timeout: 15_000 });
+
+  // Leave no session behind — /sign-up redirects an already-authenticated
+  // session straight back to /dashboard, so the third agency's sign-up below
+  // needs a clean slate first.
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/sign-in$/);
+
+  // A third agency signs up, gets vetted, and browses cross-tenant.
+  await signUpAgency(page, thirdAgency);
+  vetAgencyByName(thirdAgency.agencyName);
+  await page.goto("/marketplace");
+
+  const resaleCard = page.getByTestId("listing-card").filter({ hasText: resaleListingTitle });
+  await expect(resaleCard).toHaveCount(1, { timeout: 15_000 });
+  await expect(resaleCard.getByTestId("listing-resale-badge")).toHaveText("Resale · Gen 1");
+
+  // The seller's ORIGINAL listing (generation 0, not yet deactivated) carries
+  // no resale marker — the marker is provenance-derived, never a default.
+  const originalCard = page.getByTestId("listing-card").filter({ hasText: listingTitle });
+  await expect(originalCard).toHaveCount(1);
+  await expect(originalCard.getByTestId("listing-resale-badge")).toHaveCount(0);
 });
 
 test("the seller's own card now shows the license and the exact seller credit (spec 014 US1)", async ({

@@ -8,6 +8,7 @@ import { formatMinorAmount } from "../../../lib/planner-form.js";
 import {
   formatEarnings,
   formatRating,
+  formatResaleBadge,
   formatShareBps,
   type MarketplaceListing,
 } from "../../../lib/marketplace-flow.js";
@@ -50,6 +51,11 @@ export function ListingCard({
       <div className="tf-market-meta">
         <span className="tf-badge">{formatShareBps(listing.revenueShareBps)} revenue share</span>
         {listing.mine ? <span className="tf-badge tf-market-mine">Your listing</span> : null}
+        {listing.resaleGeneration !== null ? (
+          <span className="tf-badge tf-market-resale" data-testid="listing-resale-badge">
+            {formatResaleBadge(listing.resaleGeneration)}
+          </span>
+        ) : null}
       </div>
       {listing.mine && listing.licenseCount !== null && listing.sellerCreditTotalMinor !== null ? (
         <>

@@ -5,6 +5,7 @@
 import Link from "next/link";
 import type { FormEvent } from "react";
 import type { ListingFormValues } from "../../../lib/marketplace-flow.js";
+import { formatLicensedCopyBadge } from "../../../lib/itinerary-list.js";
 import type { ListingFormState, PickerState } from "./marketplace-panel-types.js";
 
 /**
@@ -86,6 +87,7 @@ export function ListingForm({
             {picker.itineraries.map((itinerary) => (
               <option key={itinerary.id} value={itinerary.id} disabled={itinerary.listing !== null}>
                 {itinerary.title} ({itinerary.currency})
+                {itinerary.licensedCopy !== null ? ` — ${formatLicensedCopyBadge(itinerary.licensedCopy)}` : ""}
                 {itinerary.listing !== null ? " — already listed" : ""}
               </option>
             ))}

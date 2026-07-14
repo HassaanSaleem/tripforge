@@ -13,6 +13,7 @@ import {
   deactivateListingFailureMessage,
   formatEarnings,
   formatRating,
+  formatResaleBadge,
   formatShareBps,
   licenseFailureMessage,
   marketplaceErrorMessage,
@@ -182,6 +183,13 @@ describe("formatRating / formatShareBps (research D8, contract §6)", () => {
   it("scales share basis points for display", () => {
     expect(formatShareBps(1_000)).toBe("10%");
     expect(formatShareBps(750)).toBe("7.5%");
+  });
+});
+
+describe("formatResaleBadge (spec 024 FR-003/FR-004)", () => {
+  it("shows the exact lineage-depth generation, never inferred from free text", () => {
+    expect(formatResaleBadge(1)).toBe("Resale · Gen 1");
+    expect(formatResaleBadge(2)).toBe("Resale · Gen 2");
   });
 });
 

@@ -153,6 +153,13 @@ export function formatShareBps(bps: number): string {
   return formatBps(bps);
 }
 
+/** Resale/generation marker (spec 024 FR-003/FR-004): the listed itinerary's
+ * rebrand-lineage depth, exactly — never inferred from the seller's free
+ * text. Callers only invoke this when `resaleGeneration !== null`. */
+export function formatResaleBadge(generation: number): string {
+  return `Resale · Gen ${generation}`;
+}
+
 /**
  * Rating display (research D8): an explicit unrated state — the page never
  * invents a default score — else the aggregate exactly as the server keeps it.

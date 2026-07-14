@@ -3,7 +3,17 @@
 // documents stay behind itineraryOverview. Deliberately NOT in
 // services/booking.ts (research D3): that module is past the split threshold
 // with an open quality-sweep ticket.
-import { and, desc, eq, itinerary as itineraryTable, marketplaceListing, scopedWhere, type Db } from "@tripforge/db";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  itinerary as itineraryTable,
+  marketplaceListing,
+  organization,
+  scopedWhere,
+  type Db,
+} from "@tripforge/db";
 import { ItinerarySchema, parseItinerary, type Itinerary, type MediaRef } from "@tripforge/itinerary-schema";
 import {
   applyItineraryEdit,
@@ -36,7 +46,11 @@ export interface MyItinerary {
   createdAt: string;
   /** Active marketplace listing for this trip, if any (spec 014 US2). */
   listing: MyItineraryListing | null;
+  /** Non-null when this itinerary is a licensed white-label copy (spec 024). */
+  licensedCopy: { originalAuthorAgencyName: string; generation: number } | null;
 }
+
+const UNKNOWN_ORIGINAL_AUTHOR = "a previous owner";
 
 /**
  * The caller agency's own itineraries, newest first. Every row is pinned to
@@ -58,6 +72,7 @@ export async function listItineraries(
       title: itineraryTable.title,
       currency: itineraryTable.currency,
       createdAt: itineraryTable.createdAt,
+      document: itineraryTable.document,
       listingId: marketplaceListing.id,
       listingPriceMinor: marketplaceListing.priceMinor,
       listingCurrency: marketplaceListing.currency,
@@ -69,21 +84,59 @@ export async function listItineraries(
     )
     .where(scopedWhere(itineraryTable.agencyId, session.agencyId))
     .orderBy(desc(itineraryTable.createdAt));
+
+  // Licensed-copy marker (spec 024, FEAT-2): derived entirely from provenance
+  // already stamped on every license (whiteLabelCopy) — no new writes, no
+  // canonical schema change. Batched org-name lookup mirrors vettedAgencyIds
+  // (packages/marketplace/src/vetting.ts) — one extra query, not one per row.
+  const parsed = rows.map((row) => ({ row, provenance: parseItinerary(row.document).provenance }));
+  const originalAuthorIds = [
+    ...new Set(
+      parsed
+        .filter((p) => p.provenance.rebrandLineage.length > 0)
+        .map((p) => p.provenance.originalAuthorAgencyId)
+        .filter((id): id is string => id !== undefined),
+    ),
+  ];
+  const authorNames =
+    originalAuthorIds.length === 0
+      ? new Map<string, string>()
+      : new Map(
+          (
+            await db
+              .select({ id: organization.id, name: organization.name })
+              .from(organization)
+              .where(inArray(organization.id, originalAuthorIds))
+          ).map((o) => [o.id, o.name] as const),
+        );
+
   return {
-    itineraries: rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      currency: row.currency,
-      createdAt: row.createdAt.toISOString(),
-      listing:
-        row.listingId === null
-          ? null
-          : {
-              listingId: row.listingId,
-              priceMinor: row.listingPriceMinor as number,
-              currency: row.listingCurrency as string,
-            },
-    })),
+    itineraries: parsed.map(({ row, provenance }) => {
+      const generation = provenance.rebrandLineage.length;
+      return {
+        id: row.id,
+        title: row.title,
+        currency: row.currency,
+        createdAt: row.createdAt.toISOString(),
+        listing:
+          row.listingId === null
+            ? null
+            : {
+                listingId: row.listingId,
+                priceMinor: row.listingPriceMinor as number,
+                currency: row.listingCurrency as string,
+              },
+        licensedCopy:
+          generation === 0
+            ? null
+            : {
+                originalAuthorAgencyName:
+                  (provenance.originalAuthorAgencyId && authorNames.get(provenance.originalAuthorAgencyId)) ||
+                  UNKNOWN_ORIGINAL_AUTHOR,
+                generation,
+              },
+      };
+    }),
   };
 }
 

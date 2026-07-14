@@ -144,6 +144,8 @@ export interface BrowseListing {
   licenseCount: number | null;
   /** Seller-only, in the listing's own currency; null for listings the caller does not own. */
   sellerCreditTotalMinor: number | null;
+  /** The listed itinerary's rebrand-lineage depth (spec 024 FR-003/FR-004); null when 0 (not a resale). */
+  resaleGeneration: number | null;
 }
 
 /**
@@ -162,9 +164,11 @@ export async function browseListings(db: Db, actor: MarketplaceActor): Promise<{
       revenueShareBps: marketplaceListing.revenueShareBps,
       sellerAgencyId: marketplaceListing.sellerAgencyId,
       sellerAgencyName: organization.name,
+      itineraryDocument: itineraryTable.document,
     })
     .from(marketplaceListing)
     .innerJoin(organization, eq(marketplaceListing.sellerAgencyId, organization.id))
+    .innerJoin(itineraryTable, eq(marketplaceListing.itineraryId, itineraryTable.id))
     .where(eq(marketplaceListing.status, "active"));
 
   const aggregates = await ratingAggregates(
@@ -179,17 +183,20 @@ export async function browseListings(db: Db, actor: MarketplaceActor): Promise<{
   const earnings = await earningsAggregates(db, actor.agencyId, ownListingIds);
   return {
     listings: rows.map((r) => {
+      const { itineraryDocument, ...rest } = r;
       const agg = aggregates.get(r.listingId);
       const mine = r.sellerAgencyId === actor.agencyId;
       const earned = mine ? (earnings.get(r.listingId) ?? { licenseCount: 0, sellerCreditTotalMinor: 0 }) : null;
+      const generation = parseItinerary(itineraryDocument).provenance.rebrandLineage.length;
       return {
-        ...r,
+        ...rest,
         sellerVetted: vetted.has(r.sellerAgencyId),
         ratingAverage: agg?.average ?? null,
         ratingCount: agg?.count ?? 0,
         mine,
         licenseCount: earned?.licenseCount ?? null,
         sellerCreditTotalMinor: earned?.sellerCreditTotalMinor ?? null,
+        resaleGeneration: generation === 0 ? null : generation,
       };
     }),
   };

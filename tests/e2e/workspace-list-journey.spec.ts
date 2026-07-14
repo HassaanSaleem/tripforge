@@ -129,7 +129,13 @@ test("a licensed white-label copy lands in the buyer's workspace list and opens 
   const rows = page.getByTestId("trip-row");
   await expect(rows).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByTestId("trips-empty")).toHaveCount(0);
-  await expect(rows.first().locator(".tf-badge")).toHaveText("USD");
+  await expect(rows.first().locator(".tf-badge").filter({ hasText: "USD" })).toHaveText("USD");
+
+  // Licensed-copy marker (spec 024 FR-001/FR-002): attributed to the
+  // original author, distinguishing the copy from a self-authored draft.
+  await expect(rows.first().getByTestId("trip-licensed-copy")).toHaveText(
+    `Licensed copy · original by ${owner.agencyName}`,
+  );
 
   // Continue-work works on a licensed copy exactly as on an own draft (US2).
   await page.getByTestId("trip-open").click();

@@ -4,7 +4,13 @@
 // the trips wording (contract §2/§3 — only these strings ever reach the panel).
 import { describe, it, expect } from "vitest";
 import { TRPCClientError } from "@trpc/client";
-import { formatCreatedDate, formatListedBadge, listErrorMessage, openErrorMessage } from "../itinerary-list.js";
+import {
+  formatCreatedDate,
+  formatLicensedCopyBadge,
+  formatListedBadge,
+  listErrorMessage,
+  openErrorMessage,
+} from "../itinerary-list.js";
 
 function trpcError(code: string) {
   return new TRPCClientError("boom", {
@@ -33,6 +39,20 @@ describe("formatListedBadge (spec 014 US2, FR-007)", () => {
 
   it("respects the currency's own fraction digits", () => {
     expect(formatListedBadge({ priceMinor: 450, currency: "JPY" })).toBe("Listed · 450 JPY");
+  });
+});
+
+describe("formatLicensedCopyBadge (spec 024 FR-001/FR-002)", () => {
+  it("names the original author, not an intermediate reseller", () => {
+    expect(formatLicensedCopyBadge({ originalAuthorAgencyName: "Bright Peak Travel", generation: 1 })).toBe(
+      "Licensed copy · original by Bright Peak Travel",
+    );
+  });
+
+  it("stays the same shape for a deeper resale chain (generation is server-derived, not shown here)", () => {
+    expect(formatLicensedCopyBadge({ originalAuthorAgencyName: "Bright Peak Travel", generation: 2 })).toBe(
+      "Licensed copy · original by Bright Peak Travel",
+    );
   });
 });
 

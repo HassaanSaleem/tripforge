@@ -96,13 +96,15 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
       expect(stamps[0]).toBeGreaterThanOrEqual(stamps[1] as number);
 
       // Picker projection ONLY: no canonical document, no trip request. Every
-      // unlisted trip carries an explicit null listing (spec 014 FR-008), not
-      // an absent field.
+      // unlisted trip carries an explicit null listing (spec 014 FR-008) and
+      // null licensedCopy (spec 024 FR-006 — a self-authored original is
+      // never marked), not an absent field.
       for (const row of alphaList.itineraries) {
-        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "listing", "title"]);
+        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "licensedCopy", "listing", "title"]);
         expect(row.currency).toBe("USD");
         expect(row.title.length).toBeGreaterThan(0);
         expect(row.listing).toBeNull();
+        expect(row.licensedCopy).toBeNull();
       }
     },
     LONG,
@@ -176,9 +178,73 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
       const buyerAfter = await callerFor(buyer).workspace.itinerary.list();
       expect(buyerAfter.itineraries.map((i) => i.id)).toEqual([licensed.copyItineraryId]);
 
-      // The trade never grows (or leaks into) the seller's own list.
+      // Licensed-copy marker (spec 024 FR-001/FR-002): the buyer's copy is
+      // marked and attributed to the original author; a generation-1 chain.
+      expect(buyerAfter.itineraries[0]?.licensedCopy).toEqual({
+        originalAuthorAgencyName: "Gamma Journeys",
+        generation: 1,
+      });
+
+      // The trade never grows (or leaks into) the seller's own list; the
+      // seller's original stays unmarked (FR-006).
       const sellerAfter = await callerFor(seller).workspace.itinerary.list();
       expect(sellerAfter.itineraries.map((i) => i.id)).toEqual([sourceId]);
+      expect(sellerAfter.itineraries[0]?.licensedCopy).toBeNull();
+    },
+    LONG,
+  );
+
+  it(
+    "a re-licensed chain (copy-of-a-copy) attributes the FIRST author, generation 2 (spec 024 edge case)",
+    async () => {
+      const originalAuthor = await makeAgency("Zenith Expeditions");
+      const firstReseller = await makeAgency("Coastal Journeys");
+      const secondReseller = await makeAgency("Wanderlux Agency");
+      for (const agency of [originalAuthor, firstReseller, secondReseller]) {
+        await handle.db.insert(agencyVetting).values({ agencyId: agency.agencyId, vettedBy: "l3il-test-operator" });
+      }
+
+      const sourceId = await draft(originalAuthor, "Vienna");
+      const listing1 = await callerFor(originalAuthor).workspace.marketplace.createListing({
+        itineraryId: sourceId,
+        title: "Vienna proven route",
+        priceMinor: 25_000,
+        licenseTerms: "White-label permitted; keep attribution lineage.",
+        revenueShareBps: 750,
+      });
+      expect(listing1.status).toBe("listed");
+      if (listing1.status !== "listed") throw new Error("listing failed");
+
+      const license1 = await callerFor(firstReseller).workspace.marketplace.licenseListing({
+        listingId: listing1.listingId,
+      });
+      expect(license1.status).toBe("licensed");
+      if (license1.status !== "licensed") throw new Error("license failed");
+
+      // First reseller re-lists their own copy — a resale, not a fresh original.
+      const listing2 = await callerFor(firstReseller).workspace.marketplace.createListing({
+        itineraryId: license1.copyItineraryId,
+        title: "Vienna proven route (re-listed)",
+        priceMinor: 20_000,
+        licenseTerms: "White-label permitted; keep attribution lineage.",
+        revenueShareBps: 500,
+      });
+      expect(listing2.status).toBe("listed");
+      if (listing2.status !== "listed") throw new Error("re-listing failed");
+
+      const license2 = await callerFor(secondReseller).workspace.marketplace.licenseListing({
+        listingId: listing2.listingId,
+      });
+      expect(license2.status).toBe("licensed");
+      if (license2.status !== "licensed") throw new Error("second license failed");
+
+      const secondResellerList = await callerFor(secondReseller).workspace.itinerary.list();
+      // Generation 2 (two rebrand-lineage hops); attribution stays the FIRST
+      // author (Zenith Expeditions), never the intermediate reseller.
+      expect(secondResellerList.itineraries.find((i) => i.id === license2.copyItineraryId)?.licensedCopy).toEqual({
+        originalAuthorAgencyName: "Zenith Expeditions",
+        generation: 2,
+      });
     },
     LONG,
   );

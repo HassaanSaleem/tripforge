@@ -598,6 +598,77 @@ describe.skipIf(!DATABASE_URL)("L3 marketplace trade layer (real Postgres)", () 
     },
     LONG,
   );
+
+  it(
+    "resale generation marker (spec 024 US2): null on a first-generation listing, the exact depth on a re-listed chain",
+    async () => {
+      const originalAuthor = await makeAgency("Atlas DMC");
+      const firstReseller = await makeAgency("Nomad Collective");
+      const secondReseller = await makeAgency("Third Agency");
+      await vet(originalAuthor.agencyId);
+      await vet(firstReseller.agencyId);
+      await vet(secondReseller.agencyId);
+
+      const sourceId = await draftItinerary(originalAuthor);
+      const listing1 = await callerFor(originalAuthor).workspace.marketplace.createListing({
+        itineraryId: sourceId,
+        ...LISTING_INPUT,
+      });
+      expect(listing1.status).toBe("listed");
+      if (listing1.status !== "listed") return;
+
+      // A never-licensed, first-generation listing: no resale marker (FR-006).
+      const browseBefore = await callerFor(secondReseller).workspace.marketplace.browseListings();
+      expect(browseBefore.listings.find((l) => l.listingId === listing1.listingId)).toMatchObject({
+        resaleGeneration: null,
+      });
+
+      const license1 = await callerFor(firstReseller).workspace.marketplace.licenseListing({
+        listingId: listing1.listingId,
+      });
+      expect(license1.status).toBe("licensed");
+      if (license1.status !== "licensed") return;
+
+      // First reseller re-lists the copy — a generation-1 resale.
+      const listing2 = await callerFor(firstReseller).workspace.marketplace.createListing({
+        itineraryId: license1.copyItineraryId,
+        ...LISTING_INPUT,
+        title: "Paris on a budget — resold copy",
+      });
+      expect(listing2.status).toBe("listed");
+      if (listing2.status !== "listed") return;
+
+      const browseGen1 = await callerFor(secondReseller).workspace.marketplace.browseListings();
+      expect(browseGen1.listings.find((l) => l.listingId === listing2.listingId)).toMatchObject({
+        resaleGeneration: 1,
+      });
+      // The original listing is untouched by the resale one hop downstream.
+      expect(browseGen1.listings.find((l) => l.listingId === listing1.listingId)).toMatchObject({
+        resaleGeneration: null,
+      });
+
+      // Second reseller licenses the once-resold copy and re-lists it again —
+      // a generation-2 resale (copy-of-a-copy).
+      const license2 = await callerFor(secondReseller).workspace.marketplace.licenseListing({
+        listingId: listing2.listingId,
+      });
+      expect(license2.status).toBe("licensed");
+      if (license2.status !== "licensed") return;
+      const listing3 = await callerFor(secondReseller).workspace.marketplace.createListing({
+        itineraryId: license2.copyItineraryId,
+        ...LISTING_INPUT,
+        title: "Paris on a budget — resold copy (gen 2)",
+      });
+      expect(listing3.status).toBe("listed");
+      if (listing3.status !== "listed") return;
+
+      const browseGen2 = await callerFor(originalAuthor).workspace.marketplace.browseListings();
+      expect(browseGen2.listings.find((l) => l.listingId === listing3.listingId)).toMatchObject({
+        resaleGeneration: 2,
+      });
+    },
+    LONG,
+  );
 });
 
 /** Wrap a real Db so the Nth `insert` INSIDE the next transaction throws —

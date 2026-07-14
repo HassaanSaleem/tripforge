@@ -24,6 +24,12 @@ export function formatListedBadge(listing: { priceMinor: number; currency: strin
   return `Listed · ${formatMinorAmount(listing.priceMinor, listing.currency)}`;
 }
 
+/** Licensed-copy badge text (spec 024 FR-001/FR-002): names the ORIGINAL
+ * author, never an intermediate reseller — server-derived, no free text. */
+export function formatLicensedCopyBadge(licensedCopy: { originalAuthorAgencyName: string; generation: number }): string {
+  return `Licensed copy · original by ${licensedCopy.originalAuthorAgencyName}`;
+}
+
 /**
  * Transport/authorization failures with trips-list wording (FR-008); shares
  * the UNAUTHORIZED + network strings with every other workspace panel via
