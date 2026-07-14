@@ -25,9 +25,15 @@ export interface ItemMediaControls {
 export function ItineraryDays({
   days,
   mediaControls,
+  bookedItemIds,
 }: {
   days: DraftedItinerary["days"];
   mediaControls?: ItemMediaControls;
+  /** Item ids with a confirmed booking_component (seed-0027), server-derived
+   * (`workspace.itinerary.get`'s `bookedItemIds`) — OPTIONAL and undefined at
+   * the planner's freshly-drafted call site, which has no booking history to
+   * mark (same opt-in convention as `mediaControls`). */
+  bookedItemIds?: ReadonlySet<string>;
 }) {
   return (
     <>
@@ -68,6 +74,11 @@ export function ItineraryDays({
                         <span className="tf-price">
                           {" "}
                           — {formatMinorAmount(item.pricing.sellPrice.amountMinor, item.pricing.sellPrice.currency)}
+                        </span>
+                      ) : null}
+                      {bookedItemIds?.has(item.id) ? (
+                        <span className="tf-badge tf-badge--booked" data-testid="item-booked-badge">
+                          Booked
                         </span>
                       ) : null}
                       {mediaControls ? (

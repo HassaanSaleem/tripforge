@@ -5,11 +5,13 @@
 import { describe, it, expect } from "vitest";
 import { TRPCClientError } from "@trpc/client";
 import {
+  bookedSummaryLabel,
   formatCreatedDate,
   formatLicensedCopyBadge,
   formatListedBadge,
   listErrorMessage,
   openErrorMessage,
+  realizedMarkupLabel,
 } from "../itinerary-list.js";
 
 function trpcError(code: string) {
@@ -88,5 +90,32 @@ describe("openErrorMessage (contract §3)", () => {
     expect(openErrorMessage(new Error("offline"))).toBe(
       "Could not reach the server. Check your connection and try again.",
     );
+  });
+});
+
+describe("bookedSummaryLabel (seed-0027)", () => {
+  it("reports nothing booked", () => {
+    expect(bookedSummaryLabel(0, 5)).toBe("Nothing booked yet.");
+  });
+
+  it("reports a partial count with correct pluralization", () => {
+    expect(bookedSummaryLabel(3, 5)).toBe("3 of 5 items booked.");
+    expect(bookedSummaryLabel(1, 5)).toBe("1 of 5 items booked.");
+  });
+
+  it("reports every item booked, singular-safe", () => {
+    expect(bookedSummaryLabel(5, 5)).toBe("All 5 items booked.");
+    expect(bookedSummaryLabel(1, 1)).toBe("All 1 item booked.");
+  });
+});
+
+describe("realizedMarkupLabel (seed-0027/seed-0028)", () => {
+  it("renders nothing when the trip has no booked generation yet", () => {
+    expect(realizedMarkupLabel(null)).toBeNull();
+  });
+
+  it("formats the server's own basis-point rate, no client math", () => {
+    expect(realizedMarkupLabel(2200)).toBe("Booked at 22% markup.");
+    expect(realizedMarkupLabel(1225)).toBe("Booked at 12.25% markup.");
   });
 });

@@ -365,6 +365,61 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
   );
 
   it(
+    "itinerary.get's bookedItemIds marks EXACTLY the booked items on a partial booking (seed-0027)",
+    async () => {
+      const session = await makeAgency();
+      const caller = appRouter.createCaller({ session, container: makeContainer() });
+
+      const drafted = await draftViaCaller(caller, DRAFT_INPUT);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") return;
+      const itineraryId = drafted.itinerary.id;
+      const allItemIds = drafted.itinerary.days.flatMap((d) => d.items.map((i) => i.id));
+      expect(allItemIds.length).toBeGreaterThan(1);
+
+      // Fresh trip, nothing booked: an empty booked set (contract §2 —
+      // "no way to see WHICH items are booked" is exactly the bug this pins).
+      const freshView = await caller.workspace.itinerary.get({ itineraryId });
+      expect(freshView.status).toBe("found");
+      if (freshView.status !== "found") return;
+      expect(freshView.bookedItemIds).toEqual([]);
+
+      // Book only a SUBSET.
+      const quoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 2200 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") return;
+      const heldItems = quoted.items.flatMap((i) => (i.outcome === "held" ? [i] : []));
+      expect(heldItems.length).toBeGreaterThan(1);
+      const [toBook, ...rest] = heldItems;
+      const booked = await caller.workspace.booking.book({
+        itineraryId,
+        quoteRowIds: [toBook.quote.quoteRowId],
+      });
+      expect(booked.status === "confirmed" || booked.status === "partially_confirmed").toBe(true);
+
+      const afterPartialBook = await caller.workspace.itinerary.get({ itineraryId });
+      expect(afterPartialBook.status).toBe("found");
+      if (afterPartialBook.status !== "found") return;
+      // EXACTLY the one booked item — every other item (including the other
+      // held-but-not-booked quotes) stays out of the set.
+      expect(afterPartialBook.bookedItemIds).toEqual([toBook.itemId]);
+      expect(rest.every((item) => !afterPartialBook.bookedItemIds.includes(item.itemId))).toBe(true);
+
+      // Book the rest — the set now covers every item.
+      const secondBook = await caller.workspace.booking.book({
+        itineraryId,
+        quoteRowIds: rest.map((item) => item.quote.quoteRowId),
+      });
+      expect(secondBook.status === "confirmed" || secondBook.status === "partially_confirmed").toBe(true);
+      const afterFullBook = await caller.workspace.itinerary.get({ itineraryId });
+      expect(afterFullBook.status).toBe("found");
+      if (afterFullBook.status !== "found") return;
+      expect(new Set(afterFullBook.bookedItemIds)).toEqual(new Set(heldItems.map((item) => item.itemId)));
+    },
+    LONG,
+  );
+
+  it(
     "itinerary.get shows the booked CLIENT price, not the net rate, in item pricing and day subtotals (seed-0026)",
     async () => {
       const session = await makeAgency();

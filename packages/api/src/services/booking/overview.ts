@@ -78,6 +78,12 @@ export async function itineraryOverview(
        * partially-booked trip should reflect what was ALREADY booked, not
        * silently reset to the form's 15% default). */
       latestBookedMarkupBps: number | null;
+      /** Canonical item ids with a confirmed booking_component (seed-0027):
+       * the same key set `withBookedSellPrices` already derives, surfaced so
+       * the workspace view can mark each booked item and count a
+       * booked/remaining summary without inferring booking state from the
+       * document's pricing (which un-booked items also carry). */
+      bookedItemIds: string[];
     }
 > {
   const db = container.db;
@@ -148,5 +154,6 @@ export async function itineraryOverview(
       })),
     bookings: bookings.map((b) => ({ bookingId: b.id, status: b.status, createdAt: b.createdAt.toISOString() })),
     latestBookedMarkupBps: latestConsumed?.markupBps ?? null,
+    bookedItemIds: [...bookedPriceByItemId.keys()],
   };
 }

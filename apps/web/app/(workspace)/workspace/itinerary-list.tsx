@@ -11,14 +11,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { trpc, type GetItineraryOutput, type MediaAsset, type MyItinerariesOutput } from "../../../lib/trpc/client.js";
 import {
+  bookedSummaryLabel,
   formatCreatedDate,
   formatLicensedCopyBadge,
   formatListedBadge,
   listErrorMessage,
   openErrorMessage,
+  realizedMarkupLabel,
 } from "../../../lib/itinerary-list.js";
 import { attachMediaErrorMessage } from "../../../lib/media-library.js";
 import { BookingFlow } from "./booking-flow.js";
@@ -166,7 +168,18 @@ function OpenedTrip({
   onBack: () => void;
 }) {
   const [itinerary, setItinerary] = useState(overview.itinerary);
-  const { bookings } = overview;
+  const { bookings, bookedItemIds, latestBookedMarkupBps } = overview;
+  // The booked set + realized markup come from the ORIGINAL overview read
+  // (seed-0027): same reopen-to-refresh cadence the `bookings` note above
+  // already has — a booking made in this open session shows once the trip
+  // is reopened, not live (BookingFlow's own confirmation card is the
+  // in-session witness).
+  const bookedItemIdSet = useMemo(() => new Set(bookedItemIds), [bookedItemIds]);
+  const totalItemCount = useMemo(
+    () => itinerary.days.reduce((count, day) => count + day.items.length, 0),
+    [itinerary],
+  );
+  const markupNote = realizedMarkupLabel(latestBookedMarkupBps);
   const [libraryAssets, setLibraryAssets] = useState<MediaAsset[]>([]);
   const [attachingKey, setAttachingKey] = useState<string | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -244,12 +257,21 @@ function OpenedTrip({
       </div>
       <h2>{itinerary.title}</h2>
       {bookings.length > 0 ? (
-        <p className="tf-trip-note" data-testid="opened-bookings">
-          {/* Booking truth verbatim from the platform's own response — status
-              strings are never remapped or inferred client-side. */}
-          Bookings on this trip:{" "}
-          {bookings.map((b) => `${b.status} (${formatCreatedDate(b.createdAt)})`).join(", ")}
-        </p>
+        <>
+          {/* Booked/remaining summary + realized markup (seed-0027): driven by
+              the server's own bookedItemIds/latestBookedMarkupBps, visible
+              without running a fresh quote. */}
+          <p className="tf-trip-note" data-testid="opened-booked-summary">
+            {bookedSummaryLabel(bookedItemIdSet.size, totalItemCount)}
+            {markupNote ? ` ${markupNote}` : ""}
+          </p>
+          <p className="tf-trip-note" data-testid="opened-bookings">
+            {/* Booking truth verbatim from the platform's own response — status
+                strings are never remapped or inferred client-side. */}
+            Bookings on this trip:{" "}
+            {bookings.map((b) => `${b.status} (${formatCreatedDate(b.createdAt)})`).join(", ")}
+          </p>
+        </>
       ) : null}
 
       {mediaError ? <p role="alert">{mediaError}</p> : null}
@@ -306,12 +328,12 @@ function OpenedTrip({
         ) : null}
       </div>
 
-      <ItineraryDays days={itinerary.days} mediaControls={itemMediaControls} />
+      <ItineraryDays days={itinerary.days} mediaControls={itemMediaControls} bookedItemIds={bookedItemIdSet} />
       {/* Same composition rule as the planner's drafted state (spec 009 D2,
           extended by spec 012 D4): booking + share render only inside a
           verified agent's workspace surface; keyed so opening another trip
           resets both flows. */}
-      <BookingFlow key={itineraryId} itinerary={itinerary} latestBookedMarkupBps={overview.latestBookedMarkupBps} />
+      <BookingFlow key={itineraryId} itinerary={itinerary} latestBookedMarkupBps={latestBookedMarkupBps} />
       <ShareControl key={`share-${itineraryId}`} itineraryId={itineraryId} />
     </section>
   );

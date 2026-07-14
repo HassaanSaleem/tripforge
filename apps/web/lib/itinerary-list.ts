@@ -3,6 +3,7 @@
 // timezone are pinned (research D6): server HTML and client hydration must
 // render the same text on any host, and the e2e asserts the visible date.
 // No money logic lives here (FR-009 — amounts go through formatMinorAmount).
+import { formatBps } from "./basis-points.js";
 import { formatMinorAmount } from "./planner-form.js";
 import { transportErrorMessage } from "./transport-error.js";
 
@@ -49,4 +50,27 @@ export function openErrorMessage(error: unknown): string {
     badRequest: "The server rejected the request. Reload the page and try again.",
     notFound: "That trip is no longer available.",
   });
+}
+
+/**
+ * Booked/remaining summary for the reopened workspace trip (seed-0027): the
+ * counts are arithmetic over an already-typed set (`bookedItemIds.length` vs
+ * the document's own item count), never a money computation — FR-007 only
+ * restricts client-side PRICE math. Visible without running a fresh quote.
+ */
+export function bookedSummaryLabel(bookedCount: number, totalCount: number): string {
+  if (bookedCount === 0) return "Nothing booked yet.";
+  const noun = totalCount === 1 ? "item" : "items";
+  if (bookedCount === totalCount) return `All ${totalCount} ${noun} booked.`;
+  return `${bookedCount} of ${totalCount} ${noun} booked.`;
+}
+
+/**
+ * The realized markup of the trip's most recently booked generation
+ * (seed-0027/seed-0028): null renders nothing (contract: nothing booked yet).
+ * `formatBps` is the same server-integer → display-percent formatter the
+ * booking flow already uses to seed its markup input — no client money math.
+ */
+export function realizedMarkupLabel(latestBookedMarkupBps: number | null): string | null {
+  return latestBookedMarkupBps === null ? null : `Booked at ${formatBps(latestBookedMarkupBps)} markup.`;
 }
