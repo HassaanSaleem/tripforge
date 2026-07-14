@@ -1079,5 +1079,25 @@
     "state": "todo",
     "created": "2026-07-14T00:00:00Z",
     "pr_url": ""
+  },
+  {
+    "id": "demo-polish-discover-layout",
+    "title": "Discover page header renders ABOVE the app-shell chrome (should nest in content area)",
+    "type": "improvement",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-14T14:07:03Z",
+    "pr_url": "",
+    "body": "DRESS-REHEARSAL FINDING (2026-07-14, operator, live screenshot): on /discover the '\"'\"'What'\"'\"'s hot'\"'\"' page header + intro renders ABOVE the persistent app-shell chrome (left sidebar + top identity banner) instead of INSIDE the content area to the right of the sidebar. Marketplace (/marketplace) and Group Travel (/group-travel) render correctly (header inside the WorkspacePageShell content region) \u2014 so /discover'\"'\"'s page.tsx wraps/positions its header outside the shell. FIX: make the Discover page structure match the other workspace routes (header inside the WorkspacePageShell main content, below the sticky banner). Pure layout/structure fix, no data/logic change. Verify with a screenshot that the Discover header sits within the content area exactly like Marketplace. Files: apps/web/app/(workspace)/discover/page.tsx + discover-feed-view.tsx + the shell wrapper. Acceptance: /discover header nests in the content area (no floating-above-nav header); Live Test screenshot confirms."
+  },
+  {
+    "id": "demo-polish-seed-group-and-booking",
+    "title": "Extend demo seed: add group departures + at least one booking (so /group-travel isn't empty and dashboard GBV is non-zero)",
+    "type": "improvement",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-14T14:07:03Z",
+    "pr_url": "",
+    "body": "DRESS-REHEARSAL FINDING (2026-07-14, operator, live): the demo seed (demo-01-seed, apps/web/scripts/seed-demo.ts) populates agencies/trips/listings/licenses/ratings/media but (1) NO group departures \u2014 /group-travel shows the empty state '\"'\"'No group departures posted yet'\"'\"'; and (2) NO bookings \u2014 the dashboard GBV stat shows '\"'\"'\u2014'\"'\"' (Earnings 405.00 shows from licenses, but GBV = booked trip value needs a real booking). EXTEND seed-demo.ts (idempotent, same ensure* pattern, real tenant-scoped tRPC callers \u2014 NO raw SQL, NO inline money math): (a) post 2-3 GROUP DEPARTURES on seeded itineraries via the audited group-departures.postGroupDeparture path (with capacity + per-seat price + a departure date; optionally join 1 seat so a card shows '\"'\"'X of N seats left'\"'\"'); (b) complete at least ONE BOOKING via the audited quote->book flow on a seeded itinerary so at least one demo agency'\"'\"'s dashboard GBV is non-zero. Keep INV-009/010 integer minor units, INV-004 tenant attribution, idempotency (re-run shows '\"'\"'already...'\"'\"'). Acceptance: fresh docker compose up --build --wait -> /group-travel shows >=2 populated departures with seats-remaining; a demo login'\"'\"'s dashboard shows a non-zero GBV; idempotent re-run unchanged. Live Test screenshots."
   }
 ]
