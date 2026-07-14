@@ -1008,7 +1008,7 @@
     "title": "Discover / 'What's Hot' feed \u2014 country selection -> trending inspiration -> 'Plan this' seeds the builder (B6/B10)",
     "body": "OPERATOR must-have: \"What's new/hot in a country ... Discover / 'What's Hot' inspiration feed ... country selection.\" No discover/explore surface exists today (specs/006 explicitly excluded it). BUILD a top-of-funnel Discover page (new nav destination):\n1. Country/destination selection (reuse the hero cities + countries), then a scrollable inspiration feed of trending places/experiences for that destination \u2014 image-forward cards (licensed imagery from demo-01 catalog / Unsplash source URLs; INV-025 licensed-only, no scraped/fabricated), a 'what's happening' blurb, and hotel highlights (B10 discovery-side hotel recommendations).\n2. HARD RULE (PRD \u00a79.7): every feed item is ACTIONABLE \u2014 a 'Plan this' / 'Add to trip' action opens the AI builder pre-seeded with that place/destination (a feed that only shows pretty pictures is engagement with no conversion).\n3. Seeded content is fine for the demo (no live events-API integration required) but must be labeled/real, not fabricated.\n\nUI BAR: this is a wow surface \u2014 editorial, magazine-grade, premium. ACCEPTANCE: pick a country -> see a populated 'what's hot' feed with real imagery -> tap an item -> the builder opens seeded with it. PRD refs: \u00a79.7 Discover feed + content sourcing, Pillar 4.",
     "type": "feature",
-    "priority": "medium",
+    "priority": "high",
     "state": "todo",
     "created": "2026-07-13T08:45:29Z",
     "pr_url": ""
@@ -1018,7 +1018,7 @@
     "title": "Self-drive vs 'request an agent to arrange' fork on the client-facing trip (A4)",
     "body": "OPERATOR must-have: 'Clients should be able to request agents to host/arrange their itinerary for them if not available.' PRD \u00a79.5 fork: self-drive (traveler books the assembled cart) vs request-agent (hand the plan to a marketplace agent who refines/executes; platform earns take-rate) \u2014 this keeps the consumer surface feeding the B2B marketplace. Nothing like it exists today (no consumer surface / handoff).\n\nBUILD a lightweight fork on the client-facing trip view (/view/[token]): two clear paths \u2014 'Book it myself' (self-drive, links into the existing booking flow / or a request-quote) and 'Have an agent arrange this for me' (request-agent). The request-agent path captures the client's contact + notes and creates a handoff/request record visible to the agent (a simple agent-side 'Trip requests' inbox with status: new/accepted). Keep it demo-simple (no full consumer auth): the value is showing the fork + the agent receiving the request. \n\nINVARIANTS: tenant scoping (INV-004) \u2014 requests route to the owning agency; provenance/client-ownership respected. ACCEPTANCE: on a shared client trip, the client can choose self-drive or request-an-agent; a request appears in the agent's inbox. PRD refs: \u00a79.5 agent-vs-self-drive fork, Pillar 4.",
     "type": "feature",
-    "priority": "medium",
+    "priority": "high",
     "state": "todo",
     "created": "2026-07-13T08:45:29Z",
     "pr_url": ""
@@ -1062,8 +1062,9 @@
     "body": "Discovered incidentally during Live Test & Fix for e2e-planner-journey-compare-step-stale (iteration 6). `pnpm run typecheck` (in-image, tripforge-verify:build target) fails: packages/llm/src/__tests__/chat-edit.test.ts(10,55) TS2724 '\"../port.js\"' has no exported member named 'ChatEditResult'. Did you mean 'ChatEditRequest'? and (114,38) TS7006 implicit any on parameter s. This cascades turbo failures to @tripforge/marketplace, @tripforge/api, and @tripforge/web typecheck tasks (dependency graph), though `next build` and `pnpm test` (vitest) both pass unaffected \u2014 vitest type-checks loosely and the Next.js build did not surface it. Confirmed pre-existing and unrelated to the e2e fix: `git diff origin/main -- packages/llm/` on the fix branch is empty; the file was last touched by the conversational-editing feature (demo-03-chat-builder, PR #60, commit e8649e2).\n\nFILE POINTERS: packages/llm/src/__tests__/chat-edit.test.ts:10,114; packages/llm/src/port.ts (exports ChatEditRequest, ChatEditStep, ChatEditProgressEvent, PlannerToolDeps \u2014 no ChatEditResult; ChatEditProposeSchema/type likely the intended import from ../chat-edit.js instead).\n\nBug-sized: direct fix (import correction + explicit param type) + confirm `pnpm run typecheck` clean repo-wide.",
     "type": "bug",
     "priority": "medium",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-14T07:30:00Z",
-    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/63"
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/63",
+    "merge_commit": "64557b4"
   }
 ]
