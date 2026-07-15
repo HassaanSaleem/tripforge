@@ -146,7 +146,7 @@ export function ItineraryList() {
           {list.itineraries.map((trip) => (
             <li key={trip.id} className="tf-trip-row" data-testid="trip-row">
               <b>{trip.title}</b>
-              <span className="tf-badge">{trip.currency}</span>
+              <span className="tf-badge" data-testid="trip-currency">{trip.currency}</span>
               {trip.licensedCopy ? (
                 <span className="tf-badge tf-badge--licensed" data-testid="trip-licensed-copy">
                   {formatLicensedCopyBadge(trip.licensedCopy)}

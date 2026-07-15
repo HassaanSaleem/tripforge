@@ -65,7 +65,7 @@ test("trips panel: empty state, draft appears without reload, survives reload, o
   const rows = page.getByTestId("trip-row");
   await expect(rows).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByTestId("trips-empty")).toHaveCount(0);
-  await expect(rows.first().locator(".tf-badge")).toHaveText("USD");
+  await expect(rows.first().getByTestId("trip-currency")).toHaveText("USD");
   // Human-readable created date (research D6 format), not a raw ISO string.
   await expect(rows.first().locator("time")).toHaveText(/^\d{1,2} [A-Z][a-z]{2} \d{4}$/);
 
@@ -145,7 +145,7 @@ test("a licensed white-label copy lands in the buyer's workspace list and opens 
   const rows = page.getByTestId("trip-row");
   await expect(rows).toHaveCount(1, { timeout: 15_000 });
   await expect(page.getByTestId("trips-empty")).toHaveCount(0);
-  await expect(rows.first().locator(".tf-badge").filter({ hasText: "USD" })).toHaveText("USD");
+  await expect(rows.first().getByTestId("trip-currency")).toHaveText("USD");
 
   // Licensed-copy marker (spec 024 FR-001/FR-002): attributed to the
   // original author, distinguishing the copy from a self-authored draft.
