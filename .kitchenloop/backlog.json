@@ -1182,8 +1182,8 @@
     "body": "Non-blocking doc-vs-code drift found by pr-auditor on PR #78. specs/029-agent-upload-own-itinerary/contracts/manual-itinerary.md (~L44-46) says createManual re-validates via the persistDocument helper; packages/api/src/services/itineraries.ts (~L607,632) inlines ItinerarySchema.parse on the insert path instead. Validation IS enforced (INV-001 upheld) so no defect \u2014 but code never silently redefines the spec. Sync the contract doc to match the impl, or refactor createManual to call persistDocument. Low priority.",
     "type": "chore",
     "priority": "low",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-15T15:30:00Z",
-    "pr_url": null
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/79"
   }
 ]

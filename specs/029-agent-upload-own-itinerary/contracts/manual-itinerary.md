@@ -47,9 +47,13 @@ research D7):
    generated ids, no `supplyRef`/`pricing`/empty `media: []`); `pricing` is
    the synthesized placeholder block (data-model.md); `provenance` defaults
    to `{ rebrandLineage: [] }` (this is an original trip, not a copy).
-4. Re-validate the WHOLE document through `ItinerarySchema.parse` (via the
-   existing `persistDocument` helper, `itineraries.ts:176-182` — INV-001: no
-   layer trusts unvalidated input past the boundary).
+4. Re-validate the WHOLE document through `ItinerarySchema.parse`, inlined
+   directly in `createManualItinerary` (`itineraries.ts`) rather than via the
+   `persistDocument` helper (`itineraries.ts:191-197`) — `persistDocument` is
+   an UPDATE-by-id for an already-existing row (used by `attachMedia`/
+   `detachMedia`/`applyChatEdit`), while `createManual` INSERTs a brand-new
+   row inside the same transaction as its `recordPmfEvent` call (step 6); INV-001
+   still holds either way — no layer trusts unvalidated input past the boundary.
 5. Build a `TripRequest` from `{ destination, checkIn, checkOut, party }` +
    synthesized `budget` (data-model.md D6); this becomes the row's
    `trip_request` value.

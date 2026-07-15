@@ -120,9 +120,12 @@ same `agentProcedure` + zod-parse-function input convention as its ten
 siblings. Service function lives in `packages/api/src/services/itineraries.ts`
 (the file that already owns `listItineraries`/`attachMedia`/the
 `ItinerarySchema.parse`-before-write `persistDocument` helper at
-`itineraries.ts:176-182`) — reusing `persistDocument` for the boundary
-re-validation (INV-001: canonical on write) rather than duplicating the
-`parseItinerary(...)` + `tx.insert(itineraryTable)` pattern a third time.
+`itineraries.ts:191-197`). `persistDocument` is an UPDATE-by-id for an
+already-existing row and does not fit the CREATE path structurally, so
+`createManualItinerary` inlines `ItinerarySchema.parse` directly ahead of the
+insert instead, mirroring `selectDraftOption`'s own insert-transaction shape
+(same INV-001 boundary re-validation, no forced insert/update merge —
+recorded in tasks.md T005).
 
 **Input shape**: title, currency, destination, checkIn, checkOut, party — the
 same four fields `tripRequestSchema` already requires

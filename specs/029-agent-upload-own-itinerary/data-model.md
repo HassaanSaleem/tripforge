@@ -149,8 +149,10 @@ z.strictObject({
 Server assigns `id`s (items and itinerary), stamps `agencyId` from the
 session, sets `creationSource: "manual"`, builds the `Itinerary` object, and
 validates the WHOLE thing through the existing `ItinerarySchema.parse`
-boundary (via `persistDocument`, `itineraries.ts:176-182`) before insert —
-identical re-validation discipline to every other write path (INV-001).
+boundary, inlined directly ahead of the insert rather than via the
+`persistDocument` helper (`itineraries.ts:191-197`, an UPDATE-by-id that
+doesn't fit a CREATE — see tasks.md T005) — identical re-validation
+discipline to every other write path (INV-001).
 
 ## New PMF event
 

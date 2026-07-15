@@ -117,7 +117,9 @@ packages/db/src/
 
 packages/api/src/services/
 ├── itineraries.ts                # EDIT — new createManualItinerary() service function
-│                                  #       (reuses persistDocument), extend MyItinerary +
+│                                  #       (inlines ItinerarySchema.parse before insert,
+│                                  #       mirroring selectDraftOption — see T005), extend
+│                                  #       MyItinerary +
 │                                  #       listItineraries with `origin`, new
 │                                  #       createManualItineraryInputSchema + manual item/day
 │                                  #       input schemas
@@ -165,14 +167,13 @@ this one file/router). No new top-level package: manual entry is an itinerary
 
 - **`packages/api/src/services/itineraries.ts`**: **extend** — new
   `createManualItinerary()` sits alongside `listItineraries`/`attachMedia`/
-  `persistDocument` in the same service file rather than a new file; reuses
-  `persistDocument` for the `ItinerarySchema.parse`-before-write boundary
-  check instead of duplicating it a third time (the AI-draft and
-  licensed-copy paths each currently inline their own validate+insert; this
-  is the first consumer of a shared helper across all three, generalizing an
-  already-duplicated 2-instance pattern into a named one, per the
-  Refactoring & Generalization "generalize" threshold — 2+ callsites now
-  share a shape).
+  `persistDocument` in the same service file rather than a new file.
+  `persistDocument` is an UPDATE-by-id for an already-existing row and does
+  not fit the CREATE path structurally, so `createManualItinerary` instead
+  inlines `ItinerarySchema.parse` immediately before `tx.insert`, mirroring
+  `selectDraftOption`'s own insert-transaction shape — the same INV-001
+  boundary discipline `persistDocument` enforces for edits, without forcing
+  an awkward insert/update merge (recorded in tasks.md T005).
 - **`packages/api/src/routers/itinerary.ts`**: **extend** — new
   `createManual` procedure in the existing `itineraryRouter`, same
   `agentProcedure` + zod-parse-function convention as its ten siblings; no
