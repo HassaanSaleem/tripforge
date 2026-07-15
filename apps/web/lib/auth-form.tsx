@@ -3,10 +3,16 @@
 // duplicated the same email+password labeled-input markup and the same
 // pending/error submit-state plumbing. Hoisted here — extend if a third auth
 // surface needs it, don't generalize further until it does.
+//
+// Relocated from apps/web/app/(workspace)/auth-form.tsx (spec 030): the
+// (client-view) route group's traveler sign-in/sign-up forms are the third
+// auth surface the header comment above anticipated, so this file moved out
+// of the (workspace) route group into a neutral shared location both route
+// groups can import without either reaching into the other's directory.
 "use client";
 
 import { useState } from "react";
-import type { AuthActionError } from "../../lib/auth-client.js";
+import type { AuthActionError } from "./auth-client.js";
 
 export function CredentialsFields({
   email,

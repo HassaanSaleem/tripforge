@@ -98,6 +98,12 @@ A traveler who's comfortable proceeding on their own selects "Book it myself" an
 ## Assumptions
 
 - No anonymous consumer authentication is introduced by this feature — both fork choices work purely off the existing share-token trust boundary, matching the ticket's explicit "no full consumer auth" scope.
+  > **Amended by spec 030 (2026-07-15, p2-consumer-accounts-identity):** consumer
+  > authentication is introduced, but strictly as an *optional* layer — both fork choices
+  > continue to work purely off the share-token trust boundary for anyone who does not sign
+  > in, unchanged. Signing in only pre-fills the request-an-agent form's contact fields from
+  > the account; it grants no new capability and is never required to use either fork. See
+  > `specs/030-traveler-client-accounts/spec.md`.
 - "Book it myself" is a confirmation-only stub in this scope, not a real self-serve checkout: there is no existing anonymous booking capability to link into today, and full self-serve consumer booking is an explicit later-roadmap (P2) item. This reading matches the ticket's own wording ("links into the existing booking flow / or a request-quote") and its "demo-simple" instruction.
 - Contact name is required so an agent always has someone to reach; email is optional since a note may reference another contact channel.
 - No outbound notification (email/SMS) to the agent is included in this scope — the inbox itself is the delivery mechanism, consistent with "demo-simple."

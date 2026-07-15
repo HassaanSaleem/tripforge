@@ -3,7 +3,7 @@
 // agent's agency role for the request session context (INV-023/004).
 import { and, asc, eq } from "drizzle-orm";
 import type { Db } from "./client.js";
-import { member, organization } from "./schema.js";
+import { member, organization, user } from "./schema.js";
 
 /** The agency (org) role for a user in an organization, or undefined if not a member. */
 export async function getMemberRole(
@@ -49,4 +49,22 @@ export async function getOrganizationName(
     .where(eq(organization.id, organizationId))
     .limit(1);
   return rows[0]?.name;
+}
+
+/**
+ * A user's own display name + email (spec 030) — used to echo a signed-in caller's
+ * identity back to them (e.g. request-agent form pre-fill). Not tenant-scoped: a
+ * user's own row is, by construction, exactly what a `protectedProcedure` caller is
+ * allowed to see.
+ */
+export async function getUserIdentity(
+  db: Db,
+  userId: string,
+): Promise<{ name: string; email: string } | undefined> {
+  const rows = await db
+    .select({ name: user.name, email: user.email })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  return rows[0];
 }

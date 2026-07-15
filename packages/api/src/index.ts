@@ -54,6 +54,7 @@ export type {
   ClientViewMedia,
   CreateShareLinkOutcome,
   ResolveShareLinkOutcome,
+  TravelerIdentity,
 } from "./services/client-view.js";
 // Agent Home dashboard aggregate surfaced the same way (spec 017, TS4023):
 // DashboardStats rides the inferred AppRouter type via workspace.dashboard.stats.

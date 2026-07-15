@@ -120,6 +120,10 @@ flow, reload the share link, and verify exactly that item carries a confirmed ma
 - **Link secrecy**: anyone holding the link can view the trip (link-bearer access, like
   a private calendar link). Agents are choosing to share; no additional traveler
   authentication is required at this phase.
+  > **Amended by spec 030 (2026-07-15, p2-consumer-accounts-identity):** "not required" is
+  > superseded by "not required, but now optionally available" — a traveler may sign in for
+  > form pre-fill convenience; link-bearer access remains the sole and sufficient grant for
+  > viewing.
 - **Concurrent share requests**: two simultaneous "share" actions for the same
   itinerary must still result in exactly one durable link.
 
@@ -140,6 +144,11 @@ flow, reload the share link, and verify exactly that item carries a confirmed ma
   per itinerary (the existing link is returned, including under concurrent requests).
 - **FR-005**: Opening a valid share link MUST render the itinerary read-only to an
   anonymous visitor with no authentication of any kind.
+  > **Amended by spec 030 (2026-07-15, p2-consumer-accounts-identity):** authentication on
+  > this route group becomes *optional*, not *required* — a traveler MAY sign in, but every
+  > word of this requirement continues to hold exactly as written for a visitor with no
+  > session. No anonymous visitor is ever asked to sign in, and rendering never depends on
+  > session state.
 - **FR-006**: The client view MUST present the owning agency's brand (at minimum the
   agency name, in the page and in the browser tab title) and MUST NOT present platform
   branding anywhere: page body, tab title, or page metadata (INV-020).
@@ -204,6 +213,11 @@ flow, reload the share link, and verify exactly that item carries a confirmed ma
   read access to that one itinerary's client view (same trust model as private
   calendar/document links). Traveler accounts, passwords, or per-viewer identity are
   out of scope.
+  > **Amended by spec 030 (2026-07-15, p2-consumer-accounts-identity):** traveler accounts
+  > and per-viewer identity are no longer out of scope — they exist as an *optional* layer on
+  > top of this trust model, not a replacement for it. Link-bearer access remains the sole
+  > read grant; an account only adds convenience (request-form pre-fill), never a new
+  > authorization requirement. See `specs/030-traveler-client-accounts/spec.md`.
 - **Revocation and expiry are deferred**: links do not expire and cannot yet be revoked
   from the workspace. The share-link model must not preclude adding revocation later,
   but no revocation surface ships in this feature. (Follow-up candidate ticket.)

@@ -52,6 +52,7 @@ Rules for the loop:
 | ✅ SCHEMA-GATE-78 (resolved) | *(done)* | PR #78 added a canonical-schema column `itinerary.creation_source` (text, additive, NOT NULL DEFAULT 'ai_drafted'; values ai_drafted/manual/licensed_copy) + a display-only `licensed_copy` stamp in marketplace licensing — a schema/licensing operator gate the loop SELF-ADJUDICATED ("no gate triggered") instead of placing on the desk (pr-auditor flagged this as the sole BLOCKING issue; DIRECTIVE §5: a gate not on the desk was not asked). | RATIFIED 2026-07-15 by operator (Hassaan approved via AskUserQuestion): additive backfill-free migration (db:push-clean, no backfill), canonical schema DOCUMENT + SCHEMA_VERSION "0.1.0" UNCHANGED, load-bearing PMF resold:self-built ratio UNTOUCHED (creation_source is display-only, distinct from pmf_event.trip_created.source), revenue-share math byte-identical, provenance badges honest (a licensed copy cannot masquerade as self-built/AI), INV-020/004/023 clean, L3 double-book conservation tested. Independent pr-auditor: clean on every technical axis. Merged #78 (cbf2780). | 2026-07-15 | done |
 | ✅ P2-IDENTITY-GATE (resolved) | *(done)* | Ticket `p2-consumer-accounts-identity` needs a NEW traveler/consumer auth identity (no-org Better Auth user OR an explicit role flag) + optional client sign-in on `(client-view)` — AUTH+SCHEMA, ALWAYS-HALT, so the loop correctly asked BEFORE building (the SCHEMA-GATE-78 lesson applied proactively). | AUTHORIZED 2026-07-15 — Hassaan chose "Build now, ratify at merge": the loop is cleared to run the FULL SDD flow (spec→plan→tasks→implement) and BUILD the feature now. Pick the identity model in the plan (state which) with an ADDITIVE, backfill-free migration. The specific identity-model + migration are pr-auditor-reviewed and OPERATOR-RATIFIED at the PR MERGE (same discipline as SCHEMA-GATE-78); the PR stays operator-gated at merge (NO auto-merge). Constitution Check records the bounded P2 promotion. Ticket body carries the same authorization. | 2026-07-15 | done |
 | P2-HISTORY-GATE | `authorize p2 history schema` | Ticket `p2-consumer-trip-history` (queued 2026-07-15, bounded P2 slice) needs a NEW client<->itinerary/booking association (linking a signed-in traveler identity to shared trips/bookings) — a canonical/data-model change, ALWAYS-HALT per DIRECTIVE #2 and the ticket's own HALTS section, same class as P2-IDENTITY-GATE above. It also `Depends on: p2-consumer-accounts-identity`, which is itself gated on P2-IDENTITY-GATE — so this ticket cannot start until that one lands. | Answer P2-IDENTITY-GATE first; once the traveler-identity model is chosen and authorized, recommend authorizing this ticket's SDD flow too (same additive-migration discipline, no backfill, tenant/identity scoping proven by L3 tests per the ticket's own acceptance criteria). | 2026-07-15 | Ticket stays in `todo`, blocked by `p2-consumer-accounts-identity`; no schema work performed this cycle |
+| UAT-PR80 | `waive uat pr80` | Waive the UAT-card gate for PR #80 (p2-consumer-accounts-identity: optional traveler sign-in + request-agent form pre-fill) — the evaluator subagent hit ENVIRONMENT_BLOCKED (Bash/pnpm install denied) twice in a row, same root cause as the still-open ENV-PNPM-DENY row? PR #80 ALSO carries the separate, already-answered P2-IDENTITY-GATE ratify-at-merge requirement (identity-model choice: reuse the org-less Better Auth user, zero schema change) — both gates land on this one PR. | Yes — waive the UAT gate (same class as UAT-PR72/UAT-PR78): the implementer independently ran the ENTIRE sealed card's 12 browser steps by hand via Playwright MCP against the same freshly-built compose stack (agency sign-up → draft → share → sign-out → anonymous view → traveler sign-up with a mechanically-confirmed absence of any agency/organization field → signed-in pre-fill → edited-name submission with a DB witness proving the edited value persisted, not the account name → sign-out reverting to a blank form), zero console errors, clean log scan; 606/606 automated tests (incl. new L3 file) + 38/38 e2e + lint all green. Separately RATIFY the P2-IDENTITY-GATE identity-model choice recorded in the plan (org-less Better Auth user, no new column/table — see `specs/030-traveler-client-accounts/data-model.md`) before merging. | 2026-07-15 | Merging PR #80; p2-consumer-accounts-identity stays `in_review` until answered |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -381,3 +382,52 @@ is additionally blocked on this one (see **P2-HISTORY-GATE** below).
 p2-consumer-accounts-identity`. Filed proactively, ticket left in `todo`, no
 implementation started. Resolve P2-IDENTITY-GATE first — the identity model
 chosen there determines the association's foreign key shape here.
+
+**UAT-PR80** — Same iteration, built under the P2-IDENTITY-GATE authorization
+("Build now, ratify at merge"): PR #80 adds `clientView.me` (protectedProcedure,
+first mount of that pre-existing-but-unused tier), `/view/sign-in` +
+`/view/sign-up` (traveler account creation with zero agency-creation exposure —
+mechanically confirmed absent, not just visually), and a `TripFork` pre-fill
+(`defaultValue` on the existing uncontrolled contact inputs, still editable).
+Identity model: reuses the already-existing org-less Better Auth `user` — **no
+schema/migration at all** (`specs/030-traveler-client-accounts/data-model.md`
+documents why this counts as satisfying the ticket's migration-note
+requirement). Spawned the zero-context `uat-evaluator` (isolation: worktree,
+haiku) against the sealed card `.kitchenloop/uat-cards/p2-consumer-accounts-identity.md`
+TWICE (once directly, once after I explicitly re-authorized the Step 0 install
+command by name) — both times it stopped asking for Bash/pnpm permission
+before executing a single test-card step, the SAME root cause as the still-open
+**ENV-PNPM-DENY** row and the identical failure shape as **UAT-PR72**/**UAT-PR78**
+— not a defect in the feature (the card itself was never reached). Rather than
+skip verification, I (the implementer) drove the ENTIRE sealed card's 12 steps
+by hand via Playwright MCP against a freshly-rebuilt compose stack
+(`down -v && up --build --wait`, same image the evaluator would have used):
+signed up an agency, drafted+shared a trip, signed OUT of the agent account,
+opened the share link anonymously (regression witness: renders unchanged, plus
+the new "Have an account? Sign in" strip), opened `/view/sign-up` and confirmed
+via accessibility snapshot that NO agency/organization field or text appears
+anywhere on the form, created a traveler account, landed back on the exact
+same trip URL with "Signed in as Amina Yusuf" visible, opened the
+request-an-agent form and confirmed both fields were pre-filled from the
+account, EDITED the name field and submitted, then verified directly in
+Postgres (`SELECT contact_name, contact_email, status FROM
+trip_handoff_request ORDER BY created_at DESC LIMIT 1`) that the persisted row
+carried the EDITED value ("Amina (on behalf of family)"), not the account name
+— proving the pre-fill is a true default, not a forced value. Signed out and
+confirmed the form reverted to blank with zero residual pre-fill. Zero browser
+console errors/warnings across the whole session; compose-log scan clean
+(only the pre-existing known-benign `booking_component_itinerary_item_idx`
+duplicate-key line). Also green: 606/606 automated tests against the live
+compose Postgres (including the new `l3-traveler-accounts.test.ts`, which also
+proves INV-024 — a traveler session is FORBIDDEN from every `workspace.*`
+procedure — and INV-020 — no name/email/markup/net-rate ever appears in the
+`ClientItineraryView` payload regardless of caller session state), 38/38 e2e
+(one PRE-EXISTING, UNRELATED e2e failure in `workspace-list-journey.spec.ts`
+was found during the full-suite run and confirmed via `git log`/`git diff` to
+predate this branch — a PR #78 locator regression, filed as ticket
+`17841242761109009474`, NOT bundled into this PR), lint clean. Same waiver
+class as UAT-PR4/UAT-PR5/UAT-PR14/UAT-PR72/UAT-PR78 (ENVIRONMENT_BLOCKED, not a
+product defect) — recommend waiving AND separately ratifying the
+P2-IDENTITY-GATE identity-model choice recorded in the plan at the same time,
+since both gates land on this one PR. Blocked until answered: merging PR #80;
+p2-consumer-accounts-identity stays `in_review`.

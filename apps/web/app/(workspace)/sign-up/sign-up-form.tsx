@@ -8,7 +8,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createAndActivateAgency, signUpWithEmail } from "../../../lib/auth-client.js";
-import { CredentialsFields, useSubmitState } from "../auth-form.js";
+import { CredentialsFields, useSubmitState } from "../../../lib/auth-form.js";
 
 /** URL-safe slug from the agency name + random suffix (org slugs are unique). */
 function agencySlug(name: string): string {

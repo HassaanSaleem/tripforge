@@ -49,3 +49,16 @@ export async function createTrpcContext(headers: Headers): Promise<TrpcContext> 
 export function getAnonymousCaller() {
   return createAppCaller(createContext({ session: null, container: getContainer() }));
 }
+
+/**
+ * In-process caller carrying whatever real session (or none) the request's
+ * headers resolve to (spec 030 research D3) — same shape as
+ * `getAnonymousCaller` but session-aware, for server components that want to
+ * read a signed-in caller's own identity (`clientView.me`). Reuses
+ * `createTrpcContext` so the traveler-vs-agent ladder lives in exactly one
+ * place; public procedures behave identically to `getAnonymousCaller` either
+ * way, since they never branch on session.
+ */
+export async function getAuthenticatedCaller(headers: Headers) {
+  return createAppCaller(await createTrpcContext(headers));
+}

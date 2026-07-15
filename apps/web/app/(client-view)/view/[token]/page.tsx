@@ -8,9 +8,10 @@
 // (INV-018, research D3). force-dynamic: a private, per-token view must never
 // be cached or serve stale booked-state (INV-028 — the DB row is the state).
 import { cache } from "react";
+import { headers } from "next/headers";
 import type { Metadata } from "next";
-import type { ClientViewItem, ClientViewMedia } from "@tripforge/api";
-import { getAnonymousCaller } from "../../../../lib/trpc/server.js";
+import type { ClientViewItem, ClientViewMedia, TravelerIdentity } from "@tripforge/api";
+import { getAnonymousCaller, getAuthenticatedCaller } from "../../../../lib/trpc/server.js";
 import { formatMinorAmount } from "../../../../lib/planner-form.js";
 import {
   itemKindLabel,
@@ -29,6 +30,22 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const resolveView = cache(async (token: string) => {
   if (!UUID_RE.test(token)) return { status: "not_found" as const };
   return getAnonymousCaller().clientView.itinerary({ token });
+});
+
+// The signed-in caller's own identity, for request-agent form pre-fill only
+// (spec 030 FR-004/FR-005) — null for anonymous visitors. UNAUTHORIZED from
+// `clientView.me` (no session) is expected, not an error; every other outcome
+// (network/server failure) is left to surface normally. This is entirely
+// separate from `resolveView` above, which is UNCHANGED (still anonymous),
+// so the core itinerary-rendering path (US3 regression guard) carries zero
+// risk from this addition.
+const resolveIdentity = cache(async (): Promise<TravelerIdentity | null> => {
+  try {
+    const caller = await getAuthenticatedCaller(await headers());
+    return await caller.clientView.me();
+  } catch {
+    return null;
+  }
 });
 
 interface PageProps {
@@ -76,6 +93,7 @@ export default async function SharedItineraryPage({ params }: PageProps) {
     );
   }
 
+  const identity = await resolveIdentity();
   const { view } = result;
   // Booked prices come from the booking record (spec 013); when any shown
   // price is still an un-booked estimate, the total must say so (FR-004).
@@ -136,7 +154,7 @@ export default async function SharedItineraryPage({ params }: PageProps) {
           ))
         )}
 
-        <TripFork token={token} />
+        <TripFork token={token} identity={identity} />
 
         <footer className="tf-client-foot">
           <small>Shared with you by {view.agencyName}.</small>

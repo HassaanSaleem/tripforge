@@ -80,6 +80,67 @@ export async function signInAgency(page: Page, input: { email: string; password:
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+/**
+ * Traveler sign-up on the client-view (spec 030), with the same bounded
+ * rate-limit patience as `signUpAgency` above — same shared-IP-across-workers
+ * cause, same Better Auth endpoint underneath `signUpWithEmail`. Caller
+ * supplies the expected post-sign-up URL pattern (the trip page the form
+ * redirects back to), since unlike `signUpAgency` there is no fixed
+ * `/dashboard` landing spot.
+ */
+export async function signUpTraveler(
+  page: Page,
+  input: { name: string; email: string; password: string },
+  returnToPattern: RegExp,
+): Promise<void> {
+  await page.getByLabel("Your name").fill(input.name);
+  await page.getByLabel("Email").fill(input.email);
+  await page.getByLabel("Password").fill(input.password);
+
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await page.getByRole("button", { name: /Create account/i }).click();
+    const outcome = await Promise.race([
+      page.waitForURL(returnToPattern, { timeout: 15_000 }).then(() => "ok" as const),
+      page
+        .getByText(/Too many requests/i)
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(() => "rate_limited" as const),
+    ]).catch(() => "rate_limited" as const);
+    if (outcome === "ok" || attempt === maxAttempts) break;
+    await page.waitForTimeout(11_000);
+  }
+
+  await expect(page).toHaveURL(returnToPattern);
+}
+
+/** Traveler sign-in on the client-view (spec 030) — same bounded patience as
+ * `signInAgency`, different (caller-supplied) landing pattern. */
+export async function signInTraveler(
+  page: Page,
+  input: { email: string; password: string },
+  returnToPattern: RegExp,
+): Promise<void> {
+  await page.getByLabel("Email").fill(input.email);
+  await page.getByLabel("Password").fill(input.password);
+
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await page.getByRole("button", { name: /^Sign in$/i }).click();
+    const outcome = await Promise.race([
+      page.waitForURL(returnToPattern, { timeout: 15_000 }).then(() => "ok" as const),
+      page
+        .getByText("Invalid email or password.", { exact: true })
+        .waitFor({ state: "visible", timeout: 15_000 })
+        .then(() => "refused" as const),
+    ]).catch(() => "refused" as const);
+    if (outcome === "ok" || attempt === maxAttempts) break;
+    await page.waitForTimeout(11_000);
+  }
+
+  await expect(page).toHaveURL(returnToPattern);
+}
+
 /** How long a live draft may take end-to-end (real LLM; FakeLLM is instant). */
 export const DRAFT_TIMEOUT_MS = 90_000;
 

@@ -482,6 +482,12 @@ label > input, label > select, label > textarea {
 .tf-client-fork form label { display: grid; gap: 6px; }
 .tf-client-fork form button[type="submit"] { justify-self: start; min-width: 200px; margin-top: 4px; }
 
+/* ---- traveler account strip (spec 030): OPTIONAL sign-in affordance on the
+   fork's initial state — never a workspace affordance (INV-024), just a plain
+   inline link/button. */
+.tf-client-account-strip { font-size: 13px; color: var(--ink-soft); margin: 0 0 10px; }
+.tf-link-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: var(--sea); text-decoration: underline; cursor: pointer; }
+
 /* ---- Discover / "What's Hot" feed (spec 023): editorial, image-forward cards —
    the first cards in the app to render a real photo rather than a gradient
    swatch (.tf-dest-card stays gradient-only elsewhere by design). */

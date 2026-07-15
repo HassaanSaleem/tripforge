@@ -5,11 +5,20 @@
 // only stub (research D1): no server call, no persisted state. Renders
 // inside the (client-view) route group only — inherits the brand-neutral
 // layout.tsx (INV-020) and imports nothing agent-facing.
+//
+// Sign-in is OPTIONAL (spec 030 FR-004/FR-009): `identity`, when present,
+// only sets defaultValue on the existing uncontrolled contactName/
+// contactEmail inputs — still fully editable, still submitted via the same
+// FormData-based handler below (research D6). No `identity` ⇒ byte-identical
+// to the pre-spec-030 form.
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import type { TravelerIdentity } from "@tripforge/api";
 import { trpc } from "../../../../lib/trpc/client.js";
 import { transportErrorMessage } from "../../../../lib/transport-error.js";
+import { signOut } from "../../../../lib/auth-client.js";
 
 type ForkChoice = "self_drive" | "handoff";
 
@@ -19,9 +28,15 @@ type HandoffState =
   | { phase: "submitted" }
   | { phase: "refused"; message: string };
 
-export function TripFork({ token }: { token: string }) {
+export function TripFork({ token, identity }: { token: string; identity: TravelerIdentity | null }) {
+  const router = useRouter();
   const [choice, setChoice] = useState<ForkChoice | null>(null);
   const [handoff, setHandoff] = useState<HandoffState>({ phase: "idle" });
+
+  async function handleSignOut() {
+    await signOut();
+    router.refresh();
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +76,24 @@ export function TripFork({ token }: { token: string }) {
   if (choice === null) {
     return (
       <section className="tf-card tf-client-fork" data-testid="trip-fork">
+        <p className="tf-client-account-strip" data-testid="trip-fork-account-strip">
+          {identity ? (
+            <>
+              Signed in as {identity.name} ·{" "}
+              <button type="button" className="tf-link-btn" onClick={handleSignOut} data-testid="account-sign-out">
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              Have an account?{" "}
+              <a href={`/view/sign-in?token=${token}`} data-testid="account-sign-in-link">
+                Sign in
+              </a>{" "}
+              to fill in your details automatically.
+            </>
+          )}
+        </p>
         <p className="tf-eyebrow">What next?</p>
         <h2>Ready to move forward?</h2>
         <div className="tf-client-fork-choices">
@@ -112,11 +145,24 @@ export function TripFork({ token }: { token: string }) {
       <form onSubmit={handleSubmit} data-testid="trip-fork-handoff-inputs">
         <label>
           Your name
-          <input type="text" name="contactName" required maxLength={200} disabled={handoff.phase === "submitting"} />
+          <input
+            type="text"
+            name="contactName"
+            required
+            maxLength={200}
+            defaultValue={identity?.name ?? ""}
+            disabled={handoff.phase === "submitting"}
+          />
         </label>
         <label>
           Email (optional)
-          <input type="email" name="contactEmail" maxLength={320} disabled={handoff.phase === "submitting"} />
+          <input
+            type="email"
+            name="contactEmail"
+            maxLength={320}
+            defaultValue={identity?.email ?? ""}
+            disabled={handoff.phase === "submitting"}
+          />
         </label>
         <label>
           Notes (optional)

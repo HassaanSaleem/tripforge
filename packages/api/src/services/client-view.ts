@@ -22,6 +22,7 @@ import {
   eq,
   bookingComponent as bookingComponentTable,
   getOrganizationName,
+  getUserIdentity,
   itinerary as itineraryTable,
   itineraryShareLink as itineraryShareLinkTable,
   scopedWhere,
@@ -308,4 +309,31 @@ export async function resolveShareLink(
   const agencyName = (await getOrganizationName(db, link.agencyId)) ?? "Your travel agency";
 
   return { status: "found", view: toClientItineraryView(document, agencyName, bookedPriceByItemId) };
+}
+
+// ─── Signed-in traveler identity (spec 030, contracts §1) ────────────────────
+
+/** A signed-in caller's own display identity — used ONLY for form pre-fill
+ * (e.g. the request-an-agent form). Never folded into ClientItineraryView. */
+export interface TravelerIdentity {
+  name: string;
+  email: string;
+}
+
+/**
+ * The caller's own name/email — no tenant/session scoping beyond the primary-key
+ * lookup, because there is nothing to scope: a user's own row is exactly what a
+ * `protectedProcedure` caller (traveler OR agent, spec 030 FR-005) is allowed to
+ * see. Returns null if the session's user row is somehow missing (defense in
+ * depth; Better Auth guarantees a valid session always has one).
+ */
+export async function getSignedInIdentity(
+  container: Container,
+  userId: string,
+): Promise<TravelerIdentity | null> {
+  const db = container.db;
+  if (!db) throw new Error("database not configured");
+
+  const identity = await getUserIdentity(db, userId);
+  return identity ?? null;
 }

@@ -6,7 +6,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmail } from "../../../lib/auth-client.js";
-import { CredentialsFields, useSubmitState } from "../auth-form.js";
+import { CredentialsFields, useSubmitState } from "../../../lib/auth-form.js";
 
 export function SignInForm() {
   const router = useRouter();
