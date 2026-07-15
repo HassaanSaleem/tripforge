@@ -84,3 +84,27 @@ export function useSubmitState() {
 
   return { pending, error, run };
 }
+
+/** The `useSubmitState` error alert, paired with `SubmitButton` below —
+ * shared by both client-view auth forms (quality-sweep, specs 028-031 sweep). */
+export function SubmitError({ error }: { error: string | null }) {
+  return error ? <p role="alert">{error}</p> : null;
+}
+
+/** The `useSubmitState`-driven CTA button: shows `pendingLabel` while
+ * submitting, `label` otherwise, disabled either way while pending. */
+export function SubmitButton({
+  pending,
+  pendingLabel,
+  label,
+}: {
+  pending: boolean;
+  pendingLabel: string;
+  label: string;
+}) {
+  return (
+    <button type="submit" className="tf-btn--cta" disabled={pending}>
+      {pending ? pendingLabel : label}
+    </button>
+  );
+}

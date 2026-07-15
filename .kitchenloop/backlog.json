@@ -1228,9 +1228,9 @@
     "type": "chore",
     "title": "Quality sweep on the new consumer-surface code (specs 028-031)",
     "body": "Targeted clean-code sweep over the 4 features shipped this drive (028 chat-first entry, 029 bring-your-own itinerary, 030 traveler accounts, 031 trip history): run knip (dead/unused exports), jscpd (duplication), and dependency-cruiser (INV-017 layer boundaries) scoped to the touched files (packages/api/src/services/{client-view,itineraries,planner}.ts, routers, packages/llm interpret-trip-request, apps/web (client-view) surfaces). Remove/inline dead exports, de-duplicate any copy-paste across the new surfaces, confirm no boundary violations. NO behavior change; export-surface + structure only. Acceptance: knip/jscpd/depcruise clean on the touched files; L1/L2/L3 + lint green; no product behavior diff.",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-16T00:45:00Z",
-    "pr_url": null
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/84"
   },
   {
     "id": "my-trips-empty-state-nav",
@@ -1238,8 +1238,8 @@
     "type": "feature",
     "title": "My Trips: empty state + discoverable nav from the client-view",
     "body": "Polish the just-shipped /view/my-trips (spec 031): (1) when a signed-in traveler has ZERO linked trips, render a clear empty state (e.g. 'No trips yet \u2014 trips you open from an agent's link appear here') instead of a blank list; (2) ensure My Trips is DISCOVERABLE \u2014 a signed-in traveler should see a link to /view/my-trips from the client-view (e.g. in the trip-fork account strip), not have to know the URL. Client-view/traveler-identity only, no schema, no money, INV-020/INV-018 unchanged (anonymous visitors never see the My Trips link). Acceptance: empty state renders for a new traveler; a signed-in traveler can reach My Trips via a visible link; anonymous /view/[token] unchanged; e2e covers both.",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-16T00:45:00Z",
-    "pr_url": null
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/84"
   }
 ]

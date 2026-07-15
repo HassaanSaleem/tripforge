@@ -18,7 +18,7 @@ import {
   type VerifiedOffer,
 } from "@tripforge/domain";
 import type { Itinerary } from "@tripforge/itinerary-schema";
-import { itinerary as itineraryTable, recordPmfEvent } from "@tripforge/db";
+import { itinerary as itineraryTable, recordPmfEvent, type Db } from "@tripforge/db";
 import {
   DRAFT_VARIANT_LABELS,
   type DraftItineraryResult,
@@ -29,15 +29,28 @@ import {
 import { z } from "zod";
 import type { AgentSessionContext, Container } from "../context.js";
 
+/** Destination + date-range + party — shared by the AI-drafted `tripRequestSchema`
+ * below and the manually-built `createManualItineraryInputSchema` (spec 029,
+ * packages/api/src/services/itineraries.ts): both describe the same trip basics,
+ * one via the planner, one via the hand-built form. */
+export const tripBasicsShape = {
+  destination: z.string().min(1),
+  checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
+  checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
+  party: z.strictObject({
+    adults: z.number().int().min(1),
+    children: z.number().int().min(0).default(0),
+  }),
+};
+
+/** Shared `.refine` predicate for any schema built from `tripBasicsShape`. */
+export function checkOutAfterCheckIn(v: { checkIn: string; checkOut: string }): boolean {
+  return v.checkOut > v.checkIn;
+}
+
 export const tripRequestSchema = z
   .strictObject({
-    destination: z.string().min(1),
-    checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
-    checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
-    party: z.strictObject({
-      adults: z.number().int().min(1),
-      children: z.number().int().min(0).default(0),
-    }),
+    ...tripBasicsShape,
     tripStyle: z.enum(["balanced", "budget", "premium"]).optional(),
     budget: z.strictObject({
       mode: z.enum(["hardCap", "target"]),
@@ -46,7 +59,7 @@ export const tripRequestSchema = z
     }),
     flightsReserveMinor: z.number().int().min(0).optional(),
   })
-  .refine((v) => v.checkOut > v.checkIn, { message: "checkOut must be after checkIn" });
+  .refine(checkOutAfterCheckIn, { message: "checkOut must be after checkIn" });
 
 export type TripRequest = z.infer<typeof tripRequestSchema>;
 
@@ -308,6 +321,39 @@ export async function* draftOptions(container: Container, session: AgentSessionC
 }
 
 /**
+ * Persist a newly created itinerary — ONE transaction: insert the document +
+ * trip request, then record the `trip_created` PMF event. Shared by
+ * `selectDraftOption` (AI-drafted) and `createManualItinerary` (spec 029,
+ * packages/api/src/services/itineraries.ts) — both mean "not a licensed/
+ * resold copy" to the PMF `source` field (research D2), so it stays the fixed
+ * `"self_built"` regardless of `creationSource`.
+ */
+export async function persistNewItinerary(
+  db: Db,
+  session: AgentSessionContext,
+  params: { document: Itinerary; tripRequest: TripRequest; creationSource: "manual" | "ai_drafted" },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(itineraryTable).values({
+      id: params.document.id,
+      agencyId: session.agencyId,
+      title: params.document.title,
+      currency: params.document.currency,
+      document: params.document,
+      tripRequest: params.tripRequest,
+      creationSource: params.creationSource,
+    });
+    await recordPmfEvent(tx, {
+      type: "trip_created",
+      agencyId: session.agencyId,
+      itineraryId: params.document.id,
+      source: "self_built",
+      actorUserId: session.userId,
+    });
+  });
+}
+
+/**
  * Selection (spec 019 US2/contracts/select-draft-subscription.md): re-runs the
  * SAME pipeline for `input.tripRequest` (fresh supply verification per FR-008
  * — inventory may have changed since comparison), then persists exactly the
@@ -338,24 +384,7 @@ export async function* selectDraftOption(container: Container, session: AgentSes
     }
 
     const document = stampProvenance(chosen.itinerary, session.agencyId);
-    await db.transaction(async (tx) => {
-      await tx.insert(itineraryTable).values({
-        id: document.id,
-        agencyId: session.agencyId,
-        title: document.title,
-        currency: document.currency,
-        document,
-        tripRequest: input.tripRequest,
-        creationSource: "ai_drafted",
-      });
-      await recordPmfEvent(tx, {
-        type: "trip_created",
-        agencyId: session.agencyId,
-        itineraryId: document.id,
-        source: "self_built",
-        actorUserId: session.userId,
-      });
-    });
+    await persistNewItinerary(db, session, { document, tripRequest: input.tripRequest, creationSource: "ai_drafted" });
 
     yield { type: "result", outcome: { status: "drafted", itinerary: document, fit: chosen.fit } };
   }

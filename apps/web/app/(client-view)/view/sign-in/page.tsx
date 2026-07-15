@@ -8,10 +8,10 @@
 // a sign-in page either way) is redirected straight back to where they came
 // from.
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSessionContext } from "../../../../lib/auth.js";
 import { ClientSignInForm } from "./client-sign-in-form.js";
+import { resolveClientAuthReturnTo } from "../resolve-client-auth-return-to.js";
+import { ClientAuthShell } from "../client-auth-shell.js";
 
 export const dynamic = "force-dynamic";
 
@@ -21,27 +21,19 @@ interface PageProps {
 
 export default async function ClientSignInPage({ searchParams }: PageProps) {
   const { token } = await searchParams;
-  const returnTo = token ? `/view/${token}` : "/view";
-
-  const session = await getSessionContext(await headers());
-  if (session) {
-    redirect(returnTo);
-  }
+  const returnTo = await resolveClientAuthReturnTo(token, await headers());
 
   return (
-    <div data-plain className="tf-client-root">
-      <main className="tf-auth-shell">
-        <div className="tf-auth-card">
-          <p className="tf-auth-tagline">Sign in to have your name and email fill in automatically.</p>
-          <div className="tf-card">
-            <ClientSignInForm returnTo={returnTo} />
-          </div>
-          <p className="tf-auth-foot">
-            New here?{" "}
-            <Link href={`/view/sign-up${token ? `?token=${token}` : ""}`}>Create an account</Link>
-          </p>
-        </div>
-      </main>
-    </div>
+    <ClientAuthShell
+      tagline="Sign in to have your name and email fill in automatically."
+      footer={
+        <>
+          New here?{" "}
+          <Link href={`/view/sign-up${token ? `?token=${token}` : ""}`}>Create an account</Link>
+        </>
+      }
+    >
+      <ClientSignInForm returnTo={returnTo} />
+    </ClientAuthShell>
   );
 }

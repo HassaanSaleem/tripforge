@@ -137,6 +137,16 @@ describe.skipIf(!DATABASE_URL)("L3 traveler trip history (real Postgres)", () =>
   );
 
   it(
+    "US1: myTrips is an empty array for a signed-in traveler who has never opened a trip link (my-trips-empty-state-nav)",
+    async () => {
+      const traveler = await makeTraveler("Fresh Traveler", `fresh-${randomUUID()}@example.test`);
+      const trips = await callerFor(traveler).clientView.myTrips();
+      expect(trips).toEqual([]);
+    },
+    LONG,
+  );
+
+  it(
     "US1: myTrips after attachTrip matches resolveShareLink's own projection for the same token (FR-003)",
     async () => {
       const agent = await makeAgency("Sintra Escapes");

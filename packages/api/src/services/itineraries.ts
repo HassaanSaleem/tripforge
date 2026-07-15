@@ -13,7 +13,6 @@ import {
   itinerary as itineraryTable,
   marketplaceListing,
   organization,
-  recordPmfEvent,
   scopedWhere,
   type Db,
 } from "@tripforge/db";
@@ -33,7 +32,15 @@ import type {
   HotelSuggestion,
 } from "@tripforge/llm";
 import type { AgentSessionContext, Container } from "../context.js";
-import { plannerToolDeps, tripRequestSchema, verifiedSupplyCatalog, type TripRequest } from "./planner.js";
+import {
+  checkOutAfterCheckIn,
+  persistNewItinerary,
+  plannerToolDeps,
+  tripBasicsShape,
+  tripRequestSchema,
+  verifiedSupplyCatalog,
+  type TripRequest,
+} from "./planner.js";
 import { findRate } from "../rates.js";
 
 interface MyItineraryListing {
@@ -196,16 +203,16 @@ async function persistDocument(db: Db, itineraryId: string, document: Itinerary)
     .where(eq(itineraryTable.id, itineraryId));
 }
 
-/** Push `mediaRef` onto `target`'s array, deduping by id (research D4) — attaching
- * an already-attached asset to the same target is a no-op, not a duplicate. */
-function withMediaAttached(
+/** Replace `target`'s media array (gallery or one item's) via `updateRefs`,
+ * shared by attach/detach below — the gallery-vs-item branch and the
+ * day/item walk are identical either way; only the array update differs. */
+function updateMediaTarget(
   document: Itinerary,
   target: MediaTarget,
-  mediaRef: MediaRef,
+  updateRefs: (refs: readonly MediaRef[]) => MediaRef[],
 ): { document: Itinerary; itemFound: boolean } {
   if (target.scope === "gallery") {
-    const already = document.media.some((m) => m.id === mediaRef.id);
-    return { document: already ? document : { ...document, media: [...document.media, mediaRef] }, itemFound: true };
+    return { document: { ...document, media: updateRefs(document.media) }, itemFound: true };
   }
   let itemFound = false;
   const days = document.days.map((day) => ({
@@ -213,11 +220,22 @@ function withMediaAttached(
     items: day.items.map((item) => {
       if (item.id !== target.itemId) return item;
       itemFound = true;
-      const already = item.media.some((m) => m.id === mediaRef.id);
-      return already ? item : { ...item, media: [...item.media, mediaRef] };
+      return { ...item, media: updateRefs(item.media) };
     }),
   }));
   return { document: { ...document, days }, itemFound };
+}
+
+/** Push `mediaRef` onto `target`'s array, deduping by id (research D4) — attaching
+ * an already-attached asset to the same target is a no-op, not a duplicate. */
+function withMediaAttached(
+  document: Itinerary,
+  target: MediaTarget,
+  mediaRef: MediaRef,
+): { document: Itinerary; itemFound: boolean } {
+  return updateMediaTarget(document, target, (refs) =>
+    refs.some((m) => m.id === mediaRef.id) ? [...refs] : [...refs, mediaRef],
+  );
 }
 
 /** Filter `mediaRefId` out of `target`'s array — absent id is a no-op (detach
@@ -227,19 +245,7 @@ function withMediaDetached(
   target: MediaTarget,
   mediaRefId: string,
 ): { document: Itinerary; itemFound: boolean } {
-  if (target.scope === "gallery") {
-    return { document: { ...document, media: document.media.filter((m) => m.id !== mediaRefId) }, itemFound: true };
-  }
-  let itemFound = false;
-  const days = document.days.map((day) => ({
-    ...day,
-    items: day.items.map((item) => {
-      if (item.id !== target.itemId) return item;
-      itemFound = true;
-      return { ...item, media: item.media.filter((m) => m.id !== mediaRefId) };
-    }),
-  }));
-  return { document: { ...document, days }, itemFound };
+  return updateMediaTarget(document, target, (refs) => refs.filter((m) => m.id !== mediaRefId));
 }
 
 /**
@@ -543,16 +549,10 @@ export const createManualItineraryInputSchema = z
   .strictObject({
     title: z.string().min(1),
     currency: z.string().length(3).toUpperCase(),
-    destination: z.string().min(1),
-    checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
-    checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
-    party: z.strictObject({
-      adults: z.number().int().min(1),
-      children: z.number().int().min(0).default(0),
-    }),
+    ...tripBasicsShape,
     days: z.array(manualDayInputSchema).default([]),
   })
-  .refine((v) => v.checkOut > v.checkIn, { message: "checkOut must be after checkIn" });
+  .refine(checkOutAfterCheckIn, { message: "checkOut must be after checkIn" });
 export type CreateManualItineraryInput = z.infer<typeof createManualItineraryInputSchema>;
 
 export type CreateManualItineraryOutcome = { status: "created"; itinerary: Itinerary };
@@ -588,12 +588,12 @@ function buildManualDay(day: ManualDayInput): Record<string, unknown> {
 }
 
 /**
- * Persist a hand-built itinerary (contracts/manual-itinerary.md). ONE
- * transaction, mirroring `selectDraftOption`'s persist step
- * (packages/api/src/services/planner.ts) — insert + the SAME `trip_created`
- * PMF event, `source: "self_built"` UNCHANGED (research D2: AI-drafted and
- * manual trips both mean "not a licensed/resold copy" to that field).
- * `creationSource: "manual"` is the separate, new origin signal (research D3).
+ * Persist a hand-built itinerary (contracts/manual-itinerary.md) via the
+ * shared `persistNewItinerary` (packages/api/src/services/planner.ts) —
+ * insert + the SAME `trip_created` PMF event, `source: "self_built"`
+ * UNCHANGED (research D2: AI-drafted and manual trips both mean "not a
+ * licensed/resold copy" to that field). `creationSource: "manual"` is the
+ * separate, new origin signal (research D3).
  */
 export async function createManualItinerary(
   container: Container,
@@ -628,24 +628,7 @@ export async function createManualItinerary(
     budget: { mode: "target", amountMinor: 1, currency: input.currency },
   });
 
-  await db.transaction(async (tx) => {
-    await tx.insert(itineraryTable).values({
-      id: document.id,
-      agencyId: session.agencyId,
-      title: document.title,
-      currency: document.currency,
-      document,
-      tripRequest,
-      creationSource: "manual",
-    });
-    await recordPmfEvent(tx, {
-      type: "trip_created",
-      agencyId: session.agencyId,
-      itineraryId: document.id,
-      source: "self_built",
-      actorUserId: session.userId,
-    });
-  });
+  await persistNewItinerary(db, session, { document, tripRequest, creationSource: "manual" });
 
   return { status: "created", itinerary: document };
 }

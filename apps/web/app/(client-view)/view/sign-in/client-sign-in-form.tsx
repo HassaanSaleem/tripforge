@@ -9,7 +9,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithEmail } from "../../../../lib/auth-client.js";
-import { CredentialsFields, useSubmitState } from "../../../../lib/auth-form.js";
+import { CredentialsFields, SubmitButton, SubmitError, useSubmitState } from "../../../../lib/auth-form.js";
 
 export function ClientSignInForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
@@ -37,10 +37,8 @@ export function ClientSignInForm({ returnTo }: { returnTo: string }) {
         onPasswordChange={setPassword}
         passwordAutoComplete="current-password"
       />
-      {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" className="tf-btn--cta" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
-      </button>
+      <SubmitError error={error} />
+      <SubmitButton pending={pending} pendingLabel="Signing in…" label="Sign in" />
     </form>
   );
 }

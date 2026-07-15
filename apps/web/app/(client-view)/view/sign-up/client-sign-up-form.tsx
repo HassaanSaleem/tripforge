@@ -9,7 +9,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signUpWithEmail } from "../../../../lib/auth-client.js";
-import { CredentialsFields, useSubmitState } from "../../../../lib/auth-form.js";
+import { CredentialsFields, SubmitButton, SubmitError, useSubmitState } from "../../../../lib/auth-form.js";
 
 export function ClientSignUpForm({ returnTo }: { returnTo: string }) {
   const router = useRouter();
@@ -47,10 +47,8 @@ export function ClientSignUpForm({ returnTo }: { returnTo: string }) {
         onPasswordChange={setPassword}
         passwordAutoComplete="new-password"
       />
-      {error ? <p role="alert">{error}</p> : null}
-      <button type="submit" className="tf-btn--cta" disabled={pending}>
-        {pending ? "Creating…" : "Create account"}
-      </button>
+      <SubmitError error={error} />
+      <SubmitButton pending={pending} pendingLabel="Creating…" label="Create account" />
     </form>
   );
 }
