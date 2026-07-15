@@ -33,6 +33,8 @@ import {
   type ChatEditRequest,
   type DraftItineraryRequest,
   type DraftProgressEvent,
+  type InterpretTripRequestRequest,
+  type InterpretTripRequestResult,
   type LlmCompleteRequest,
   type LlmCompleteResponse,
   type LLMPort,
@@ -59,6 +61,10 @@ class SloppyCriteriaLLM implements LLMPort {
   }
 
   chatEditItinerary(_req: ChatEditRequest): AsyncGenerator<ChatEditProgressEvent> {
+    throw new Error("not used by the planner draft path");
+  }
+
+  async interpretTripRequest(_req: InterpretTripRequestRequest): Promise<InterpretTripRequestResult> {
     throw new Error("not used by the planner draft path");
   }
 

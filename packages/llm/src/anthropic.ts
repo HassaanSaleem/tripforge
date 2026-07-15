@@ -12,17 +12,20 @@ import type {
   DraftItineraryRequest,
   DraftProgressEvent,
   DraftStep,
+  InterpretTripRequestRequest,
   LlmUsage,
   PlannerTripRequest,
 } from "./port.js";
 import type { NamedPlannerDrafts } from "./planner-draft.js";
 import type { ChatEditPropose } from "./chat-edit.js";
+import type { InterpretTripRequestPropose, InterpretTripRequestResult } from "./interpret-trip-request.js";
 import { searchHotelRatesTool } from "./tools/search-hotel-rates.js";
 import { searchActivitiesTool } from "./tools/search-activities.js";
 import { quoteTransferTool } from "./tools/quote-transfer.js";
 import { quoteCarRentalTool } from "./tools/quote-car-rental.js";
 import { submitItineraryDraftsTool } from "./tools/submit-itinerary-drafts.js";
 import { proposeItineraryEditTool } from "./tools/propose-itinerary-edit.js";
+import { interpretTripRequestTool } from "./tools/interpret-trip-request.js";
 
 export interface AnthropicLLMOptions {
   apiKey: string;
@@ -86,6 +89,23 @@ const CHAT_EDIT_TOOL_NAME_TO_STEP: Record<string, ChatEditStep> = {
   quote_transfer: "searchingOptions",
   propose_itinerary_edit: "searchingOptions",
 };
+
+// Stable chat-first interpretation instructions (spec 028) — kept free of
+// per-request values so the prompt prefix stays cacheable (INV-013). No
+// supply tools are offered here (research.md D2): this call never searches
+// inventory, it only maps text to request parameters.
+const INTERPRET_TRIP_REQUEST_SYSTEM = [
+  "You are a travel-agency assistant turning ONE chat message into a trip-planning",
+  "request. Identify a destination and a total budget amount in the message.",
+  "If BOTH are present, call interpret_trip_request with `params` filled in — use",
+  "sensible defaults for anything else the message doesn't state (2 adults, 0",
+  "children, no style preference, 4 nights, EUR currency).",
+  "If either a destination or a budget amount is missing, call",
+  "interpret_trip_request with `params` null and a `reply` asking for exactly what's",
+  "missing. Finish by calling interpret_trip_request exactly once.",
+].join("\n");
+
+const INTERPRET_MAX_TOKENS = 1024;
 
 function chatEditUserPrompt(req: ChatEditRequest): string {
   const itemLines = req.items.length
@@ -233,5 +253,47 @@ export class AnthropicLLM implements LLMPort {
       return;
     }
     yield { type: "result", result: { status: "interpreted", ...captured, usage } };
+  }
+
+  /** ONE forced tool call — no runner loop needed (research.md D2): no
+   * supply search happens while interpreting a chat-first trip request, so
+   * this mirrors complete()'s single-call shape rather than
+   * draftItinerary/chatEditItinerary's streamed tool-loop shape. */
+  async interpretTripRequest(req: InterpretTripRequestRequest): Promise<InterpretTripRequestResult> {
+    let captured: InterpretTripRequestPropose | undefined;
+    const runner = this.client.beta.messages.toolRunner({
+      model: LLM_MODEL,
+      max_tokens: INTERPRET_MAX_TOKENS,
+      max_iterations: 1,
+      system: INTERPRET_TRIP_REQUEST_SYSTEM,
+      messages: [{ role: "user", content: req.message }],
+      tool_choice: { type: "tool", name: "interpret_trip_request" },
+      tools: [
+        interpretTripRequestTool((propose) => {
+          captured = propose;
+        }),
+      ],
+      // NOTE: no `effort` param — unsupported on Haiku 4.5 (INV-013).
+    });
+
+    const usage: LlmUsage = { inputTokens: 0, outputTokens: 0 };
+    try {
+      for await (const message of runner) {
+        usage.inputTokens += message.usage.input_tokens;
+        usage.outputTokens += message.usage.output_tokens;
+      }
+    } catch {
+      this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
+      return { status: "failed", reason: "malformed_output" };
+    }
+    this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
+
+    if (!captured) {
+      return { status: "failed", reason: "malformed_output" };
+    }
+    if (!captured.params) {
+      return { status: "needsInfo", reply: captured.reply, usage };
+    }
+    return { status: "resolved", params: captured.params, usage };
   }
 }

@@ -21,6 +21,9 @@ export type { BookOutcome, HeldQuote } from "./services/booking.js";
 // DraftEvent/DraftOutcome's pre-existing shape; SelectDraftInput is the
 // selectDraft procedure's own input type — same TS4023 nameability need.
 export type { DraftEvent, DraftOutcome, CompareEvent, CompareOutcome, DraftOption, SelectDraftInput } from "./services/planner.js";
+// Chat-first entry outcome type surfaced the same way (spec 028, TS4023):
+// interpretChatRequest is a mutation riding the inferred AppRouter type.
+export type { InterpretChatOutcome } from "./services/planner.js";
 // Marketplace-picker projection surfaced the same way (spec 011). Attach/
 // detach outcome types surfaced the same way (spec 015). Chat-edit outcome
 // types surfaced the same way (spec 020): chatEdit is a subscription and

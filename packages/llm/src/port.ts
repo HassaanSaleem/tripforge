@@ -18,6 +18,7 @@ import type {
 } from "@tripforge/supply-adapter";
 import type { NamedPlannerDraft } from "./planner-draft.js";
 import type { ChatEditResult } from "./chat-edit.js";
+import type { InterpretTripRequestResult } from "./interpret-trip-request.js";
 import type { LlmUsage } from "./usage.js";
 
 // Re-exported from the leaf usage module so the metering type stays reachable
@@ -133,6 +134,20 @@ export type ChatEditProgressEvent =
   | { type: "progress"; step: ChatEditStep }
   | { type: "result"; result: ChatEditResult };
 
+// ─── Chat-first trip-request interpretation (spec 028) ───────────────────────
+// A single chat message, mapped to the SAME parameter set the structured
+// planner form already collects (destination/dates/party/style/budget) — or
+// a clarifying reply when a destination or budget could not be identified.
+// Deliberately NOT a tool loop (no supply search happens here, INV-005/D2 of
+// specs/028-chat-first-entry/research.md) — a plain Promise, mirroring
+// complete()'s shape, not draftItinerary/chatEditItinerary's streamed shape.
+
+export interface InterpretTripRequestRequest {
+  /** Why this call is being made — recorded in metering (INV-013). */
+  purpose: string;
+  message: string;
+}
+
 export interface LLMPort {
   complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse>;
   /** Draft 1-3 labeled trip options through tool-driven supply lookups (spec
@@ -144,4 +159,8 @@ export interface LLMPort {
    * itinerary (spec 020). Yields zero or more progress events followed by
    * exactly one terminal result event. */
   chatEditItinerary(req: ChatEditRequest): AsyncGenerator<ChatEditProgressEvent>;
+  /** Interpret one chat message into a trip request (spec 028) — the
+   * chat-first entry point's ONLY LLM call. Single-shot, non-streamed: no
+   * supply search runs during interpretation. */
+  interpretTripRequest(req: InterpretTripRequestRequest): Promise<InterpretTripRequestResult>;
 }

@@ -25,6 +25,7 @@ import {
   type SelectDraftOutput,
 } from "../../../lib/trpc/client.js";
 import { BookingFlow } from "./booking-flow.js";
+import { ChatEntry } from "./chat-entry.js";
 import { ChatPanel } from "./chat-panel.js";
 import { FlightsCard } from "./flights-card.js";
 import { ItineraryDays } from "./itinerary-days.js";
@@ -156,15 +157,13 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
     setValues((current) => ({ ...current, [field]: value }));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  // The ONE place that calls the draft subscription (spec 028 research.md
+  // D5) — both the structured form (handleSubmit below) and the chat-first
+  // entry point (ChatEntry) call this same function, so the compare/select/
+  // book/share/refine flow downstream is byte-identical regardless of which
+  // entry produced the tripRequest.
+  function startDraft(tripRequest: DraftInput) {
     if (busy) return;
-    const mapped = toTripRequest(values);
-    if ("error" in mapped) {
-      setView({ phase: "failed", message: mapped.error });
-      return;
-    }
-    const tripRequest = mapped.request;
     activeSubscription.current?.unsubscribe();
     setView({ phase: "drafting" });
     activeSubscription.current = trpc.workspace.itinerary.draft.subscribe(tripRequest, {
@@ -194,6 +193,17 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
         );
       },
     });
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const mapped = toTripRequest(values);
+    if ("error" in mapped) {
+      setView({ phase: "failed", message: mapped.error });
+      return;
+    }
+    startDraft(mapped.request);
   }
 
   // Reflect a chat-applied edit (spec 020) into the SAME drafted outcome the
@@ -393,6 +403,11 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
           {drafting ? "Drafting…" : "Draft itinerary"}
         </button>
       </form>
+
+      {/* Chat-first entry (spec 028) — an alternative to the form above,
+          visible only before any draft attempt has started; startDraft is
+          the SAME function the form's handleSubmit calls (research.md D5). */}
+      {view.phase === "idle" ? <ChatEntry onResolved={startDraft} /> : null}
 
       {view.phase === "drafting" ? (
         <p className="tf-drafting" aria-live="polite">

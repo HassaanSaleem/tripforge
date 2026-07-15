@@ -43,6 +43,15 @@ export type SelectDraftEvent = inferSubscriptionOutput<AppRouter["workspace"]["i
 export type SelectDraftOutput = Extract<SelectDraftEvent, { type: "result" }>["outcome"];
 
 /**
+ * Chat-first entry types via the same inference (spec 028): the server's
+ * InterpretChatOutcome union stays un-exported; inference keeps the browser
+ * exactly in sync with the deployed contract. A `resolved` output's
+ * `tripRequest` is the SAME `DraftInput` shape above.
+ */
+export type InterpretChatRequestInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["interpretChatRequest"];
+export type InterpretChatRequestOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["interpretChatRequest"];
+
+/**
  * Chat-edit input/outcome types via the same inference (spec 020): the
  * server's ChatEditOutcome/ApplyChatEditOutcome unions stay un-exported;
  * inference keeps the browser exactly in sync with the deployed contract.

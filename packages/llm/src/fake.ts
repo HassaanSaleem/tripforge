@@ -15,6 +15,7 @@ import {
   type DraftItineraryRequest,
   type DraftItineraryResult,
   type DraftProgressEvent,
+  type InterpretTripRequestRequest,
   type LLMPort,
   type LlmCompleteRequest,
   type LlmCompleteResponse,
@@ -28,6 +29,69 @@ import {
   type PlannerDraftItem,
 } from "./planner-draft.js";
 import type { ChatEditResult, HotelSuggestion } from "./chat-edit.js";
+import type { InterpretedTripParams, InterpretTripRequestResult } from "./interpret-trip-request.js";
+
+const CURRENCY_SYMBOLS: Record<string, string> = { "$": "USD", "€": "EUR", "£": "GBP" };
+
+/** Deterministic destination extraction (spec 028, research.md D7) — text
+ * following "in"/"to", cut at the next clause boundary. Operates on the
+ * ORIGINAL-case message so a returned destination reads naturally (supply
+ * search is case-insensitive at the sandbox layer). */
+function extractDestination(raw: string): string | null {
+  const match = raw.match(/\b(?:in|to)\s+([A-Za-z][A-Za-z\s'-]*?)(?=\s+for\b|\s+with\b|,|$)/i);
+  const destination = match?.[1]?.trim();
+  return destination && destination.length > 0 ? destination : null;
+}
+
+/** Deterministic budget extraction — currency symbol/code adjacent to an
+ * amount, either order ("EUR2000", "$2000", "2000 EUR"). */
+function extractBudget(text: string): { amount: number; currency: string } | null {
+  const before = text.match(/(eur|usd|gbp|\$|€|£)\s*([\d,]+(?:\.\d+)?)/i);
+  if (before?.[1] && before[2]) {
+    const token = before[1].toLowerCase();
+    const currency = CURRENCY_SYMBOLS[token] ?? token.toUpperCase();
+    const amount = Number.parseFloat(before[2].replace(/,/g, ""));
+    return Number.isFinite(amount) && amount > 0 ? { amount, currency } : null;
+  }
+  const after = text.match(/([\d,]+(?:\.\d+)?)\s*(eur|usd|gbp)\b/i);
+  if (after?.[1] && after[2]) {
+    const amount = Number.parseFloat(after[1].replace(/,/g, ""));
+    const currency = after[2].toUpperCase();
+    return Number.isFinite(amount) && amount > 0 ? { amount, currency } : null;
+  }
+  return null;
+}
+
+/** "N days"/"N nights" -> a nights count (days convert via days-1, min 1,
+ * research.md D7); absent when the message states neither. */
+function extractNights(text: string): number | null {
+  const match = text.match(/(\d+)\s*(day|days|night|nights)\b/);
+  if (!match?.[1] || !match[2]) return null;
+  const count = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(count) || count <= 0) return null;
+  const nights = match[2].startsWith("day") ? Math.max(1, count - 1) : count;
+  return Math.min(30, nights);
+}
+
+/** "for N" (party size) — never matches when immediately followed by a
+ * day/night unit, so "for 2 nights" isn't mistaken for 2 travelers. */
+function extractAdults(text: string): number | null {
+  const match = text.match(/\bfor\s+(\d+)\b(?!\s*(?:day|days|night|nights)\b)/);
+  if (!match?.[1]) return null;
+  const count = Number.parseInt(match[1], 10);
+  return Number.isFinite(count) && count > 0 ? count : null;
+}
+
+function extractTripStyle(text: string): "balanced" | "budget" | "premium" | null {
+  if (/\b(boutique|luxury|upscale|premium)\b/.test(text)) return "premium";
+  // Deliberately NOT bare "budget" — that word overwhelmingly names the
+  // money amount ("budget of $3000"), not a style preference; only more
+  // specific phrasing signals the budget-savvy STYLE.
+  if (/\b(cheap|backpack|shoestring|budget-friendly|budget-savvy)\b/.test(text) || /\bon a budget\b/.test(text)) {
+    return "budget";
+  }
+  return null;
+}
 
 export interface FakeLLMOptions {
   /** Canned complete() responses (consumed in order). */
@@ -332,5 +396,35 @@ export class FakeLLM implements LLMPort {
     }
 
     yield { type: "result", result: clarify(CLARIFY_REPLY) };
+  }
+
+  /** Deterministic regex/keyword chat-first interpreter (spec 028,
+   * research.md D7) — zero `Math.random()`, zero wall-clock read (dates are
+   * resolved one layer up, in packages/api, never here — research.md D3).
+   * Resolves only when BOTH a destination and a budget amount are found;
+   * everything else defaults (research.md D4). */
+  async interpretTripRequest(req: InterpretTripRequestRequest): Promise<InterpretTripRequestResult> {
+    const usage = { inputTokens: 0, outputTokens: 0 };
+    const text = req.message.toLowerCase();
+
+    const destination = extractDestination(req.message);
+    if (!destination) {
+      return { status: "needsInfo", reply: "Which destination would you like to plan for?", usage };
+    }
+    const budget = extractBudget(text);
+    if (!budget) {
+      return { status: "needsInfo", reply: `What's your budget for the trip to ${destination}?`, usage };
+    }
+
+    const params: InterpretedTripParams = {
+      destination,
+      nights: extractNights(text) ?? 4,
+      adults: extractAdults(text) ?? 2,
+      children: 0,
+      tripStyle: extractTripStyle(text),
+      budgetMajor: budget.amount,
+      currency: budget.currency,
+    };
+    return { status: "resolved", params, usage };
   }
 }

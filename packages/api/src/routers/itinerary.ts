@@ -6,7 +6,13 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { ChatEditProposalSchema } from "@tripforge/llm";
 import { router, agentProcedure } from "../trpc.js";
-import { draftOptions, selectDraftInputSchema, selectDraftOption, tripRequestSchema } from "../services/planner.js";
+import {
+  draftOptions,
+  interpretChatTripRequest,
+  selectDraftInputSchema,
+  selectDraftOption,
+  tripRequestSchema,
+} from "../services/planner.js";
 import { itineraryOverview } from "../services/booking.js";
 import { applyChatEdit, attachMedia, detachMedia, interpretChatEdit, listItineraries } from "../services/itineraries.js";
 import { createShareLink, shareInputSchema } from "../services/client-view.js";
@@ -21,6 +27,8 @@ const mediaTargetSchema = z.discriminatedUnion("scope", [
 ]);
 
 const chatEditInputSchema = z.strictObject({ itineraryId: z.uuid(), message: z.string().min(1) });
+
+const interpretChatRequestInputSchema = z.strictObject({ message: z.string().min(1) });
 
 const applyChatEditInputSchema = z.strictObject({ itineraryId: z.uuid(), edit: ChatEditProposalSchema });
 
@@ -45,6 +53,16 @@ export const itineraryRouter = router({
   draft: agentProcedure
     .input((value) => tripRequestSchema.parse(value))
     .subscription(({ ctx, input }) => draftOptions(ctx.container, ctx.session, input)),
+
+  /** Chat-first entry (spec 028 contracts/interpret-chat-request-mutation.md):
+   * interpret ONE chat message into the SAME TripRequest shape `draft` above
+   * already accepts. A plain mutation, not a subscription — no supply search
+   * runs during interpretation (research.md D2). On `resolved`, the client
+   * feeds the returned `tripRequest` straight into `draft` — zero forking of
+   * the compare-then-choose pipeline. */
+  interpretChatRequest: agentProcedure
+    .input((value) => interpretChatRequestInputSchema.parse(value))
+    .mutation(({ ctx, input }) => interpretChatTripRequest(ctx.container, ctx.session, input)),
 
   /** Persist exactly the option the agent picked from `draft`'s compare view
    * (spec 019 US2). Re-runs the same pipeline (fresh supply verification,

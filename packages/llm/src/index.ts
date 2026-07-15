@@ -16,9 +16,16 @@ export type {
   ChatEditRequest,
   ChatEditStep,
   ChatEditProgressEvent,
+  InterpretTripRequestRequest,
 } from "./port.js";
 export { ChatEditProposalSchema, HotelSuggestionSchema, ChatEditProposeSchema } from "./chat-edit.js";
 export type { ChatEditProposal, HotelSuggestion, ChatEditPropose, ChatEditResult } from "./chat-edit.js";
+export { InterpretedTripParamsSchema, InterpretTripRequestProposeSchema } from "./interpret-trip-request.js";
+export type {
+  InterpretedTripParams,
+  InterpretTripRequestPropose,
+  InterpretTripRequestResult,
+} from "./interpret-trip-request.js";
 export {
   PlannerDraftSchema,
   PlannerDraftItemSchema,

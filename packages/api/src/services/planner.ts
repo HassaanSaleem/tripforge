@@ -359,3 +359,71 @@ export async function* selectDraftOption(container: Container, session: AgentSes
     yield { type: "result", outcome: { status: "drafted", itinerary: document, fit: chosen.fit } };
   }
 }
+
+// ─── Chat-first entry (spec 028) ───────────────────────────────────────────
+// Interprets ONE chat message into the SAME TripRequest shape the structured
+// form produces (research.md D1) — no schema change, no money-path change;
+// the resulting TripRequest feeds the EXISTING draftOptions/selectDraftOption
+// pipeline unchanged, via the client's own subsequent `draft` call.
+
+export type InterpretChatOutcome =
+  | { status: "resolved"; tripRequest: TripRequest }
+  | { status: "needsInfo"; reply: string }
+  | { status: "failed"; reason: "malformed_output" };
+
+/** The LLM boundary only returns a duration (`nights`), never absolute dates
+ * (research.md D3) — "now" is resolved here, one layer above the LLM
+ * package. A fixed near-term horizon, not a clock port — `Container` has no
+ * injected clock today, matching services/booking's own direct
+ * Date.now()/new Date() use. */
+const CHAT_ENTRY_CHECK_IN_OFFSET_DAYS = 21;
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Mirrors apps/web/lib/planner-form.ts's `currencyFractionDigits` — kept as
+ * a small, independently duplicated pure function rather than a new
+ * cross-package export (research.md D8): packages/api cannot import from
+ * apps/web, and extracting a shared package for one 3-line helper is not
+ * justified by this feature's scope (constitution Simplicity Default). */
+function currencyFractionDigits(currency: string): number {
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
+export async function interpretChatTripRequest(
+  container: Container,
+  _session: AgentSessionContext,
+  input: { message: string },
+): Promise<InterpretChatOutcome> {
+  const result = await container.llm.interpretTripRequest({ purpose: "planner.chatEntry", message: input.message });
+  if (result.status === "needsInfo") {
+    return { status: "needsInfo", reply: result.reply };
+  }
+  if (result.status === "failed") {
+    return { status: "failed", reason: result.reason };
+  }
+
+  const { params } = result;
+  const checkIn = new Date(Date.now() + CHAT_ENTRY_CHECK_IN_OFFSET_DAYS * 86_400_000);
+  const checkOut = new Date(checkIn.getTime() + params.nights * 86_400_000);
+  const currency = params.currency.toUpperCase();
+  const amountMinor = Math.round(params.budgetMajor * 10 ** currencyFractionDigits(currency));
+
+  const parsed = tripRequestSchema.safeParse({
+    destination: params.destination,
+    checkIn: isoDate(checkIn),
+    checkOut: isoDate(checkOut),
+    party: { adults: params.adults, children: params.children },
+    ...(params.tripStyle ? { tripStyle: params.tripStyle } : {}),
+    budget: { mode: "hardCap", amountMinor, currency },
+  });
+  if (!parsed.success) {
+    return { status: "failed", reason: "malformed_output" };
+  }
+  return { status: "resolved", tripRequest: parsed.data };
+}
