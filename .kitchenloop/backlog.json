@@ -1228,9 +1228,10 @@
     "type": "chore",
     "title": "Quality sweep on the new consumer-surface code (specs 028-031)",
     "body": "Targeted clean-code sweep over the 4 features shipped this drive (028 chat-first entry, 029 bring-your-own itinerary, 030 traveler accounts, 031 trip history): run knip (dead/unused exports), jscpd (duplication), and dependency-cruiser (INV-017 layer boundaries) scoped to the touched files (packages/api/src/services/{client-view,itineraries,planner}.ts, routers, packages/llm interpret-trip-request, apps/web (client-view) surfaces). Remove/inline dead exports, de-duplicate any copy-paste across the new surfaces, confirm no boundary violations. NO behavior change; export-surface + structure only. Acceptance: knip/jscpd/depcruise clean on the touched files; L1/L2/L3 + lint green; no product behavior diff.",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-16T00:45:00Z",
-    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/84"
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/84",
+    "merge_commit": "252e5fb47798"
   },
   {
     "id": "my-trips-empty-state-nav",
