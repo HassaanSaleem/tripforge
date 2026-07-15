@@ -1207,8 +1207,18 @@
     "body": "Non-blocking SPEC-SILENT from pr-auditor on PR #82. packages/api/src/services/client-view.ts listTravelerTrips does N sequential resolveShareLink calls (one per linked trip), unbounded/unpaginated. Plan.md acknowledges as v0 bounded-by-one-traveler's-visit-count (research D3, YAGNI). Add pagination/batching if a traveler's history grows large. Low priority.",
     "type": "chore",
     "priority": "low",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-15T16:30:00Z",
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/83"
+  },
+  {
+    "id": "e2e-traveler-trip-history-signout-hang",
+    "title": "e2e traveler-trip-history-journey.spec.ts hangs 10min on sign-out/sign-in step (reproduces on clean main)",
+    "body": "BUG, found during perf-031-mytrips-pagination live-test verification (iteration 7). tests/e2e/traveler-trip-history-journey.spec.ts (spec 031) test.step \"history persists across sign-out/sign-in (spec.md edge case)\" hangs for the FULL 600000ms test timeout, then dies with \"browserContext.close: Test ended\" instead of completing. Deterministic: reproduced identically 3/3 times, including against a CLEAN origin/main baseline built + booted in an isolated worktree/compose project (commit 9c0d315, unmodified) -- confirmed NOT caused by the perf-031 batching change, pre-existing since the feature landed (PR #82, spec 031).\n\nRoot-cause HYPOTHESIS (not yet confirmed): the test keeps the AGENT browser context/page alive and open the whole run (never closed) while a SEPARATE traveler browser context signs out and back in and re-fetches /view/my-trips -- i.e. two real concurrent sessions against the SAME single-process compose web container. packages/db/src/client.ts constructs new Pool({ connectionString }) with NO max (pg default 10) and NO connectionTimeoutMillis (pg default 0 = wait forever). If any connection is held open across the run (e.g. the seed-0014 SSE draftItinerary stream not releasing its connection promptly after the client navigates away) the pool can exhaust under concurrent agent+traveler load, and any later query silently queues FOREVER instead of erroring -- matching the exact symptom (no error, no partial progress, dies only when the outer test timeout force-kills the browser).\n\nManually walked the equivalent sign-out -> sign-in -> /view/my-trips sequence by hand via Playwright MCP against the SAME running stack (single browser session, no concurrent agent session held open) and it completed instantly with correct results both times -- consistent with the concurrency/pool-exhaustion hypothesis rather than a per-request logic bug.\n\nRepro: BASE_URL=http://localhost:3000 npx playwright test tests/e2e/traveler-trip-history-journey.spec.ts against a freshly booted compose stack. Investigate: (1) confirm/refute the pool-exhaustion hypothesis (log pool.totalCount/idleCount/waitingCount around the hang, or add connectionTimeoutMillis to fail loud instead of hanging silently as a first diagnostic step), (2) check the SSE draft stream (packages/api draftItinerary AsyncGenerator, seed-0014/PR #51) releases its DB connection promptly when the client navigates away mid-stream or the generator is not fully drained, (3) once root-caused, fix + add a regression test that pins connection release under a client-abandoned stream.",
+    "type": "bug",
+    "priority": "high",
+    "state": "todo",
+    "created": "2026-07-15T20:20:00Z",
     "pr_url": null
   }
 ]

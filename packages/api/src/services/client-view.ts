@@ -21,12 +21,14 @@ import { parseItinerary, type Itinerary, type MediaRef } from "@tripforge/itiner
 import {
   desc,
   eq,
+  inArray,
   bookingComponent as bookingComponentTable,
   clientTripLink as clientTripLinkTable,
   getOrganizationName,
   getUserIdentity,
   itinerary as itineraryTable,
   itineraryShareLink as itineraryShareLinkTable,
+  organization,
   scopedWhere,
 } from "@tripforge/db";
 import type { Db } from "@tripforge/db";
@@ -403,12 +405,14 @@ export interface TravelerTripSummary {
  * The caller's own linked trips, newest-linked-first — scoped ENTIRELY by
  * `client_trip_link.user_id = userId` (a value the session middleware derives
  * server-side, never client input), so no other visitor's trips are
- * expressible in the result (FR-005). Each row is projected by the SAME
- * `resolveShareLink` an anonymous visitor would get for that token — a single
- * source of truth for "what a visitor may see about a trip" (research D3) —
- * so a trip whose share link/itinerary was deleted since it was linked simply
- * drops out (defense in depth; the FK cascade already removes the
- * `client_trip_link` row in that case).
+ * expressible in the result (FR-005). Each row is projected the SAME way
+ * `resolveShareLink` projects an anonymous visitor's view — a single source
+ * of truth for "what a visitor may see about a trip" (research D3) — but
+ * batched across every linked trip (perf-031: N sequential per-trip queries
+ * regressed to one round trip per lookup kind), so a trip whose share
+ * link/itinerary was deleted since it was linked simply drops out (defense
+ * in depth; the FK cascade already removes the `client_trip_link` row in
+ * that case).
  */
 export async function listTravelerTrips(
   container: Container,
@@ -420,23 +424,80 @@ export async function listTravelerTrips(
   const links = await db
     .select({
       token: itineraryShareLinkTable.token,
+      itineraryId: itineraryShareLinkTable.itineraryId,
+      agencyId: itineraryShareLinkTable.agencyId,
       linkedAt: clientTripLinkTable.createdAt,
     })
     .from(clientTripLinkTable)
     .innerJoin(itineraryShareLinkTable, eq(itineraryShareLinkTable.itineraryId, clientTripLinkTable.itineraryId))
     .where(eq(clientTripLinkTable.userId, userId))
     .orderBy(desc(clientTripLinkTable.createdAt));
+  if (links.length === 0) return [];
+
+  const itineraryIds = [...new Set(links.map((link) => link.itineraryId))];
+
+  // Batched lookups, one extra query each regardless of trip count — same
+  // pattern as listItineraries' author-name batching (services/itineraries.ts).
+  const itineraryRows = await db.select().from(itineraryTable).where(inArray(itineraryTable.id, itineraryIds));
+  const itineraryById = new Map(itineraryRows.map((row) => [row.id, row]));
+
+  const components = await db
+    .select({
+      itineraryId: bookingComponentTable.itineraryId,
+      agencyId: bookingComponentTable.agencyId,
+      itemId: bookingComponentTable.itemId,
+      sellMinor: bookingComponentTable.sellMinor,
+      currency: bookingComponentTable.currency,
+    })
+    .from(bookingComponentTable)
+    .where(inArray(bookingComponentTable.itineraryId, itineraryIds));
+  const bookedPricesByItinerary = new Map<string, Map<string, Money>>();
+  for (const component of components) {
+    // Same ownership guard as the itinerary check below (INV-004 symmetry): a
+    // component only prices an itinerary it's actually tenant-owned against.
+    const owningItinerary = itineraryById.get(component.itineraryId);
+    if (!owningItinerary || owningItinerary.agencyId !== component.agencyId) continue;
+    const forItinerary = bookedPricesByItinerary.get(component.itineraryId) ?? new Map<string, Money>();
+    forItinerary.set(component.itemId, money(component.sellMinor, component.currency));
+    bookedPricesByItinerary.set(component.itineraryId, forItinerary);
+  }
+
+  const agencyIds = [...new Set(links.map((link) => link.agencyId))];
+  const agencyNameById = new Map(
+    (await db.select({ id: organization.id, name: organization.name }).from(organization).where(inArray(organization.id, agencyIds))).map(
+      (org) => [org.id, org.name] as const,
+    ),
+  );
 
   const summaries: TravelerTripSummary[] = [];
   for (const link of links) {
-    const resolved = await resolveShareLink(container, link.token);
-    if (resolved.status !== "found") continue;
+    const row = itineraryById.get(link.itineraryId);
+    // Same not_found surface resolveShareLink gives an anonymous visitor: a
+    // deleted itinerary, or a share link stamped for a different agency than
+    // the itinerary now belongs to (scopedWhere's ownership check, inlined).
+    if (!row || row.agencyId !== link.agencyId) continue;
+
+    let document: Itinerary;
+    try {
+      document = parseItinerary(row.document);
+    } catch (err) {
+      if (!isItineraryValidationError(err)) throw err;
+      logger.warn("client_view.my_trips.itinerary_invalid", {
+        itineraryId: link.itineraryId,
+        issue: summarizeItineraryValidationError(err),
+      });
+      continue;
+    }
+
+    const agencyName = agencyNameById.get(link.agencyId) ?? "Your travel agency";
+    const bookedPriceByItemId = bookedPricesByItinerary.get(link.itineraryId) ?? new Map<string, Money>();
+    const view = toClientItineraryView(document, agencyName, bookedPriceByItemId);
     summaries.push({
       token: link.token,
-      title: resolved.view.title,
-      agencyName: resolved.view.agencyName,
-      currency: resolved.view.currency,
-      totalSellMinor: resolved.view.totalSellMinor,
+      title: view.title,
+      agencyName: view.agencyName,
+      currency: view.currency,
+      totalSellMinor: view.totalSellMinor,
       linkedAt: link.linkedAt.toISOString(),
     });
   }

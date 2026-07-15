@@ -163,6 +163,84 @@ describe.skipIf(!DATABASE_URL)("L3 traveler trip history (real Postgres)", () =>
     LONG,
   );
 
+  /** Quote + book exactly one held item at the given markup — produces a
+   * real, non-null `booking_component` row so the batched money-bearing
+   * lookup (not just the agency-name batch) has something to get wrong. */
+  async function bookOneItem(session: SessionContext, itineraryId: string, markupBps: number): Promise<void> {
+    const quoted = await callerFor(session).workspace.booking.quote({ itineraryId, markupBps });
+    const held = quoted.items.flatMap((i) => (i.outcome === "held" ? [i] : []));
+    expect(held.length).toBeGreaterThan(0);
+    const target = held[0]!;
+    const booked = await callerFor(session).workspace.booking.book({
+      itineraryId,
+      quoteRowIds: [target.quote.quoteRowId],
+    });
+    expect(booked.status).toBe("confirmed");
+  }
+
+  it(
+    "US1: myTrips with several linked trips across DIFFERENT agencies projects each trip independently (perf-031: batched lookups keyed correctly)",
+    async () => {
+      const agencyX = await makeAgency("Ericeira Surf Trips");
+      const agencyY = await makeAgency("Tavira Salt Coast");
+      const agencyZ = await makeAgency("Serra Highlands");
+      const traveler = await makeTraveler("Noor Haddad", `noor-${randomUUID()}@example.test`);
+
+      const itineraryIdX = await draftItinerary(agencyX);
+      const itineraryIdY = await draftItinerary(agencyY);
+      const itineraryIdZ = await draftItinerary(agencyZ);
+      const tokenX = await shareToken(agencyX, itineraryIdX);
+      const tokenY = await shareToken(agencyY, itineraryIdY);
+      const tokenZ = await shareToken(agencyZ, itineraryIdZ);
+
+      // Book X and Y at DIFFERENT markups (so their real booked sellMinor
+      // genuinely differs); leave Z unbooked (draft-estimate pricing only —
+      // toClientItineraryView falls back to each item's `pricing.sellPrice`
+      // until it's actually booked, so totalSellMinor is non-null either way).
+      // This exercises the money-bearing bookingComponentTable batch for
+      // cross-trip contamination (X's booked price landing on Y or vice versa).
+      await bookOneItem(agencyX, itineraryIdX, 1000);
+      await bookOneItem(agencyY, itineraryIdY, 3000);
+
+      // Sequential attach order (X, Y, Z) fixes the expected newest-first order.
+      await callerFor(traveler).clientView.attachTrip({ token: tokenX });
+      await callerFor(traveler).clientView.attachTrip({ token: tokenY });
+      await callerFor(traveler).clientView.attachTrip({ token: tokenZ });
+
+      const trips = await callerFor(traveler).clientView.myTrips();
+      expect(trips.map((t) => t.token)).toEqual([tokenZ, tokenY, tokenX]);
+
+      // Each trip's batched projection must match its OWN per-token view — no
+      // cross-trip mixing of agency name / pricing between the batched rows.
+      for (const token of [tokenX, tokenY, tokenZ]) {
+        const view = await callerFor(null).clientView.itinerary({ token });
+        expect(view.status).toBe("found");
+        if (view.status !== "found") throw new Error("view resolution failed");
+        const trip = trips.find((t) => t.token === token);
+        expect(trip).toMatchObject({
+          agencyName: view.view.agencyName,
+          currency: view.view.currency,
+          totalSellMinor: view.view.totalSellMinor,
+        });
+      }
+      expect(new Set(trips.map((t) => t.agencyName)).size).toBe(3); // distinct agencies really did get distinct names
+
+      // Positive proof the booked-price Map isn't cross-wired: X and Y were
+      // booked at different markups, so their real totals must be mutually
+      // DISTINCT — a swapped itineraryId key in bookedPricesByItinerary that
+      // put X's booked component under Y's key (or vice versa) would make
+      // one of them equal the OTHER's total instead of its own; the
+      // per-token ground-truth comparison above alone couldn't tell "both
+      // swapped the same way" apart from "both correct", so this closes it.
+      const tripX = trips.find((t) => t.token === tokenX);
+      const tripY = trips.find((t) => t.token === tokenY);
+      expect(tripX?.totalSellMinor).not.toBeNull();
+      expect(tripY?.totalSellMinor).not.toBeNull();
+      expect(tripX?.totalSellMinor).not.toBe(tripY?.totalSellMinor);
+    },
+    LONG,
+  );
+
   // ─── US2: the attach-on-view boundary is exact (dedup + isolation) ─────────
 
   it(
