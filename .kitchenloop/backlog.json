@@ -1093,10 +1093,10 @@
     "title": "Discover page header renders ABOVE the app-shell chrome (should nest in content area)",
     "type": "improvement",
     "priority": "low",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-14T14:07:03Z",
-    "pr_url": "",
-    "body": "DRESS-REHEARSAL FINDING (2026-07-14, operator, live screenshot): on /discover the '\"'\"'What'\"'\"'s hot'\"'\"' page header + intro renders ABOVE the persistent app-shell chrome (left sidebar + top identity banner) instead of INSIDE the content area to the right of the sidebar. Marketplace (/marketplace) and Group Travel (/group-travel) render correctly (header inside the WorkspacePageShell content region) \u2014 so /discover'\"'\"'s page.tsx wraps/positions its header outside the shell. FIX: make the Discover page structure match the other workspace routes (header inside the WorkspacePageShell main content, below the sticky banner). Pure layout/structure fix, no data/logic change. Verify with a screenshot that the Discover header sits within the content area exactly like Marketplace. Files: apps/web/app/(workspace)/discover/page.tsx + discover-feed-view.tsx + the shell wrapper. Acceptance: /discover header nests in the content area (no floating-above-nav header); Live Test screenshot confirms.\n\n---\nRECLASSIFIED low (2026-07-14): loop execute agent found NO reproduction (clean console; full-load/client-nav/narrow-viewport all correct). Likely a fullPage-screenshot artifact. Re-verify at final rehearsal with a NORMAL viewport; close if still no repro.",
+    "pr_url": null,
+    "body": "DRESS-REHEARSAL FINDING (2026-07-14, operator, live screenshot): on /discover the '\"'\"'What'\"'\"'s hot'\"'\"' page header + intro renders ABOVE the persistent app-shell chrome (left sidebar + top identity banner) instead of INSIDE the content area to the right of the sidebar. Marketplace (/marketplace) and Group Travel (/group-travel) render correctly (header inside the WorkspacePageShell content region) \u2014 so /discover'\"'\"'s page.tsx wraps/positions its header outside the shell. FIX: make the Discover page structure match the other workspace routes (header inside the WorkspacePageShell main content, below the sticky banner). Pure layout/structure fix, no data/logic change. Verify with a screenshot that the Discover header sits within the content area exactly like Marketplace. Files: apps/web/app/(workspace)/discover/page.tsx + discover-feed-view.tsx + the shell wrapper. Acceptance: /discover header nests in the content area (no floating-above-nav header); Live Test screenshot confirms.\n\n---\nRECLASSIFIED low (2026-07-14): loop execute agent found NO reproduction (clean console; full-load/client-nav/narrow-viewport all correct). Likely a fullPage-screenshot artifact. Re-verify at final rehearsal with a NORMAL viewport; close if still no repro.\n\nOPERATOR-CLOSED 2026-07-16 as NOT REPRODUCIBLE: failed to repro across 4 independent execute-cycle investigations (fresh compose, full-page + client-side-nav + narrow-viewport, byte-for-byte page.tsx diff) \u2014 clean console every time, pixel-identical to Marketplace. Screenshot artifact, not a product defect (see DISCOVER-LAYOUT-REPRO desk row). No code change; closed to stop wasting cycles.",
     "notes": "Iteration 6 execute: investigated live, could NOT reproduce. Discover's page.tsx JSX is byte-for-byte the same shell-wrapping structure as Marketplace/Group Travel (header inside WorkspacePageShell's children, nested in .tf-workspace-main to the right of the sidebar) -- confirmed by diff against demo-08-discover's landing commit (6fae66f), which only ever touched the page BODY, never the shell wrap. Tested and screenshotted 3 conditions against a fresh docker compose up --build --wait on this exact commit: (1) full page load at 1185px, (2) client-side sidebar-link navigation from /marketplace, (3) narrow 720px viewport (mobile sidebar-collapse breakpoint). All three render the header correctly nested inside the shell, matching Marketplace pixel-for-pixel in layout; browser console clean (0 errors/warnings). Left in todo, not fixed -- there is nothing reproducible to fix without more detail from the reporting session (exact viewport/browser/cache state when the dress-rehearsal screenshot was taken). Excluded from this cycle's batch-demo-seed-flake bundle; the other 2 tickets in that dress-rehearsal filing were reproducible and are fixed there.\n\nIteration 6 execute (second pass, same iteration, independent re-check): re-verified from scratch before picking another ticket -- fresh docker compose down -v && up --build --wait, signed in as owner@azure-travel-demo.test, screenshotted (1) direct full-page load of /discover and (2) client-side sidebar-link navigation from /marketplace to /discover. Both render the header correctly nested inside .tf-workspace-main, right of the sidebar, below the sticky identity banner -- pixel-identical placement to Marketplace. Console clean (0 errors/warnings). Two independent investigations now agree: not reproducible against current main. Deprioritizing below the medium-priority feature tickets this cycle; needs a sharper repro (exact viewport/browser/cache state) from the operator before another cycle re-attempts it -- consider adding an OPERATOR-DESK row if a third cycle also fails to reproduce.\nSECOND NO-REPRO CONFIRMATION (2026-07-14, kitchenloop execute iter-6): live-verified against the built compose stack (docker compose up --build), signed up a fresh agency, navigated to /discover at a normal 1440x900 viewport and via full-page screenshot. Header renders correctly INSIDE WorkspacePageShell's content area (right of sidebar, below top identity banner), structurally identical to /marketplace. page.tsx/discover-feed-view.tsx code inspection also confirms identical <WorkspacePageShell><header>...</header>...</WorkspacePageShell> structure to marketplace/page.tsx. No code change made -- recommend backlog grooming retire this ticket as invalid/non-reproducing (likely a one-off screenshot artifact from the original dress-rehearsal capture)."
   },
   {
@@ -1207,9 +1207,10 @@
     "body": "Non-blocking SPEC-SILENT from pr-auditor on PR #82. packages/api/src/services/client-view.ts listTravelerTrips does N sequential resolveShareLink calls (one per linked trip), unbounded/unpaginated. Plan.md acknowledges as v0 bounded-by-one-traveler's-visit-count (research D3, YAGNI). Add pagination/batching if a traveler's history grows large. Low priority.",
     "type": "chore",
     "priority": "low",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-15T16:30:00Z",
-    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/83"
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/83",
+    "merge_commit": "d59a88f26cc7"
   },
   {
     "id": "e2e-traveler-trip-history-signout-hang",
@@ -1219,6 +1220,26 @@
     "priority": "high",
     "state": "todo",
     "created": "2026-07-15T20:20:00Z",
+    "pr_url": null
+  },
+  {
+    "id": "consumer-surface-quality-sweep",
+    "priority": "medium",
+    "type": "chore",
+    "title": "Quality sweep on the new consumer-surface code (specs 028-031)",
+    "body": "Targeted clean-code sweep over the 4 features shipped this drive (028 chat-first entry, 029 bring-your-own itinerary, 030 traveler accounts, 031 trip history): run knip (dead/unused exports), jscpd (duplication), and dependency-cruiser (INV-017 layer boundaries) scoped to the touched files (packages/api/src/services/{client-view,itineraries,planner}.ts, routers, packages/llm interpret-trip-request, apps/web (client-view) surfaces). Remove/inline dead exports, de-duplicate any copy-paste across the new surfaces, confirm no boundary violations. NO behavior change; export-surface + structure only. Acceptance: knip/jscpd/depcruise clean on the touched files; L1/L2/L3 + lint green; no product behavior diff.",
+    "state": "todo",
+    "created": "2026-07-16T00:45:00Z",
+    "pr_url": null
+  },
+  {
+    "id": "my-trips-empty-state-nav",
+    "priority": "medium",
+    "type": "feature",
+    "title": "My Trips: empty state + discoverable nav from the client-view",
+    "body": "Polish the just-shipped /view/my-trips (spec 031): (1) when a signed-in traveler has ZERO linked trips, render a clear empty state (e.g. 'No trips yet \u2014 trips you open from an agent's link appear here') instead of a blank list; (2) ensure My Trips is DISCOVERABLE \u2014 a signed-in traveler should see a link to /view/my-trips from the client-view (e.g. in the trip-fork account strip), not have to know the URL. Client-view/traveler-identity only, no schema, no money, INV-020/INV-018 unchanged (anonymous visitors never see the My Trips link). Acceptance: empty state renders for a new traveler; a signed-in traveler can reach My Trips via a visible link; anonymous /view/[token] unchanged; e2e covers both.",
+    "state": "todo",
+    "created": "2026-07-16T00:45:00Z",
     "pr_url": null
   }
 ]
