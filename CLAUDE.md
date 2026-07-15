@@ -14,8 +14,13 @@ self-drive-or-request-agent fork, feeding the marketplace). North Star metric:
 **GBV** — booked trip value through the platform.
 
 Source of truth for the product: `docs/product/Trellis_Product_Charter_PRD.pdf`
-(Charter+PRD v0.3). This is a standalone git repository (nested under the
-GrowthAnts monorepo directory but independent of it).
+(Charter+PRD v0.3). Companion market/monetization validation:
+`docs/product/Trellis_Feasibility_Study_v0.1.pdf` (v0.1, July 2026) — read its
+agent-readable digest `docs/product/Trellis_Feasibility_Study_v0.1_digest.md`
+during any product/roadmap planning (it validates the direction and corrects
+monetization *sequencing*: booking margin + take-rate + light SaaS carry P0–P1;
+handoff fees are P2; ads are P3). This is a standalone git repository (nested
+under the GrowthAnts monorepo directory but independent of it).
 
 ## Governance
 
