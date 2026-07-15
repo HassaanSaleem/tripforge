@@ -1161,9 +1161,10 @@
     "body": "OPERATOR ask (Hassaan, 2026-07-15): 'or upload it's own itinerary.' Today EVERY itinerary is AI-drafted (planner/chatEdit); there is NO import/upload path (verified \u2014 no import/paste/bring-your-own capability in packages/api or apps/web).\n\nSCOPE: let an agent create an itinerary by bringing their OWN (structured multi-day entry and/or a file/paste import) -> mapped into the CANONICAL itinerary schema -> then the same downstream applies: quote-then-book (supply adapter), markup, marketplace list/white-label, client-view share. Decide the simplest correct ingestion model in the plan (manual day/item builder vs. structured file import) and state it.\n\nHALTS (DIRECTIVE / constitution \u2014 operator gates):\n- CANONICAL ITINERARY SCHEMA: ingestion writes the canonical schema. If new fields are needed (e.g. item provenance = agent-uploaded vs AI-drafted vs licensed; or unpriced/custom items awaiting a quote), that is a SCHEMA change and REQUIRES a versioned migration note in the plan + operator gate. Do not change the schema silently.\n- SUPPLY/MONEY: uploaded items must still price via the supply-adapter boundary (no supplier shapes outside it); define the pricing path for custom/uploaded items (map to a real supply SKU, or a typed 'custom/unpriced' line that cannot be booked until quoted). Money in integer minor units (INV-009/010); booking conservation on failure paths (L3, MANDATORY for the money path).\n- TRUST/PROVENANCE: mark itinerary provenance (self-built/uploaded vs AI vs licensed) so marketplace + client-view display honest origin (Constitution VI, INV trust/provenance); tenant-scoped (INV-004).\n\nACCEPTANCE: an agent uploads/enters their own multi-day itinerary; it persists as a canonical itinerary owned by their agency; it can be priced (quote-then-book), booked (conserved), listed/white-labeled, and shared to a client-view; provenance is recorded and shown; schema migration note + Constitution Check present; any schema/supply change landed via operator gate; L3 conservation tests on the booking failure path.\n\nFeature-sized -> route through Spec Kit. Depends on: canonical itinerary schema (seed-0002), supply-adapter (seed-0003), quote-then-book (seed-0005), marketplace (seed-0006).",
     "type": "feature",
     "priority": "high",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-15T05:40:30Z",
-    "pr_url": null
+    "pr_url": "https://github.com/disrupt-gt/tripforge/pull/78",
+    "merge_commit": "cbf27802955f"
   },
   {
     "id": "p2-consumer-trip-history",
@@ -1173,6 +1174,16 @@
     "priority": "medium",
     "state": "todo",
     "created": "2026-07-15T05:45:00Z",
+    "pr_url": null
+  },
+  {
+    "id": "doc-sync-029-persistdocument",
+    "title": "Doc-sync (spec 029): contract says createManual reuses persistDocument, but impl inlines ItinerarySchema.parse",
+    "body": "Non-blocking doc-vs-code drift found by pr-auditor on PR #78. specs/029-agent-upload-own-itinerary/contracts/manual-itinerary.md (~L44-46) says createManual re-validates via the persistDocument helper; packages/api/src/services/itineraries.ts (~L607,632) inlines ItinerarySchema.parse on the insert path instead. Validation IS enforced (INV-001 upheld) so no defect \u2014 but code never silently redefines the spec. Sync the contract doc to match the impl, or refactor createManual to call persistDocument. Low priority.",
+    "type": "chore",
+    "priority": "low",
+    "state": "todo",
+    "created": "2026-07-15T15:30:00Z",
     "pr_url": null
   }
 ]
