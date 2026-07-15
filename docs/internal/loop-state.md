@@ -2,10 +2,10 @@
 
 ## Current Status
 
-**Iteration**: 5
+**Iteration**: 6
 **Mode**: strategy
-**Status**: CONTINUE (all gates green — lint, L1/L2+L3 vitest 483/483, L3 smoke 46/46 against the live built stack)
-**Last Updated**: 2026-07-14 00:52 PKT
+**Status**: CONTINUE (all gates green — lint, L1/L2+L3 vitest 573/573, L3 smoke 46/46 against the live built stack)
+**Last Updated**: 2026-07-15 03:26 PKT
 
 ## Blocked Combos
 
@@ -28,6 +28,43 @@
 | 3 | 2026-07-11 | strategy | 6x(ideate→triage)→many execute cycles→regress→quality-sweep | CONTINUE | Lint PASS; L1/L2 326/326 (100%, 42 env-gated L3 skipped without DB) — same suite 368/368 (100%) against the live Postgres network; L3 smoke 41/41 vs live compose stack; PRs #10–#40 merged/landed (supply-adapter, L3 harness, budget allocator + AI planner + booking money path, marketplace trade layer v0, premium UI, workspace itinerary list, booked-price fidelity, seller earnings surface); coverage 30/36 (83.3%, pending commit); quality sweep ran — 1 new ticket filed (2 knip-flagged unexported types), deduped against 10 pre-existing open QS3-series tickets from an earlier squash-merged sweep lineage; depcruise clean, no TODO/stub debt, specs 012-014 (28 FRs) fully implemented+tested |
 | 4 | 2026-07-12 | strategy | ideate→execute cycles→regress | CONTINUE | Lint PASS; L1/L2+L3 vitest 392/392 (100%, DB-inclusive run, 39 files); L3 smoke 41/41 vs live compose stack; PRs #42 (seed-0022 content-library v0) and #44 (marketplace-copy/picker/typed-errors/demo-plan polish bundle) merged; PR #46 (coverage-matrix derivation tool, scenario hardening, markup prefill, auth-form dedup bundle) open/in-review; coverage 17/36 (47.2%) per `coverage-matrix.yaml` on disk — this iteration's ideate scenario (reseller-builds-fresh, itinerary-builder × web/api × agent-reseller) not yet reflected in the matrix, a known drift tracked by seed-0031 (fix pending in PR #46); quality sweep skipped (iter 4 not a multiple of 3) |
 | 5 | 2026-07-14 | strategy | many execute cycles (quality-sweep drain + Friday demo-drive UI bundle)→regress | CONTINUE | Lint PASS; L1/L2+L3 vitest 483/483 (100%, DB-inclusive run, 48 files, up from 392); L3 smoke 46/46 vs live compose stack; PRs #46–#57 and #59 merged (seed-0031 coverage-derivation tool landed; seed-0014 SSE streaming closed INV-028; three quality-sweep drain bundles #48–#50, #52–#53 reaching the operator's 🎯 90% backlog-ratio goal at #53; Friday demo-drive UI bundle: dashboard shell #56, planner UX redesign #57, auth/trust-badge restyle #55, multi-option AI itinerary #59); PR #60 (conversational AI itinerary editing, demo-03-chat-builder) in_review, not yet merged; demo-01-seed deferred (heavy seed-script cycle killed at 55m); coverage 28/36 (77.8%) per regenerated `coverage-matrix.yaml` — zero drift against `derive-coverage.mjs` (working tree clean after regen), confirming the seed-0031 fix now holds for a 2nd iteration; quality sweep skipped (iter 5 not a multiple of 3) |
+| 6 | 2026-07-15 | strategy | ideate (fresh-draft-client-view)→triage→14 execute cycles→regress | CONTINUE | Lint PASS; L1/L2+L3 vitest 573/573 (100%, DB-inclusive run, 56 files, up from 483); L3 smoke 46/46 vs live compose stack; PRs #60–#73 merged (demo-03-chat-builder conversational editing, demo-11-group-travel departures, e2e-planner-journey stale-test fix, repo-wide typecheck fix, demo-09-request-agent fork, demo-08-discover feed, demo-01-seed demo data population reaching 10/11 demo tickets, demo-polish seed+booking bundle, seed-0018 provenance badges, seed-0027 booked-state/markup surfacing, seed-0009 agency member roster, demo-10-flights closing DEMO 11/11 feature-complete, seed-0022a real device media upload, and #73's same-day media-serving-route + upload magic-byte security hardening follow-up); coverage 30/36 (83.3%) per regenerated `coverage-matrix.yaml`, up from 28/36 — new combos itinerary-builder×{api,web}×client (fresh-draft-client-view scenario) and content-library×web×agent-seller (seed-0022a); `derive-coverage.mjs` hard-crashed mid-iteration on an out-of-vocabulary `KITCHENLOOP-COVERAGE` block PR #61 shipped (`group-travel`/`agent` not in `kitchenloop.yaml`'s dimension vocabulary) — block removed to unblock tooling, desk row GROUP-TRAVEL-DIMENSION opened for the operator's 7th-dimension decision; quality sweep ran (3rd-iteration cadence) — see Quality Sweep section below |
+
+## Regression — Iteration 6
+
+- **Date**: 2026-07-15 03:26 PKT
+- **Branch**: kitchen/iter-6 (iteration-6 worktree tip, carries merged PRs #60–#73)
+- **Lint**: PASS (`eslint .` inside the build-stage verify image, no findings, exit 0) — `.kitchenloop/logs/regress-iter-6-lint.log`
+- **Typecheck** (investigative, not part of the oracle): FAIL — `pnpm run typecheck` exits 2 (`.kitchenloop/logs/regress-iter-6-typecheck.log`); see Warnings
+- **Pass rate**: 100% (573/573, DB-inclusive run, fresh compose boot) — `.kitchenloop/logs/regress-iter-6-l3vitest.log`
+- **Previous pass rate**: 100% (483/483)
+- **Delta**: ±0%
+- **Skip rate**: 0% (0 skipped) in the DB-inclusive run; 16.6% (95/573) in the plain L1/L2 run (env-gated `l3-*.test.ts` specs skip cleanly without `DATABASE_URL`, not silent test loss) — `.kitchenloop/logs/regress-iter-6.log`
+- **Test count**: 573 (previous: 483) — 56 test files (up from 48)
+- **Duration**: 3.00s (vitest run, DB-inclusive, `--network tripforge_default -e DATABASE_URL=...`)
+- **L3 smoke (`node tests/integration/smoke.mjs`)**: PASS 46/46 — health/auth/PMF-view/build→book/client-view checks all green against a freshly booted compose stack (postgres/mailpit/web Healthy, migrate exited 0) — `.kitchenloop/logs/regress-iter-6-smoke.log`
+- **Consecutive failures**: 0
+- **Status**: CONTINUE
+
+### Failing Tests
+None. (See Warnings — a real `pnpm run typecheck` break was found by investigation outside the standard oracle, ticketed, not a test-suite failure.)
+
+### New Patterns
+See `memory/codebase-patterns.md` — added a new confirmed Testing Pattern (shared test-flow helpers going stale silently on flow-shape changes, now confirmed 3 times: `tests/e2e/support.ts` across spec 018/019, plus this iteration's Node-script-side staleness), extended the "Green L1/L2 necessary never sufficient" note with iter 6 as a second consecutive clean live-scenario pass, and extended the vitest-suite-speed data point (573 tests → 1.55s/3.0s).
+
+### Warnings
+- **Six orphaned `rescue/iter-6-*` regress attempts found** (`89115fa`, `76a15ab`, `cfa605a`, `b530a0d`, `ac88496`, `56d1b41`) — the `REGRESS-ARTIFACT-LOSS` class recurring six times in this one iteration rather than once. The product source tree (`apps`/`packages`/`scripts`) on the most complete orphaned attempt (`56d1b41`) was byte-identical to this run's HEAD, so its draft findings (a completed quality sweep + a typecheck-break ticket) were independently re-verified rather than either discarded or blindly trusted — see the Quality Sweep section and `docs/internal/reports/quality-sweep-iter-6.md`'s Provenance note for the full re-verification. No product-code loss occurred; only loop-artifact commits were orphaned, consistent with the known REGRESS-ARTIFACT-LOSS mechanics (already on `OPERATOR-DESK.md`).
+- **New regression-oracle blind spot found and ticketed**: `pnpm run typecheck` (`tsc --noEmit` via turbo, in-image) currently fails repo-wide on `l3-agency-admin.test.ts` (4x TS2345) and `l3-booking.test.ts` (2x TS18048) — the same bug class PR #63 fixed elsewhere hours earlier. Neither `pnpm test` (vitest) nor `pnpm run lint` (eslint) catch it, so it was invisible to every gate the loop currently runs. This is NOT a stop-condition trip (typecheck isn't part of `verification.oracle` in `kitchenloop.yaml`) — filed as bug ticket `typecheck-break-agency-admin-booking-l3` (medium) and desk row `TYPECHECK-GATE-GAP` (should typecheck join the oracle — a sealed-gate change, operator decision).
+- Host `pnpm` remained denied in this loop session (consistent with iter 1–5 — desk row ENV-PNPM-DENY); lint + tests + typecheck ran inside the built image (`docker build -f apps/web/Dockerfile --target build` → `docker run --rm tripforge-verify pnpm test`/`pnpm run lint`/`pnpm run typecheck`), DB-inclusive test run added `--network tripforge_default -e DATABASE_URL=...` per the verified in-image recipe.
+- Compose-log scan (fresh boot, `.kitchenloop/logs/regress-iter-6-compose.log`) found exactly one `ERROR`-level line: the same documented-benign concurrent-booking-race duplicate-key line seen every iteration (`l3-booking.test.ts`'s losing racer), not a product defect. No `deadlock detected` line this run.
+- No new blocked combos (`.kitchenloop/blocked-combos.yaml` is empty).
+- `derive-coverage.mjs`'s vocabulary guard hard-crashed mid-iteration on PR #61's out-of-vocabulary `KITCHENLOOP-COVERAGE` block (`"feature": "group-travel"`, `"user_type": "agent"`, neither in `kitchenloop.yaml`'s dimension vocabulary) — the block was removed by an earlier phase this iteration so the tool runs clean again (30/36); the underlying 7th-dimension question is desk row `GROUP-TRAVEL-DIMENSION`, ticket `17840666553970558336`. This run's Step 3.5 regeneration exited 0 with no warnings.
+- Quality sweep ran (3rd-iteration cadence, oracle green) — see `docs/internal/reports/quality-sweep-iter-6.md`: 6 tickets filed (5 duplication-cleanup `improvement`, 1 `bug` for the typecheck blind spot above), depcruise clean (0 violations), knip's 8 unused-exported-types class not re-ticketed (each is feature-load-bearing, none crosses the extraction threshold), zero TODO/stub debt, spec↔code completeness clean (specs 015-027).
+- Backlog now 98 total, 89 done, 9 open (90.8% done) — up from 92/3-open last iteration; net +7 open tickets this pass (6 quality-sweep findings + 0 net change to the pre-existing 3, since one of those 3 — `demo-polish-discover-layout` — stays open per `DISCOVER-LAYOUT-REPRO`'s own recommendation).
+- `.kitchenloop/backlog.json` and `OPERATOR-DESK.md` reflect this regress run's own additions (6 new tickets, 1 new desk row) — landed directly by this phase since they are regress's own quality-sweep/investigation findings, not another phase's pending state.
+
+### Coverage
+30/36 combos tested (83.3%) per the regenerated `.kitchenloop/coverage-matrix.yaml` (`node scripts/kitchenloop/derive-coverage.mjs` — 30 unique combos from 38 declared entries across 11 sources), up from 28/36 (77.8%) last iteration. Two new combos this iteration: `itinerary-builder`×{`api`,`web`}×`client` (fresh-draft-client-view scenario, cross-checked against Postgres ground truth on both surfaces) and `content-library`×`web`×`agent-seller` (seed-0022a real device media upload, spec 027).
 
 ## Regression — Iteration 5
 
