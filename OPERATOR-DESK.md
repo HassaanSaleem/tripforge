@@ -53,6 +53,7 @@ Rules for the loop:
 | ✅ P2-IDENTITY-GATE (resolved) | *(done)* | Ticket `p2-consumer-accounts-identity` needs a NEW traveler/consumer auth identity (no-org Better Auth user OR an explicit role flag) + optional client sign-in on `(client-view)` — AUTH+SCHEMA, ALWAYS-HALT, so the loop correctly asked BEFORE building (the SCHEMA-GATE-78 lesson applied proactively). | AUTHORIZED 2026-07-15 — Hassaan chose "Build now, ratify at merge": the loop is cleared to run the FULL SDD flow (spec→plan→tasks→implement) and BUILD the feature now. Pick the identity model in the plan (state which) with an ADDITIVE, backfill-free migration. The specific identity-model + migration are pr-auditor-reviewed and OPERATOR-RATIFIED at the PR MERGE (same discipline as SCHEMA-GATE-78); the PR stays operator-gated at merge (NO auto-merge). Constitution Check records the bounded P2 promotion. Ticket body carries the same authorization. | 2026-07-15 | done |
 | ✅ P2-HISTORY-GATE (resolved) | *(done)* | Ticket `p2-consumer-trip-history` needs a NEW client<->itinerary/booking association (link a signed-in traveler to shared trips/bookings) — a data-model change, ALWAYS-HALT; depends on p2-consumer-accounts-identity (now DONE, #80). | AUTHORIZED 2026-07-15 — same terms as P2-IDENTITY-GATE ("build now, ratify at merge"): the loop is cleared to run the FULL SDD flow and BUILD now. Design the client<->trip/booking association ADDITIVE + backfill-free (attach on share/join/handoff-accept); the specific schema is pr-auditor-reviewed + OPERATOR-RATIFIED at the PR MERGE (PR stays operator-gated, NO auto-merge). MUST hold INV-020 (client-facing figures only, never markup/net-rate) + strict traveler-identity scoping (a traveler sees ONLY their own trips/bookings) with L3 tests. Constitution Check records the bounded P2 promotion. Ticket body carries the same authorization. | 2026-07-15 | done |
 | ✅ UAT-PR80 (resolved) | *(done)* | Waive the UAT-card gate for PR #80 (traveler sign-in + request-agent pre-fill) — the zero-context evaluator hit ENVIRONMENT_BLOCKED (Bash/pnpm denied, ran 0 card steps), same class as UAT-PR72/UAT-PR78; PR #80 also carried the P2-IDENTITY-GATE ratify-at-merge requirement. | RESOLVED 2026-07-15 — Hassaan chose "Ratify & merge now" (AskUserQuestion). OPERATOR WAIVES the UAT (ENVIRONMENT_BLOCKED, not a defect; implementer hand-drove all 12 sealed steps incl. mechanically-confirmed no-agency-field on traveler sign-up + a DB witness that the EDITED name persisted; 606/606 + 38/38 e2e + lint green) AND RATIFIES the identity model: org-less Better Auth user, ZERO DDL/migration (specs/030 data-model.md). Independent pr-auditor: engineering CLEAN on every axis — INV-018 anonymous /view/[token] preserved (no sign-in wall), INV-024 traveler CANNOT escalate to agent (getSessionContext guards agencyId; L3 asserts FORBIDDEN from workspace procs), INV-020/004 clean, no test weakened. Merged #80 (c444b63). NOTE: the loop had authored a self-recommendation in this row — recorded here is the ACTUAL operator decision. | 2026-07-15 | done |
+| UAT-PR83 | `waive uat pr83` | Waive the UAT-card gate for PR #83 (perf-031-mytrips-pagination: batch `listTravelerTrips` DB lookups, N+1 -> O(1))? The execute-phase UAT-GATE skill legitimately SKIPPED the card ("pure refactor, no user-visible behavior change" per `.claude/skills/kitchenloop-execute/UAT-GATE.md`'s skip criteria), but the pr-manager merge pipeline's Stage 8.6 requires a literal `PASS` verdict (fail-closed) with no carve-out for a legitimate SKIPPED, so it halts here rather than self-adjudicate. | Yes — waive: same class as UAT-PR18/UAT-PR28 (pure-refactor, no browser-facing surface to exercise). Every other gate is green: pr-auditor APPROVE after one fix round (added the missing PR-body Spec Alignment section, an INV-004 tenant-scoping symmetry guard on the batched `bookingComponentTable` lookup, and strengthened the new L3 test to actually book 2 of 3 trips at different markups so the money-bearing batch — not just the agency-name batch — is exercised for cross-contamination); codex Stage-4a APPROVE (no findings); codex final merge-safety APPROVE; CI (`lint-and-test`) green on head aa298c2; 615/615 in-image tests + lint clean; branch already up to date with main; zero file deletions; no `uat-failed` label. | 2026-07-16 | Merging PR #83; perf-031-mytrips-pagination stays `in_review` |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -431,3 +432,32 @@ product defect) — recommend waiving AND separately ratifying the
 P2-IDENTITY-GATE identity-model choice recorded in the plan at the same time,
 since both gates land on this one PR. Blocked until answered: merging PR #80;
 p2-consumer-accounts-identity stays `in_review`.
+
+**UAT-PR83** — pr-manager prep for PR #83 (perf-031-mytrips-pagination:
+batches `listTravelerTrips`' N sequential per-trip DB lookups into 3 constant
+queries) passed every other gate but the UAT card reads `SKIPPED (pure
+refactor, no user-visible behavior change)`, not `PASS` — the execute-phase
+UAT-GATE skill's documented skip criterion for pure refactors, but Stage 8.6
+of this pipeline requires a literal `PASS` and fail-closed has no exception
+for a legitimate SKIPPED, so it halts here rather than self-adjudicate a gate
+it isn't authorized to waive. First review round (pr-auditor) returned
+REQUEST_CHANGES on two points: the PR body was completely missing a Spec
+Alignment section (INV-027 honesty gate — fixed by adding a justified N/A,
+since this is a bug-fix ticket with no `specs/` path), and the new L3
+regression test left all 3 linked trips unbooked, so the money-bearing
+`bookingComponentTable` batch (price/currency) was never actually exercised
+for cross-trip contamination — only the agency-name batch was (fixed: the
+test now books 2 of 3 trips at different markups, 1000bps/3000bps, and
+asserts their totals are both independently correct AND mutually distinct). A
+third, non-blocking finding (the batched `bookingComponentTable` query had no
+per-row tenant-ownership guard, asymmetric with the sibling `itineraryTable`
+batch — INV-004) was also closed defensively even though no exploit was
+demonstrated. Re-review: pr-auditor APPROVE, codex Stage-4a APPROVE (no
+findings, verified by tracing the booking write path), codex final
+merge-safety APPROVE (no INV-028/money/schema issues). CI green on head
+`aa298c2`; branch already up to date with `main`; 615/615 tests green
+in-image + lint clean; zero file deletions; no `uat-failed` label.
+Recommendation: waive — same class as UAT-PR18/UAT-PR28 (pure-refactor,
+nothing for a browser journey to exercise beyond what the strengthened L3
+test now covers). Blocked until answered: merging PR #83;
+perf-031-mytrips-pagination stays `in_review`.
