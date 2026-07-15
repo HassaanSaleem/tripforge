@@ -98,13 +98,15 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
       // Picker projection ONLY: no canonical document, no trip request. Every
       // unlisted trip carries an explicit null listing (spec 014 FR-008) and
       // null licensedCopy (spec 024 FR-006 — a self-authored original is
-      // never marked), not an absent field.
+      // never marked), not an absent field. An AI-drafted original reports
+      // origin "ai_drafted" (spec 029 research D3).
       for (const row of alphaList.itineraries) {
-        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "licensedCopy", "listing", "title"]);
+        expect(Object.keys(row).sort()).toEqual(["createdAt", "currency", "id", "licensedCopy", "listing", "origin", "title"]);
         expect(row.currency).toBe("USD");
         expect(row.title.length).toBeGreaterThan(0);
         expect(row.listing).toBeNull();
         expect(row.licensedCopy).toBeNull();
+        expect(row.origin).toBe("ai_drafted");
       }
     },
     LONG,
@@ -184,12 +186,16 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.itinerary.list (real Postgres)", ()
         originalAuthorAgencyName: "Gamma Journeys",
         generation: 1,
       });
+      // A licensed copy's origin badge is its licensing provenance above, not
+      // a re-classification of who created the row (spec 029 research D3).
+      expect(buyerAfter.itineraries[0]?.origin).toBeNull();
 
       // The trade never grows (or leaks into) the seller's own list; the
       // seller's original stays unmarked (FR-006).
       const sellerAfter = await callerFor(seller).workspace.itinerary.list();
       expect(sellerAfter.itineraries.map((i) => i.id)).toEqual([sourceId]);
       expect(sellerAfter.itineraries[0]?.licensedCopy).toBeNull();
+      expect(sellerAfter.itineraries[0]?.origin).toBe("ai_drafted");
     },
     LONG,
   );

@@ -28,6 +28,8 @@ export type { InterpretChatOutcome } from "./services/planner.js";
 // detach outcome types surfaced the same way (spec 015). Chat-edit outcome
 // types surfaced the same way (spec 020): chatEdit is a subscription and
 // applyChatEdit a mutation, both riding the inferred AppRouter type.
+// Manual itinerary creation types surfaced the same way (spec 029, TS4023):
+// createManual is a mutation riding the inferred AppRouter type.
 export type {
   MyItinerary,
   MediaTarget,
@@ -36,6 +38,8 @@ export type {
   ChatEditEvent,
   ChatEditOutcome,
   ApplyChatEditOutcome,
+  CreateManualItineraryInput,
+  CreateManualItineraryOutcome,
 } from "./services/itineraries.js";
 // Media library outcome types surfaced the same way (spec 015, TS4023).
 export type { RegisterMediaServiceInput, GetMediaOutcome } from "./services/media.js";

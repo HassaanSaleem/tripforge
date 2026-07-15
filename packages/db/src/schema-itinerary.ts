@@ -14,6 +14,20 @@ import { agencyFk } from "./schema-columns";
 // (INV-001); it is validated by parseItinerary at the api boundary on write
 // and read. `trip_request` is adjacent persistence context (supply-search
 // re-derivation), not a canonical-schema extension.
+//
+// `creation_source` (spec 029, bring-your-own itinerary): records HOW the row
+// was created — 'ai_drafted' | 'manual' | 'licensed_copy' — for display only
+// (workspace/marketplace origin badges). Deliberately NOT the same signal as
+// the `pmf_event.trip_created.source` enum ('self_built' | 'licensed'), which
+// is a separate, closed, load-bearing field feeding the constitution-mandated
+// resold:self-built PMF ratio (packages/db/sql/pmf-views.sql) — both
+// AI-drafted and manual itineraries record 'self_built' there, unchanged.
+// Plain `text` (not a DB enum), matching `media_asset.source`'s convention;
+// validated at the Zod boundary in the service layer. `DEFAULT 'ai_drafted'`
+// makes this an additive, backfill-free migration: every pre-existing row was
+// in fact AI-drafted or a licensed copy, and pre-existing licensed-copy rows
+// keep rendering correctly through the unrelated `provenance.rebrandLineage`
+// derivation regardless of this column's defaulted value (data-model.md).
 export const itinerary = pgTable(
   "itinerary",
   {
@@ -23,6 +37,7 @@ export const itinerary = pgTable(
     currency: text("currency").notNull(),
     document: jsonb("document").notNull(),
     tripRequest: jsonb("trip_request").notNull(),
+    creationSource: text("creation_source").notNull().default("ai_drafted"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

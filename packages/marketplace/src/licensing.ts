@@ -140,6 +140,7 @@ export async function licenseListing(
         document: validatedCopy,
         // Inherited so the reseller can re-quote supply on the copy (D8).
         tripRequest: source.tripRequest,
+        creationSource: "licensed_copy",
       });
       if (sourceDeparture) {
         await tx.insert(groupDeparture).values({

@@ -3,6 +3,8 @@
 // documents stay behind itineraryOverview. Deliberately NOT in
 // services/booking.ts (research D3): that module is past the split threshold
 // with an open quality-sweep ticket.
+import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import {
   and,
   desc,
@@ -11,6 +13,7 @@ import {
   itinerary as itineraryTable,
   marketplaceListing,
   organization,
+  recordPmfEvent,
   scopedWhere,
   type Db,
 } from "@tripforge/db";
@@ -48,6 +51,14 @@ export interface MyItinerary {
   listing: MyItineraryListing | null;
   /** Non-null when this itinerary is a licensed white-label copy (spec 024). */
   licensedCopy: { originalAuthorAgencyName: string; generation: number } | null;
+  /**
+   * How this ORIGINAL trip was created (spec 029 research D3) — null when
+   * `licensedCopy` is non-null: a copy's displayed origin is its licensing
+   * provenance (the badge above), not a re-classification of who clicked
+   * "create". Derived from the `itinerary.creation_source` column, a signal
+   * distinct from the PMF `trip_created.source` field (research D2).
+   */
+  origin: "manual" | "ai_drafted" | null;
 }
 
 const UNKNOWN_ORIGINAL_AUTHOR = "a previous owner";
@@ -73,6 +84,7 @@ export async function listItineraries(
       currency: itineraryTable.currency,
       createdAt: itineraryTable.createdAt,
       document: itineraryTable.document,
+      creationSource: itineraryTable.creationSource,
       listingId: marketplaceListing.id,
       listingPriceMinor: marketplaceListing.priceMinor,
       listingCurrency: marketplaceListing.currency,
@@ -135,6 +147,9 @@ export async function listItineraries(
                   UNKNOWN_ORIGINAL_AUTHOR,
                 generation,
               },
+        // A copy's badge is its licensing provenance above, not this signal
+        // (research D3) — origin is only shown for an ORIGINAL trip.
+        origin: generation === 0 ? (row.creationSource === "manual" ? ("manual" as const) : ("ai_drafted" as const)) : null,
       };
     }),
   };
@@ -472,4 +487,165 @@ export async function applyChatEdit(
 
   await persistDocument(db, input.itineraryId, result.itinerary);
   return { status: "applied", itinerary: result.itinerary, fit: result.fit };
+}
+
+// ─── Manual entry / bring-your-own itinerary (spec 029) ──────────────────────
+//
+// A structured day/item builder alongside the AI planner (research D5): the
+// agent supplies days/items directly instead of an LLM tool loop. Reuses the
+// EXISTING ItemSchema kinds (stay/activity/transfer) with `supplyRef`/
+// `pricing` both omitted — no canonical schema change (research D1). Every
+// item starts unpriced by construction: the client can never supply a
+// `supplyRef`/`pricing` value here; a real rate is attached later through the
+// unchanged `applyChatEdit`/`chatEdit` path (research D4).
+
+const manualStayItemInputSchema = z.strictObject({
+  kind: z.literal("stay"),
+  title: z.string().min(1),
+  checkIn: z.string(),
+  checkOut: z.string(),
+  occupancy: z.strictObject({
+    adults: z.number().int().min(1),
+    children: z.number().int().min(0).default(0),
+  }),
+});
+
+const manualActivityItemInputSchema = z.strictObject({
+  kind: z.literal("activity"),
+  title: z.string().min(1),
+  startsAt: z.string().optional(),
+  durationMinutes: z.number().int().positive().optional(),
+});
+
+const manualTransferItemInputSchema = z.strictObject({
+  kind: z.literal("transfer"),
+  title: z.string().min(1),
+  from: z.string().min(1),
+  to: z.string().min(1),
+  mode: z.enum(["private", "shared", "rail", "other"]),
+});
+
+const manualItemInputSchema = z.discriminatedUnion("kind", [
+  manualStayItemInputSchema,
+  manualActivityItemInputSchema,
+  manualTransferItemInputSchema,
+]);
+type ManualItemInput = z.infer<typeof manualItemInputSchema>;
+
+const manualDayInputSchema = z.strictObject({
+  dayNumber: z.number().int().min(1),
+  date: z.string().optional(),
+  items: z.array(manualItemInputSchema).default([]),
+});
+type ManualDayInput = z.infer<typeof manualDayInputSchema>;
+
+export const createManualItineraryInputSchema = z
+  .strictObject({
+    title: z.string().min(1),
+    currency: z.string().length(3).toUpperCase(),
+    destination: z.string().min(1),
+    checkIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
+    checkOut: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date (YYYY-MM-DD)"),
+    party: z.strictObject({
+      adults: z.number().int().min(1),
+      children: z.number().int().min(0).default(0),
+    }),
+    days: z.array(manualDayInputSchema).default([]),
+  })
+  .refine((v) => v.checkOut > v.checkIn, { message: "checkOut must be after checkIn" });
+export type CreateManualItineraryInput = z.infer<typeof createManualItineraryInputSchema>;
+
+export type CreateManualItineraryOutcome = { status: "created"; itinerary: Itinerary };
+
+/** Server assigns every id; the server-generated title/kind-specific fields
+ * are exactly what the agent typed — no LLM, no supply search, no money math
+ * (research D7's synthesized zero-placeholder pricing is applied one layer up). */
+function buildManualItem(item: ManualItemInput): Record<string, unknown> {
+  const id = randomUUID();
+  switch (item.kind) {
+    case "stay":
+      return { kind: "stay", id, title: item.title, checkIn: item.checkIn, checkOut: item.checkOut, occupancy: item.occupancy, media: [] };
+    case "activity":
+      return {
+        kind: "activity",
+        id,
+        title: item.title,
+        media: [],
+        ...(item.startsAt !== undefined ? { startsAt: item.startsAt } : {}),
+        ...(item.durationMinutes !== undefined ? { durationMinutes: item.durationMinutes } : {}),
+      };
+    case "transfer":
+      return { kind: "transfer", id, title: item.title, from: item.from, to: item.to, mode: item.mode, media: [] };
+  }
+}
+
+function buildManualDay(day: ManualDayInput): Record<string, unknown> {
+  return {
+    dayNumber: day.dayNumber,
+    items: day.items.map((item) => buildManualItem(item)),
+    ...(day.date !== undefined ? { date: day.date } : {}),
+  };
+}
+
+/**
+ * Persist a hand-built itinerary (contracts/manual-itinerary.md). ONE
+ * transaction, mirroring `selectDraftOption`'s persist step
+ * (packages/api/src/services/planner.ts) — insert + the SAME `trip_created`
+ * PMF event, `source: "self_built"` UNCHANGED (research D2: AI-drafted and
+ * manual trips both mean "not a licensed/resold copy" to that field).
+ * `creationSource: "manual"` is the separate, new origin signal (research D3).
+ */
+export async function createManualItinerary(
+  container: Container,
+  session: AgentSessionContext,
+  input: CreateManualItineraryInput,
+): Promise<CreateManualItineraryOutcome> {
+  const db: Db | undefined = container.db;
+  if (!db) throw new Error("database not configured");
+
+  const itineraryId = randomUUID();
+  const document = ItinerarySchema.parse({
+    id: itineraryId,
+    agencyId: session.agencyId,
+    title: input.title,
+    currency: input.currency,
+    days: input.days.map((day) => buildManualDay(day)),
+    pricing: { budgetMode: "target", total: { amountMinor: 0, currency: input.currency }, categories: [] },
+  });
+
+  // Synthesized from the create form's own fields (research D6) — a REAL
+  // TripRequest, not a placeholder, so quote/chat-edit/flights-deeplink work
+  // unchanged for a manually-created trip. `budget` is inert here: nothing in
+  // the quote-then-book path reads it (only the allocator does, never invoked
+  // for a manual trip) — `amountMinor: 1` is the smallest value satisfying
+  // `tripRequestSchema`'s `positive()` bound (unlike `PricingBlockSchema.total`,
+  // which allows 0).
+  const tripRequest: TripRequest = tripRequestSchema.parse({
+    destination: input.destination,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    party: input.party,
+    budget: { mode: "target", amountMinor: 1, currency: input.currency },
+  });
+
+  await db.transaction(async (tx) => {
+    await tx.insert(itineraryTable).values({
+      id: document.id,
+      agencyId: session.agencyId,
+      title: document.title,
+      currency: document.currency,
+      document,
+      tripRequest,
+      creationSource: "manual",
+    });
+    await recordPmfEvent(tx, {
+      type: "trip_created",
+      agencyId: session.agencyId,
+      itineraryId: document.id,
+      source: "self_built",
+      actorUserId: session.userId,
+    });
+  });
+
+  return { status: "created", itinerary: document };
 }

@@ -346,6 +346,7 @@ export async function* selectDraftOption(container: Container, session: AgentSes
         currency: document.currency,
         document,
         tripRequest: input.tripRequest,
+        creationSource: "ai_drafted",
       });
       await recordPmfEvent(tx, {
         type: "trip_created",

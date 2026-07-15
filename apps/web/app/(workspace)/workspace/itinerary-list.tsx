@@ -18,6 +18,7 @@ import {
   formatCreatedDate,
   formatLicensedCopyBadge,
   formatListedBadge,
+  formatOriginBadge,
   listErrorMessage,
   openErrorMessage,
   realizedMarkupLabel,
@@ -26,6 +27,7 @@ import { attachMediaErrorMessage } from "../../../lib/media-library.js";
 import { BookingFlow } from "./booking-flow.js";
 import { FlightsCard } from "./flights-card.js";
 import { ItineraryDays, type ItemMediaControls } from "./itinerary-days.js";
+import { ManualItineraryForm } from "./manual-itinerary-form.js";
 import { ShareControl } from "./share-control.js";
 
 type MyItinerary = MyItinerariesOutput["itineraries"][number];
@@ -57,21 +59,19 @@ type OpenState =
 export function ItineraryList() {
   const [list, setList] = useState<ListState>({ phase: "loading" });
   const [open, setOpen] = useState<OpenState>(null);
+  const [building, setBuilding] = useState(false);
+
+  async function loadTrips() {
+    try {
+      const outcome = await trpc.workspace.itinerary.list.query();
+      setList({ phase: "loaded", itineraries: outcome.itineraries });
+    } catch (error) {
+      setList({ phase: "failed", message: listErrorMessage(error) });
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false;
-    async function loadTrips() {
-      try {
-        const outcome = await trpc.workspace.itinerary.list.query();
-        if (!cancelled) setList({ phase: "loaded", itineraries: outcome.itineraries });
-      } catch (error) {
-        if (!cancelled) setList({ phase: "failed", message: listErrorMessage(error) });
-      }
-    }
     void loadTrips();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   async function handleOpen(itineraryId: string) {
@@ -102,10 +102,26 @@ export function ItineraryList() {
     );
   }
 
+  if (building) {
+    return (
+      <ManualItineraryForm
+        onCancel={() => setBuilding(false)}
+        onCreated={(itineraryId) => {
+          setBuilding(false);
+          void loadTrips();
+          void handleOpen(itineraryId);
+        }}
+      />
+    );
+  }
+
   return (
     <section className="tf-card tf-triplist" data-testid="trips-panel">
       <p className="tf-eyebrow">Your trips</p>
       <h2>Trips in your workspace</h2>
+      <button type="button" className="tf-btn--ghost" data-testid="trip-build-manual" onClick={() => setBuilding(true)}>
+        + Build a trip manually
+      </button>
 
       {open?.kind === "failed" ? <p role="alert">{open.message}</p> : null}
 
@@ -134,6 +150,11 @@ export function ItineraryList() {
               {trip.licensedCopy ? (
                 <span className="tf-badge tf-badge--licensed" data-testid="trip-licensed-copy">
                   {formatLicensedCopyBadge(trip.licensedCopy)}
+                </span>
+              ) : null}
+              {trip.origin ? (
+                <span className="tf-badge tf-badge--origin" data-testid="trip-origin">
+                  {formatOriginBadge(trip.origin)}
                 </span>
               ) : null}
               {trip.listing ? (

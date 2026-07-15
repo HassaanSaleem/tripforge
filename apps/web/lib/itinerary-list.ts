@@ -31,6 +31,13 @@ export function formatLicensedCopyBadge(licensedCopy: { originalAuthorAgencyName
   return `Licensed copy · original by ${licensedCopy.originalAuthorAgencyName}`;
 }
 
+/** Origin badge text for an ORIGINAL trip (spec 029 research D3) — never
+ * rendered alongside the licensed-copy badge (the caller only reads this for
+ * a row whose `origin` is non-null, i.e. `licensedCopy` is null). */
+export function formatOriginBadge(origin: "manual" | "ai_drafted"): string {
+  return origin === "manual" ? "Self-built" : "AI-drafted";
+}
+
 /**
  * Transport/authorization failures with trips-list wording (FR-008); shares
  * the UNAUTHORIZED + network strings with every other workspace panel via

@@ -48,6 +48,7 @@ Rules for the loop:
 | PRM-SEAL-55 | `review pr 55` | PR #55 changes a sealed loop gate (`.kitchenloop/uat-cards/demo-06-auth-ux.md`); the loop may not merge it. | Review the change by hand; land it yourself if intended, or close the PR. The loop will not auto-merge sealed-gate edits. | 2026-07-13 | PR #55 merge |
 | DISCOVER-LAYOUT-REPRO | `discover layout repro` | Ticket `demo-polish-discover-layout` (dress-rehearsal screenshot: `/discover`'s header renders above the app-shell chrome instead of inside it) has now failed to reproduce across THREE independent execute-cycle investigations this iteration (fresh `docker compose up --build --wait`, full-page load + client-side nav + narrow-viewport, byte-for-byte page.tsx diff against the landing commit) — clean console every time, pixel-identical to Marketplace. What exact viewport size/browser/cache state produced the original screenshot? | Close the ticket as a screenshot artifact unless you can supply the missing detail (viewport px, browser, whether the tab had a stale bundle/service-worker cached) — a fourth blind re-investigation is unlikely to find anything the first three didn't | 2026-07-14 | Ticket stays in `todo`, deprioritized below every medium/low feature ticket until a sharper repro lands |
 | GROUP-TRAVEL-DIMENSION | `add group-travel dimension` | PR #61 (spec 021, Constitution Check PASS, operator-mandated per demo-11-group-travel) shipped `tests/e2e/group-travel-journey.spec.ts` with a `KITCHENLOOP-COVERAGE` block naming `"feature": "group-travel"` and `"user_type": "agent"` — neither is in `kitchenloop.yaml`'s `spec.dimensions` vocabulary, so `derive-coverage.mjs` hard-crashed the first time anyone ran it (iteration 6 ideate; crash fixed in PR #74 by removing the block, but the underlying question is unresolved). Should "group-travel" become an official 7th `spec.dimensions.features` entry (total_combos 36->42), or is it intentionally untracked (e.g. a demo-track feature distinct from the core P0 spec surface)? | Add it as a 7th feature dimension — it's real, shipped, Constitution-Check-PASS, P0-scoped functionality with its own durable e2e coverage; leaving real coverage permanently invisible to the matrix repeats the exact seed-0031/seed-0035 drift class this tooling exists to prevent | 2026-07-15 | `tests/e2e/group-travel-journey.spec.ts` carries no COVERAGE block until answered (PR #74); ticket 17840666553970558336 tracks the fix either way |
+| UAT-PR78 | `waive uat pr78` | Waive the UAT-card gate for PR #78 (agent-upload-own-itinerary: bring-your-own itinerary manual builder) — the evaluator subagent hit ENVIRONMENT_BLOCKED (Bash denied before any card step), same root cause as the still-open ENV-PNPM-DENY row? | Yes — waive: the implementer independently drove the ENTIRE sealed card by hand via Playwright MCP against the same freshly-built compose stack (sign-up → manual-build form with all 7 fields → create trip → opens through the EXISTING day-view/flights/booking/share components → trips-list "Self-built" badge → graceful "No items could be held at live prices" on an all-unpriced quote → zero console errors → clean compose-log scan) and it PASSED every one of the 9 sealed steps exactly; 600/600 automated tests green against the live compose Postgres (including the new L3 conservation suite) + lint clean; same waiver class as UAT-PR4/UAT-PR5/UAT-PR14/UAT-PR72 (ENVIRONMENT_BLOCKED, not a defect) | 2026-07-15 | Merging PR #78; agent-upload-own-itinerary stays `in_review` until answered |
 
 **CI-IMG-BUILD** — Iteration-2 ideate found the compose image was never hermetic
 (report [BUG-1]/[IMP-4]: empty `.dockerignore` let host `node_modules` leak into
@@ -328,3 +329,33 @@ carries this risk in production); this just needs ratifying before the
 attribution-rendering follow-up ticket is filed and implemented.
 
 **PRM-SEAL-55 context:** The mechanical sealed-path guard matched `.kitchenloop/uat-cards/demo-06-auth-ux.md` in PR #55's diff. Sealed-gate changes are operator gates, never loop commits, so the PR is marked NOT_MERGEABLE and set aside.
+
+**UAT-PR78** — Iteration 7 execute (agent-upload-own-itinerary, spec 029:
+bring-your-own itinerary manual builder). Spawned the zero-context
+`uat-evaluator` (isolation: worktree, haiku) against the sealed card
+`.kitchenloop/uat-cards/agent-upload-own-itinerary.md`; it reported Bash
+tool access denied before executing a single test-card step, so it could not
+run `pnpm install`, `curl`, or `docker compose` — the SAME root cause as the
+still-open **ENV-PNPM-DENY** row, not a defect in the feature (the card
+itself was never reached). Rather than skip verification, I (the
+implementer) drove the ENTIRE sealed card's 9 steps by hand via Playwright
+MCP against a freshly-rebuilt compose stack (`down -v && up --build --wait`,
+same image the evaluator would have used): signed up a fresh agency, opened
+the new "+ Build a trip manually" form, filled all 7 trip-level fields,
+added a stay item to Day 1 and an activity item to a newly-added Day 2,
+created the trip — it opened immediately through the EXISTING day-view/
+flights-card/booking-flow/share-control components (zero new rendering
+code), the trips list showed the exact "Self-built" badge (no
+"Licensed copy" badge), quoting the fully-unpriced trip showed the exact
+graceful "No items could be held at live prices. Adjust the plan or quote
+again." message (no crash, no special-casing), zero browser console
+errors/warnings across the whole session, and the compose-log scan was
+clean (only the pre-existing known-benign `booking_component_itinerary_item_idx`
+duplicate-key line, filtered by the card's own grep). Full evidence:
+`.kitchenloop/uat-runs/agent-upload-own-itinerary/evidence.md` + 8
+screenshots (git-ignored). Also green: 600/600 automated tests against the
+live compose Postgres (including the new `l3-manual-itinerary.test.ts`
+conservation suite), lint clean. Same waiver class as UAT-PR4/UAT-PR5/
+UAT-PR14/UAT-PR72 (ENVIRONMENT_BLOCKED, not a product defect) — recommend
+waiving. Blocked until answered: merging PR #78; agent-upload-own-itinerary
+stays `in_review`.

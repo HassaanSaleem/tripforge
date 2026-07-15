@@ -14,7 +14,15 @@ import {
   tripRequestSchema,
 } from "../services/planner.js";
 import { itineraryOverview } from "../services/booking.js";
-import { applyChatEdit, attachMedia, detachMedia, interpretChatEdit, listItineraries } from "../services/itineraries.js";
+import {
+  applyChatEdit,
+  attachMedia,
+  createManualItinerary,
+  createManualItineraryInputSchema,
+  detachMedia,
+  interpretChatEdit,
+  listItineraries,
+} from "../services/itineraries.js";
 import { createShareLink, shareInputSchema } from "../services/client-view.js";
 
 const getInputSchema = z.strictObject({ itineraryId: z.uuid() });
@@ -75,6 +83,15 @@ export const itineraryRouter = router({
   /** The agency's own itineraries, newest first — the marketplace listing
    * picker's projection (spec 011 contract §2, INV-004 tenant-scoped). */
   list: agentProcedure.query(({ ctx }) => listItineraries(ctx.container, ctx.session)),
+
+  /** Build an itinerary by hand — day by day, item by item — instead of
+   * through the AI planner (spec 029 contracts/manual-itinerary.md). Every
+   * item starts unpriced by construction (no client-supplied supplyRef/
+   * pricing); attaching a real supplier rate later reuses the unchanged
+   * chatEdit/applyChatEdit path, with zero special-casing downstream. */
+  createManual: agentProcedure
+    .input((value) => createManualItineraryInputSchema.parse(value))
+    .mutation(({ ctx, input }) => createManualItinerary(ctx.container, ctx.session, input)),
 
   /** Canonical document + trip request + quote/booking summaries. */
   get: agentProcedure

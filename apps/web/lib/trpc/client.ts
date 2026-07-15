@@ -87,6 +87,15 @@ export type DeactivateListingOutput = inferRouterOutputs<AppRouter>["workspace"]
 export type MyItinerariesOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["list"];
 
 /**
+ * Manual itinerary creation types via the same inference (spec 029
+ * contracts/manual-itinerary.md): the bring-your-own day/item builder's
+ * mutation input/output stay un-exported server-side; inference keeps the
+ * browser exactly in sync with the deployed contract.
+ */
+export type CreateManualItineraryInput = inferRouterInputs<AppRouter>["workspace"]["itinerary"]["createManual"];
+export type CreateManualItineraryOutput = inferRouterOutputs<AppRouter>["workspace"]["itinerary"]["createManual"];
+
+/**
  * Itinerary overview via the same inference (spec 012 research D4): the
  * workspace list's open/continue view renders the canonical document and
  * booking summaries exactly as the deployed contract returns them.
