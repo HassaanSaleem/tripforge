@@ -3,9 +3,10 @@
 // itinerary document table, its FK helper (consumed by both the booking and
 // marketplace domain modules), the client-view share link, and content
 // library media-asset metadata — all itinerary-adjacent persistence.
-import { pgTable, text, timestamp, uuid, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uuid, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 // See schema.ts for why this sibling import omits the `.js` extension.
 import { agencyFk } from "./schema-columns";
+import { user } from "./schema-auth";
 
 // ─── Build → Book (spec 005: budget allocator + quote-then-book) ─────────────
 //
@@ -95,5 +96,37 @@ export const mediaAsset = pgTable(
   },
   (table) => ({
     agencyIdx: index("media_asset_agency_idx").on(table.agencyId),
+  }),
+);
+
+// ─── Traveler trip history (spec 031: "My Trips") ────────────────────────────
+//
+// Bolt-on metadata about an itinerary — NOT a canonical schema change
+// (Constitution IV) — the same pattern as itinerary_share_link/
+// trip_handoff_request/group_departure. Records that a signed-in visitor
+// (traveler OR agent, spec 030 precedent) has opened a trip's share link at
+// least once (research D1: "attach on view" is the sole v0 trigger).
+// UNIQUE(user_id, itinerary_id) is both the idempotency arbiter for repeat
+// views (INSERT ... ON CONFLICT DO NOTHING, same pattern as
+// itinerary_share_link's UNIQUE(itinerary_id)) and the sole predicate that
+// keeps one visitor's list from ever containing another's trips.
+export const clientTripLink = pgTable(
+  "client_trip_link",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    itineraryId: itineraryFk(),
+    source: text("source").notNull(), // "view" — the sole v0 trigger (research D1)
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userItineraryUnique: uniqueIndex("client_trip_link_user_itinerary_idx").on(
+      table.userId,
+      table.itineraryId,
+    ),
+    // The `myTrips` query is always `WHERE user_id = ? ORDER BY created_at DESC`.
+    userCreatedIdx: index("client_trip_link_user_created_idx").on(table.userId, table.createdAt),
   }),
 );

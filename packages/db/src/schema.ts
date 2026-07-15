@@ -15,7 +15,7 @@
 // every real runtime consumer (Next.js, Vite/vitest) resolve extension-less
 // relative imports fine, so this is safe for this module cluster only.
 export { user, session, account, verification, organization, member, invitation } from "./schema-auth";
-export { itinerary, itineraryFk, itineraryShareLink, mediaAsset } from "./schema-itinerary";
+export { itinerary, itineraryFk, itineraryShareLink, mediaAsset, clientTripLink } from "./schema-itinerary";
 export { bookingQuote, booking, bookingComponent, markupLedger } from "./schema-booking";
 export {
   pmfEvent,
@@ -29,7 +29,7 @@ export { groupDeparture, groupDepartureSeat } from "./schema-group-travel";
 export { tripHandoffRequest } from "./schema-trip-handoffs";
 
 import { user, session, account, verification, organization, member, invitation } from "./schema-auth";
-import { itinerary, itineraryShareLink, mediaAsset } from "./schema-itinerary";
+import { itinerary, itineraryShareLink, mediaAsset, clientTripLink } from "./schema-itinerary";
 import { bookingQuote, booking, bookingComponent, markupLedger } from "./schema-booking";
 import {
   pmfEvent,
@@ -66,6 +66,7 @@ export const schema = {
   groupDeparture,
   groupDepartureSeat,
   tripHandoffRequest,
+  clientTripLink,
 };
 
 export type Schema = typeof schema;

@@ -39,10 +39,21 @@ const resolveView = cache(async (token: string) => {
 // separate from `resolveView` above, which is UNCHANGED (still anonymous),
 // so the core itinerary-rendering path (US3 regression guard) carries zero
 // risk from this addition.
-const resolveIdentity = cache(async (): Promise<TravelerIdentity | null> => {
+//
+// Attach-on-view (spec 031 research D1/D2): once identity resolves, best-effort
+// record the visit in ITS OWN try/catch — a failure there (e.g. a transient DB
+// hiccup) is swallowed and can never turn a successful identity/pre-fill result
+// into a failure (spec 031 plan.md Constraints, spec 030 US1 regression guard).
+const resolveIdentity = cache(async (token: string): Promise<TravelerIdentity | null> => {
   try {
     const caller = await getAuthenticatedCaller(await headers());
-    return await caller.clientView.me();
+    const identity = await caller.clientView.me();
+    try {
+      await caller.clientView.attachTrip({ token });
+    } catch {
+      // best-effort trip-history linking only — never affects identity/pre-fill
+    }
+    return identity;
   } catch {
     return null;
   }
@@ -93,7 +104,7 @@ export default async function SharedItineraryPage({ params }: PageProps) {
     );
   }
 
-  const identity = await resolveIdentity();
+  const identity = await resolveIdentity(token);
   const { view } = result;
   // Booked prices come from the booking record (spec 013); when any shown
   // price is still an un-booked estimate, the total must say so (FR-004).

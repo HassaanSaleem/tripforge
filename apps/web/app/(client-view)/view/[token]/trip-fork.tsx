@@ -80,6 +80,10 @@ export function TripFork({ token, identity }: { token: string; identity: Travele
           {identity ? (
             <>
               Signed in as {identity.name} ·{" "}
+              <a href="/view/my-trips" data-testid="my-trips-link">
+                My Trips
+              </a>{" "}
+              ·{" "}
               <button type="button" className="tf-link-btn" onClick={handleSignOut} data-testid="account-sign-out">
                 Sign out
               </button>

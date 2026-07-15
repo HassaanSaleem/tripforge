@@ -19,17 +19,20 @@
 import { addMoney, money, MoneyError, type Money } from "@tripforge/domain";
 import { parseItinerary, type Itinerary, type MediaRef } from "@tripforge/itinerary-schema";
 import {
+  desc,
   eq,
   bookingComponent as bookingComponentTable,
+  clientTripLink as clientTripLinkTable,
   getOrganizationName,
   getUserIdentity,
   itinerary as itineraryTable,
   itineraryShareLink as itineraryShareLinkTable,
   scopedWhere,
 } from "@tripforge/db";
+import type { Db } from "@tripforge/db";
 import { createLogger } from "@tripforge/shared";
 import { z } from "zod";
-import type { AgentSessionContext, Container } from "../context.js";
+import type { AgentSessionContext, Container, SessionContext } from "../context.js";
 import { isItineraryValidationError, summarizeItineraryValidationError } from "./itinerary-read-guard.js";
 
 const logger = createLogger({ bindings: { component: "client-view" } });
@@ -245,6 +248,24 @@ export type ResolveShareLinkOutcome =
   | { status: "not_found" }
   | { status: "found"; view: ClientItineraryView };
 
+/** Token → `{agencyId, itineraryId}`, or undefined for an unknown token. Shared
+ * by `resolveShareLink` (anonymous) and `attachTraveler` (spec 031) — the one
+ * place either reads `itinerary_share_link` by its token. */
+async function findShareLinkByToken(
+  db: Db,
+  token: string,
+): Promise<{ agencyId: string; itineraryId: string } | undefined> {
+  const links = await db
+    .select({
+      agencyId: itineraryShareLinkTable.agencyId,
+      itineraryId: itineraryShareLinkTable.itineraryId,
+    })
+    .from(itineraryShareLinkTable)
+    .where(eq(itineraryShareLinkTable.token, token))
+    .limit(1);
+  return links[0];
+}
+
 /**
  * Token → redacted view. A typed not_found (never a thrown error) covers
  * unknown tokens and deleted itineraries alike — the unavailable state reveals
@@ -257,12 +278,7 @@ export async function resolveShareLink(
   const db = container.db;
   if (!db) throw new Error("database not configured");
 
-  const links = await db
-    .select()
-    .from(itineraryShareLinkTable)
-    .where(eq(itineraryShareLinkTable.token, token))
-    .limit(1);
-  const link = links[0];
+  const link = await findShareLinkByToken(db, token);
   if (!link) return { status: "not_found" };
 
   const rows = await db
@@ -336,4 +352,93 @@ export async function getSignedInIdentity(
 
   const identity = await getUserIdentity(db, userId);
   return identity ?? null;
+}
+
+// ─── Traveler trip history (spec 031, contracts §1/§2) ───────────────────────
+
+export type AttachTravelerOutcome = { status: "not_found" } | { status: "linked" };
+
+/**
+ * Record that the caller has opened this trip's share link (research D1:
+ * "attach on view" is the sole v0 trigger). Idempotent — a repeat call for the
+ * same (userId, itineraryId) pair is a no-op, never a duplicate row (the
+ * UNIQUE(user_id, itinerary_id) constraint is the arbiter, same pattern as
+ * `createShareLink`'s UNIQUE(itinerary_id)). An unknown/deleted-itinerary
+ * token is the same not_found surface `resolveShareLink` uses — reveals
+ * nothing about whether the token ever existed.
+ */
+export async function attachTraveler(
+  container: Container,
+  session: SessionContext,
+  token: string,
+): Promise<AttachTravelerOutcome> {
+  const db = container.db;
+  if (!db) throw new Error("database not configured");
+
+  const link = await findShareLinkByToken(db, token);
+  if (!link) return { status: "not_found" };
+
+  await db
+    .insert(clientTripLinkTable)
+    .values({ userId: session.userId, itineraryId: link.itineraryId, source: "view" })
+    .onConflictDoNothing({
+      target: [clientTripLinkTable.userId, clientTripLinkTable.itineraryId],
+    });
+
+  return { status: "linked" };
+}
+
+/** One row of a signed-in visitor's "My Trips" list — client-facing figures
+ * only (INV-020), identical shape to what the trip's own page already shows. */
+export interface TravelerTripSummary {
+  token: string;
+  title: string;
+  agencyName: string;
+  currency: string;
+  totalSellMinor: number | null;
+  linkedAt: string;
+}
+
+/**
+ * The caller's own linked trips, newest-linked-first — scoped ENTIRELY by
+ * `client_trip_link.user_id = userId` (a value the session middleware derives
+ * server-side, never client input), so no other visitor's trips are
+ * expressible in the result (FR-005). Each row is projected by the SAME
+ * `resolveShareLink` an anonymous visitor would get for that token — a single
+ * source of truth for "what a visitor may see about a trip" (research D3) —
+ * so a trip whose share link/itinerary was deleted since it was linked simply
+ * drops out (defense in depth; the FK cascade already removes the
+ * `client_trip_link` row in that case).
+ */
+export async function listTravelerTrips(
+  container: Container,
+  userId: string,
+): Promise<TravelerTripSummary[]> {
+  const db = container.db;
+  if (!db) throw new Error("database not configured");
+
+  const links = await db
+    .select({
+      token: itineraryShareLinkTable.token,
+      linkedAt: clientTripLinkTable.createdAt,
+    })
+    .from(clientTripLinkTable)
+    .innerJoin(itineraryShareLinkTable, eq(itineraryShareLinkTable.itineraryId, clientTripLinkTable.itineraryId))
+    .where(eq(clientTripLinkTable.userId, userId))
+    .orderBy(desc(clientTripLinkTable.createdAt));
+
+  const summaries: TravelerTripSummary[] = [];
+  for (const link of links) {
+    const resolved = await resolveShareLink(container, link.token);
+    if (resolved.status !== "found") continue;
+    summaries.push({
+      token: link.token,
+      title: resolved.view.title,
+      agencyName: resolved.view.agencyName,
+      currency: resolved.view.currency,
+      totalSellMinor: resolved.view.totalSellMinor,
+      linkedAt: link.linkedAt.toISOString(),
+    });
+  }
+  return summaries;
 }
