@@ -187,6 +187,15 @@ if [ -f "$REPO_ROOT/$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   source "$REPO_ROOT/$ENV_FILE"
   set +a
+  # OPERATOR POLICY (Hassaan, 2026-07-16): the loop generates code ONLY through
+  # the preconfigured terminal `claude` session (OAuth/subscription) — never an
+  # API key or model override from env. The env ANTHROPIC_API_KEY is the APP's
+  # (compose reads it directly for real-Haiku demos), NOT the loop's. Strip both
+  # from the loop's environment here so `.env` can carry the app's key without
+  # ever routing the loop's `claude` sub-processes through a pay-go API or an
+  # env-pinned model. To change the loop's model, use the terminal `claude`
+  # config (/config), not this env.
+  unset ANTHROPIC_API_KEY ANTHROPIC_MODEL
 fi
 
 # ─── Defaults ─────────────────────────────────────────────────────────
