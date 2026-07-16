@@ -10,7 +10,8 @@ export default function HomePage() {
         {/* Brand as an accessible heading — smoke.spec.ts pins role=heading "TripForge" */}
         <h1 className="tf-brand">TripForge</h1>
         <nav>
-          <Link href="/sign-in" className="tf-btn tf-btn--ghost">Sign in</Link>
+          <Link href="/view/sign-in" className="tf-btn tf-btn--ghost">Travelers</Link>
+          <Link href="/sign-in" className="tf-btn tf-btn--ghost">Agent sign in</Link>
           <Link href="/sign-up" className="tf-btn tf-btn--cta">Start free</Link>
         </nav>
       </header>
