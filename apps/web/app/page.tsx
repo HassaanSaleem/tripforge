@@ -74,7 +74,7 @@ export default function HomePage() {
         <footer className="home-foot">
           New to TripForge? <Link href="/sign-up">create an account and agency</Link>
           {"  ·  "}
-          <Link href="/view">Client view</Link> — the white-labeled traveler experience
+          Traveling? <Link href="/view/sign-in">Sign in to view your trips</Link>
         </footer>
       </main>
     </>

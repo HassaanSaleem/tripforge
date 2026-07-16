@@ -27,6 +27,9 @@ export default async function SignInPage() {
         <p className="tf-auth-foot">
           New here? <Link href="/sign-up">Create an account and agency</Link>
         </p>
+        <p className="tf-auth-foot">
+          Traveler with a trip link? <Link href="/view/sign-in">Sign in to view your trips</Link>
+        </p>
       </div>
     </main>
   );
