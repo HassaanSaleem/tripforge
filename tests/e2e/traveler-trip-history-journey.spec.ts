@@ -107,7 +107,16 @@ test("a traveler's My Trips lists only the trips they've opened, opens the same 
 
     await test.step("history persists across sign-out/sign-in (spec.md edge case)", async () => {
       await travelerPage.goto(firstUrl);
-      await travelerPage.getByTestId("trip-fork-account-strip").getByTestId("account-sign-out").click();
+      const accountStrip = travelerPage.getByTestId("trip-fork-account-strip");
+      await accountStrip.getByTestId("account-sign-out").click();
+      // Sign-out is async (Better Auth call + router.refresh) — WAIT for the
+      // account strip to actually flip to its signed-out state before navigating,
+      // or the /view/sign-in visit races an as-yet-valid session cookie and the
+      // page's "already signed in → return to trip" redirect (resolve-client-auth-
+      // return-to.ts) bounces us straight back to /view/<token>, leaving no email
+      // field for signInTraveler to fill. Keying on the signed-out affordance makes
+      // the sign-out deterministically complete first (no arbitrary sleep).
+      await expect(accountStrip.getByTestId("account-sign-in-link")).toBeVisible();
       await travelerPage.goto(`/view/sign-in?token=${firstToken}`);
       await signInTraveler(travelerPage, traveler, new RegExp(`/view/${firstToken}$`));
       await travelerPage.goto("/view/my-trips");

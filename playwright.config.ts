@@ -25,6 +25,17 @@ export default defineConfig({
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    // Bound every navigation and action (ticket e2e-traveler-trip-history-signout-hang).
+    // Playwright's defaults are 0 = "no per-step limit", so a server render that wedges
+    // (e.g. the DB-pool-exhaustion hang this ticket fixes) used to block a single
+    // `page.goto`/`click` until the whole test's 10-minute budget expired — an opaque,
+    // silent stall. A bounded per-step timeout turns any such stall into a FAST, clearly
+    // located failure ("Timeout … exceeded … navigating to /view/…") instead. This never
+    // weakens an assertion: it only caps how long one stuck step may hang; explicit
+    // longer waits (draft/rate-limit retries in tests/e2e/support.ts) pass their own
+    // larger timeout and are unaffected.
+    navigationTimeout: 45_000,
+    actionTimeout: 30_000,
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });
