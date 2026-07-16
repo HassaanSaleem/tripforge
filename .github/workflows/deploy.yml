@@ -26,6 +26,15 @@ jobs:
         with:
           node-version: "22"
 
+      # The Vercel project builds with pnpm (package.json#packageManager) — the
+      # runner has none, so `vercel build` fails with `spawn pnpm ENOENT`.
+      # Corepack (bundled with Node 22) provisions the pinned pnpm.
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.33.0 --activate
+          pnpm --version
+
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
