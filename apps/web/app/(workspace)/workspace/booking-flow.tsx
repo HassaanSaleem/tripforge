@@ -179,7 +179,17 @@ function QuoteReview({
         // Per-item reasons still render below (contract §2.1) — e.g. a fully
         // booked plan reports every item as already booked.
         <p>No items could be held at live prices. Adjust the plan or quote again.</p>
-      ) : null}
+      ) : (
+        <div className="tf-quote-summary">
+          <div>
+            <p className="tf-eyebrow">Live-priced holds</p>
+            <b>
+              {heldCount} {heldCount === 1 ? "item" : "items"} held at firm net rates
+            </b>
+          </div>
+          <p>Review each client price and hold window, then book the ones you want.</p>
+        </div>
+      )}
       {items.length === 0 ? null : (
         <table className="tf-quote-table">
           <thead>

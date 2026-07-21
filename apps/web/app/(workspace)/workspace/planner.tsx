@@ -257,7 +257,16 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
     <section className="tf-card">
       <p className="tf-eyebrow">AI itinerary planner</p>
       <h2>Plan a trip</h2>
+      <p className="tf-planner-lede">
+        Tell us the essentials and our budget-aware AI drafts a bookable, priced itinerary —
+        then compare options and book at your markup.
+      </p>
       <form onSubmit={handleSubmit} className="tf-planner-form">
+        <div className="tf-form-sectionhead span-2">
+          <span className="tf-form-stepn" aria-hidden="true">1</span>
+          <b>Destination &amp; dates</b>
+          <p className="tf-field-hint">Where and when — pick a seeded destination or type your own.</p>
+        </div>
         <label htmlFor="destination" className="span-2 tf-destination-field">
           Destination
           <input
@@ -328,6 +337,11 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
             onChange={(e) => update("checkOut", e.target.value)}
           />
         </label>
+        <div className="tf-form-sectionhead span-2">
+          <span className="tf-form-stepn" aria-hidden="true">2</span>
+          <b>Who&apos;s travelling</b>
+          <p className="tf-field-hint">Party size shapes room and activity pricing.</p>
+        </div>
         <label htmlFor="adults">
           Adults
           <input
@@ -353,6 +367,11 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
             onChange={(e) => update("children", e.target.value)}
           />
         </label>
+        <div className="tf-form-sectionhead span-2">
+          <span className="tf-form-stepn" aria-hidden="true">3</span>
+          <b>Budget &amp; style</b>
+          <p className="tf-field-hint">Set the budget and how strict it is, then tune the trip&apos;s style.</p>
+        </div>
         <div className="span-2">
           Trip style
           <SegmentedControl
