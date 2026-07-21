@@ -1260,9 +1260,10 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 5.\n\nThe product reads like a Google Form (stacked labels + inputs, no craft). Lift the shared UI to a premium travel product on both surfaces: real form components with considered spacing/typography, guided multi-step flows instead of one long form, real imagery, and a plan→book flow that feels guided rather than filled-in. Extend the existing seed-0009s .tf-* theme kit in apps/web/app/globals.css; do not fork per-page styles.\n\nAcceptance: planner, auth (agent + client), and booking review screens no longer present as bare label/input stacks; a documented before/after in the PR (screenshots to evidence); no visual regression to the home smoke assertions; e2e still green. No prod deploy; full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 7). Score 12 (U3/A5/I4) — extends the existing seed-0009s .tf-* theme kit (no per-page fork); operator-priority premium UI. Independent, no unmerged prerequisite."
   },
   {
     "id": "goal-chat-first-builder",
@@ -1270,9 +1271,10 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 3.\n\nChat already exists on the agent workspace as an adjunct to the structured form (chat-entry.tsx spec 028; chat-edit demo-03). Promote conversation to the PRIMARY build path: the agent (and, on the consumer surface, the traveler) builds the whole trip in the chat, the form remains available as an option a chat can fill, and once the itinerary has what it needs the flow proceeds into the booking workflow. Reuse the existing interpretChatRequest/startDraft path and packages/llm; do not fork the planner.\n\nAcceptance: from an empty state, a multi-turn chat produces a complete draft and offers to proceed to booking without ever touching the form; the form path still works; L3 covers the chat→draft→book handoff. No prod deploy; full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 7). Score 12 (U4/A4/I4) — promotes existing agent chat path (interpretChatRequest/startDraft, packages/llm) to the primary build flow; no unmerged prerequisite. Prerequisite for goal-consumer-planner chat-first requirement."
   },
   {
     "id": "goal-traveler-account",
@@ -1280,9 +1282,10 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.1.\n\nToday travelers only get a token-scoped identity for viewing a shared trip. Give travelers a real self-serve account: sign-up/sign-in that stands on its own (not gated behind a share token), a traveler home landing after auth, and My Trips reachable from it. Keep INV-018/INV-020/INV-023 (traveler role can never invoke a workspace procedure; client-view stays brand-neutral). Reuse Better Auth; no schema fork.\n\nAcceptance: a traveler can create an account from the consumer surface with no share token, land on a traveler home, and reach My Trips; a traveler session still cannot reach any workspace procedure (INV-023 test). No prod deploy; full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 7). Score 15 (U5/A5/I5) — foundation frontier; a real self-serve traveler account (client-view is token-only today) unblocks 5 downstream consumer/group tickets. No unmerged prerequisite; branches cleanly from campaign/two-sided-surface."
   },
   {
     "id": "goal-consumer-planner",
