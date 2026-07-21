@@ -24,3 +24,10 @@ not a backlog. (State lives in docs/internal/loop-state.md; the queue in
 4. Quality sweep every 3rd iteration; dead code is removed only via ticketed PRs.
 5. When blocked, write the ask as a row in OPERATOR-DESK.md and continue other
    work. A gate that is not on the desk was not asked.
+6. Active campaign (2026-07-21): pursue **GOAL.md** — build out the consumer/
+   client surface, group trips, chat-first builder, marketplace resale/
+   white-label, landing pages, and premium UI. Runs on branch
+   `campaign/two-sided-surface`; deploy is PAUSED; nothing merges to `main`
+   without my review. The P2 pull-forward + group-trips scope is
+   operator-authorized in GOAL.md. Live validation (INV-027 + UAT) is NOT
+   skipped.
