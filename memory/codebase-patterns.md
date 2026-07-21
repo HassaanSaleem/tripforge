@@ -39,10 +39,16 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   consecutive clean pass for product correctness — but the live browser + network
   trace surfaced a real product GAP (the self-drive "Book it myself" fork fires
   zero mutations; no client-facing self-book procedure exists) that no unit test
-  can see because there is no code to unit-test yet. The rule still holds (never
-  skip the INV-027 live gate for product-behavior changes): even when it finds no
-  DEFECT, the live surface is where missing-capability gaps against the roadmap
-  become visible.
+  can see because there is no code to unit-test yet. Iter 8's live scenario
+  (traveler-marketplace-attempt: marketplace×{web,api}×client) was a fourth
+  consecutive clean pass for product correctness AND a second consecutive
+  live-surface-reveals-a-roadmap-gap (no consumer marketplace browse/discover/act
+  surface — a traveler is FORBIDDEN on every agent marketplace procedure and every
+  `clientView.*` marketplace procedure is NOT_FOUND; state fully conserved). The
+  rule still holds (never skip the INV-027 live gate for product-behavior changes):
+  even when it finds no DEFECT, the live surface is where missing-capability gaps
+  against the roadmap become visible — now the DOMINANT signal two iterations
+  running as the campaign builds out the (largely absent) consumer surface.
 
 - **Shared test-flow helpers go stale silently when the underlying flow
   changes shape — confirmed 3 times now.** `tests/e2e/support.ts`'s
@@ -58,19 +64,23 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   (ticket `17840669434037957747` proposes the Node-script-side fix).
 
 - **Vitest + eslint DON'T type-check — real `tsc` breaks hide behind a green
-  oracle (confirmed iter 6 + iter 7).** The oracle runs `pnpm test` (vitest,
-  which transpiles without strict type-checking) and `pnpm run lint` (eslint),
-  neither of which surfaces a `tsc --noEmit` error. Iter 6 found a repo-wide
-  typecheck break (`chat-edit.test.ts` referencing a removed `ChatEditResult`
-  export) invisible to every gate; iter 7 found a different one still open
-  (`l3-agency-admin.test.ts` 4× TS2345 + `l3-booking.test.ts` 2× TS18048, all
-  test-file indexed-access / destructure `undefined`-narrowing) while vitest
-  stayed 619/619 green. Both were in TEST files, so product code compiled and
-  runtime tests passed — the break is pure type-safety debt the oracle cannot
-  see. Rule: regress should run `pnpm run typecheck` in-image as an investigative
-  check every iteration (it's cheap, layer-cached off the same verify image) and
-  ticket any break; whether it JOINS the oracle is a sealed-gate operator decision
-  (desk row `TYPECHECK-GATE-GAP`), not a loop change.
+  oracle (confirmed iter 6 + iter 7 + iter 8).** The oracle runs `pnpm test`
+  (vitest, which transpiles without strict type-checking) and `pnpm run lint`
+  (eslint), neither of which surfaces a `tsc --noEmit` error. Iter 6 found a
+  repo-wide typecheck break (`chat-edit.test.ts` referencing a removed
+  `ChatEditResult` export, since fixed) invisible to every gate; iter 7 found a
+  different one (`l3-agency-admin.test.ts` 4× TS2345 + `l3-booking.test.ts` 2×
+  TS18048, all test-file indexed-access / destructure `undefined`-narrowing), and
+  iter 8 confirmed the SAME 6 errors STILL unfixed a third consecutive iteration
+  while vitest stayed 619/619 green. All were in TEST files, so product code
+  compiled and runtime tests passed — the break is pure type-safety debt the
+  oracle cannot see, and it PERSISTS because nothing gates it (bug ticket
+  `typecheck-break-agency-admin-booking-l3` sat open across iter 6→7→8). Rule:
+  regress should run `pnpm run typecheck` in-image as an investigative check every
+  iteration (it's cheap, layer-cached off the same verify image) and ticket any
+  break; whether it JOINS the oracle is a sealed-gate operator decision (desk row
+  `TYPECHECK-GATE-GAP` — itself lost/re-filed 3× via REGRESS-ARTIFACT-LOSS), not a
+  loop change.
 
 - **State-delta assertions (not just response codes) are the load-bearing
   check on money-conservation scenarios.** L3-style scenarios that assert
@@ -96,7 +106,9 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   0.23s iter 2; 368 tests → 0.88s iter 3, 2.6s with the env-gated L3 specs
   included against live Postgres; 392 tests → iter 4; 483 tests → 1.3s (no
   DB) / 2.9s (DB-inclusive) iter 5; 573 tests → 1.55s (no DB) / 3.0s
-  (DB-inclusive) iter 6; 619 tests → 3.0s (DB-inclusive, 63 files) iter 7).
+  (DB-inclusive) iter 6; 619 tests → 3.0s (DB-inclusive, 63 files) iter 7;
+  619 tests → 3.19s (DB-inclusive, 63 files) iter 8, unchanged — no test files
+  landed on the iter-8 branch (campaign-sync + ideate only)).
   Cost is never a reason to skip or subset it.
 
 ## Integration Patterns
@@ -119,9 +131,10 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   `KITCHENLOOP-COVERAGE` declaration — it is now the sole writer, never
   hand-edited. Iter 5 re-ran the derivation and got a byte-for-byte match
   against the committed file (28/36, zero working-tree diff), confirming the
-  fix holds a second time. Iter 6 (30/36) and iter 7 (31/36) both regenerated
-  clean (exit 0, no vocabulary crash after PR #74 removed the out-of-vocab
-  group-travel block) — a 4th consecutive iteration the tool is the sole writer.
+  fix holds a second time. Iter 6 (30/36), iter 7 (31/36), and iter 8 (33/36)
+  all regenerated clean (exit 0, no vocabulary crash after PR #74 removed the
+  out-of-vocab group-travel block) — a 5th consecutive iteration the tool is the
+  sole writer.
   Regress should keep running
   `derive-coverage.mjs` each iteration (its own exit code flags malformed
   scenario blocks) rather than reconciling the matrix by hand.
