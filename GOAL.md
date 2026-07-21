@@ -47,6 +47,46 @@ out of scope.
   itinerary schema version bumps/migrations, and revenue-share / client-ownership
   semantics changes (DIRECTIVE §2) — even inside this campaign.
 
+## Inputs & architecture grounding (PRD → tech architecture → MVP)
+
+Every ticket is grounded in this order before a line is written — the loop routes
+feature work through SDD (`/speckit-specify → /speckit-plan → /speckit-tasks →
+/speckit-implement`), and the plan MUST cite these inputs and pass the
+Constitution Check:
+
+1. **PRD — what & why (product source of truth):**
+   `docs/product/Trellis_Product_Charter_PRD.pdf` (Charter+PRD v0.3), plus the
+   agent-readable feasibility digest
+   `docs/product/Trellis_Feasibility_Study_v0.1_digest.md`. Defines the two
+   surfaces, personas, the four pillars (Build/Book/Trade/Consumer), the P0–P3
+   roadmap, and the North Star (**GBV**). The consumer surface this campaign
+   builds is the PRD's **P2** surface, pulled forward by operator decision.
+
+2. **Constitution — the immutable rules:** `.specify/memory/constitution.md`
+   (v1.1.0) — the six principles (Marketplace-First, Agent-Experience-Is-the-
+   Wedge, Budget-Aware-AI, Canonical Itinerary Schema, Integrate-Supply, Trust/
+   Provenance/Revenue-Share) and the MVP scope discipline. The plan's
+   Constitution Check gates the design.
+
+3. **Tech architecture — how (the build shape):**
+   `docs/architecture/system-architecture.md` — the system map (two surfaces on
+   one shared engine, §1.1), the stack (**ADR-0001**: Next.js + Expo turborepo,
+   tRPC, Better Auth on Postgres/Drizzle, Anthropic Claude SDK behind an
+   LLMPort; ADR-0002/0003/0004), and the **numbered invariants INV-NNN (§3)** —
+   schema & data, supply & booking, money, AI, identity/RBAC, caching, live
+   verification, deployment/runtime. All new code MUST conform to these
+   invariants and the layer boundaries in
+   `.claude/skills/typescript-clean-architecture/SKILL.md`.
+
+4. **Then the MVP slice.** With PRD intent + architecture invariants in hand, the
+   ticket implements the smallest correct slice toward the goal, with L3 tests on
+   money paths and live validation each cycle.
+
+**Sealed-regulator note:** the architecture doc and constitution are sealed — the
+loop may not amend them autonomously. A ticket that needs new cross-feature
+structure (e.g. **group trips**) MUST *propose* a new invariant / schema note in
+its plan; only an operator gate lands it (DIRECTIVE §2).
+
 ## Deliverable 1 — Landing pages (global + travelers + agents) with demo videos
 
 Assets are staged in `apps/web/public/`: `demos/tripforge-clients.mp4`,
