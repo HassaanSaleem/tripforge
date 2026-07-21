@@ -46,6 +46,22 @@ out of scope.
 - **Still ALWAYS HALT for the operator:** constitution amendments, canonical
   itinerary schema version bumps/migrations, and revenue-share / client-ownership
   semantics changes (DIRECTIVE §2) — even inside this campaign.
+- **Consumer self-book semantics (goal-consumer-selfbook) — RULED 2026-07-21:**
+  the self-serve traveler booking is built as a **v0 that stays inside existing
+  money math**, so it does NOT trip the ALWAYS-HALT — build it now:
+  - **Ownership:** the trip stays owned by the **originating agency** (the share
+    token is an agency itinerary); attach the signed-in traveler via the existing
+    P2 client↔trip association (INV-020: traveler sees the **sell price only**,
+    never net/markup). No traveler-owner association, **no canonical-schema
+    change**.
+  - **Money:** the traveler pays the agency's **existing marked-up sell price**;
+    the **agency keeps the markup**; reuse `markup_ledger` unchanged. **No
+    platform take-rate on self-serve in v0; no revenue-share formula change.**
+  - **Shape:** a token-scoped `clientView.book` procedure over the existing
+    agency-scoped booking path; L3 money-path + conservation tests + live
+    validation mandatory. Traveler-owned bookings and any platform take-rate are
+    **deferred** to a future operator decision (would each be a schema /
+    revenue-share change that re-halts).
 
 ## Deliverable 1 — Landing pages (global + travelers + agents) with demo videos
 
