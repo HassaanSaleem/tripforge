@@ -583,4 +583,116 @@ label > input, label > select, label > textarea {
 .tf-discover-hotel span { color: var(--muted); font-size: 12.5px; }
 .tf-discover-card-body a.tf-btn--cta { justify-self: start; text-decoration: none; }
 
+/* ==========================================================================
+   goal-ui-depoliteform (spec 034) — premium lift of the shared kit.
+   Presentation only; EXISTING tokens only (no new palette, no dark mode).
+   Refines fields + primary CTA, adds a guided form-section system, a branded
+   auth split, and a premium booking-review summary. Every accessible name,
+   ARIA role, testid, and .tf-* hook the app / e2e depend on is preserved.
+   ========================================================================== */
+
+/* -- premium text fields: consistent height + soft depth. Excludes
+   checkbox/radio so the quote-table selectors and the sidebar toggle keep
+   their own sizing. Overrides the base padding via later-in-file order. -- */
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+  min-height: 44px; padding: 12px 14px; box-shadow: var(--shadow-sm);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+textarea { min-height: 96px; }
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+select:focus-visible, textarea:focus-visible { border-color: var(--sea); }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+
+/* -- refined primary CTA (coral) + an optional large size -- */
+.tf-btn--cta { min-height: 46px; letter-spacing: .005em;
+  box-shadow: 0 1px 2px rgba(201,92,55,.22), 0 10px 22px -13px rgba(201,92,55,.55); }
+.tf-btn--lg { min-height: 52px; padding-inline: 26px; font-size: 15.5px; }
+
+/* -- guided form sections: turn a long field stack into titled, hinted groups.
+   .tf-form-sectionhead spans the planner grid (step number + serif title +
+   hint). Presentation only — fields keep their labels, order, and roles. -- */
+.tf-planner-lede { color: var(--ink-soft); margin: 2px 0 20px; max-width: 60ch; }
+.tf-form-sectionhead {
+  grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr;
+  gap: 1px 12px; align-items: center; margin-top: 10px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.tf-form-sectionhead:first-of-type { border-top: none; padding-top: 2px; margin-top: 0; }
+.tf-form-stepn {
+  grid-row: span 2; align-self: start; display: inline-grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 999px; background: var(--sea-tint);
+  color: var(--sea-deep); font-family: var(--mono); font-weight: 700; font-size: 13px;
+}
+.tf-form-sectionhead b {
+  grid-column: 2; align-self: end; font-family: var(--serif); font-weight: 620;
+  font-size: 16.5px; color: var(--ink); text-transform: none; letter-spacing: -.01em;
+}
+.tf-form-sectionhead .tf-field-hint { grid-column: 2; align-self: start; margin: 0; }
+.tf-field-hint {
+  font-size: 12.5px; color: var(--muted); font-weight: 400;
+  text-transform: none; letter-spacing: normal; margin: 4px 0 0;
+}
+
+/* -- branded auth split: story/visual panel beside the credentials card.
+   Agent surface is platform-branded; the client (white-label) variant uses
+   .tf-auth-aside--plain and carries NO brand and NO product shot (INV-020). -- */
+.tf-auth-split { width: 100%; min-height: 100dvh; margin: 0;
+  display: grid; grid-template-columns: 1.02fr .98fr; }
+[data-plain] main.tf-auth-split { width: 100%; margin: 0; }
+.tf-auth-aside {
+  position: relative; isolation: isolate; display: flex; flex-direction: column;
+  justify-content: space-between; gap: 26px; padding: clamp(28px,4vw,56px);
+  color: #fff; overflow: hidden;
+}
+.tf-auth-aside::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
+  radial-gradient(760px 520px at 12% -10%, #14887c 0, transparent 60%),
+  radial-gradient(720px 620px at 108% 8%, var(--coral) 0, transparent 52%),
+  linear-gradient(160deg, var(--sea-deep), #0a3f3a 60%, #7d3f2f); }
+.tf-auth-aside--plain::before { background:
+  radial-gradient(760px 520px at 12% -10%, #14887c 0, transparent 60%),
+  linear-gradient(160deg, var(--sea-deep), #0a3f3a); }
+.tf-auth-aside .tf-brand { color: #fff; font-size: 22px; }
+.tf-auth-aside .tf-brand::before { color: #ffd9a0; }
+.tf-auth-aside .tf-eyebrow { color: rgba(255,255,255,.82); }
+.tf-auth-aside h2 { color: #fff; font-size: clamp(23px,2.5vw,31px); max-width: 18ch; margin: 6px 0 0; }
+.tf-auth-aside-lede { color: rgba(255,255,255,.9); margin: 0; max-width: 40ch; }
+.tf-auth-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tf-auth-points li { display: flex; align-items: flex-start; gap: 10px; color: rgba(255,255,255,.94); font-size: 14.5px; }
+.tf-auth-points li::before {
+  content: "✓"; flex: none; display: grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 999px; background: rgba(255,255,255,.16); font-size: 12px; margin-top: 1px;
+}
+.tf-auth-shot { margin: 0; border-radius: var(--r); overflow: hidden;
+  border: 1px solid rgba(255,255,255,.22); box-shadow: 0 20px 50px -22px rgba(0,0,0,.6);
+  background: rgba(255,255,255,.06); }
+.tf-auth-shot img { display: block; width: 100%; height: auto; }
+.tf-auth-panel { display: grid; place-items: center; padding: clamp(28px,5vw,56px) 20px; background:
+  radial-gradient(700px 420px at 88% -12%, var(--sea-tint) 0, transparent 60%), var(--sand); }
+.tf-auth-panel .tf-auth-card { margin: 0; }
+.tf-auth-panel .tf-auth-tagline { margin-top: 0; }
+@media (max-width: 880px) {
+  .tf-auth-split { grid-template-columns: 1fr; }
+  .tf-auth-aside { padding: 24px 22px; gap: 12px; }
+  .tf-auth-shot, .tf-auth-aside-lede, .tf-auth-points { display: none; }
+  .tf-auth-aside h2 { font-size: 21px; }
+}
+
+/* -- premium booking review: a summary band above the refined quote table -- */
+.tf-quote-summary { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; padding: 13px 16px; border-radius: var(--r);
+  background: var(--sea-tint); border: 1px solid color-mix(in srgb, var(--sea) 20%, var(--line)); }
+.tf-quote-summary .tf-eyebrow { color: var(--sea-deep); }
+.tf-quote-summary b { font-family: var(--serif); font-weight: 620; color: var(--ink); font-size: 15.5px; }
+.tf-quote-summary p { margin: 0; font-size: 13px; color: var(--ink-soft); max-width: 34ch; }
+.tf-quote-table thead th { background: var(--sand); }
+.tf-quote-table tbody tr { transition: background .12s; }
+.tf-quote-table tbody tr:not(.tf-row-failed):hover { background: color-mix(in srgb, var(--sea-tint) 55%, transparent); }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
