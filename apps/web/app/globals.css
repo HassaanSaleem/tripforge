@@ -530,6 +530,17 @@ label > input, label > select, label > textarea {
 .tf-client-account-strip { font-size: 13px; color: var(--ink-soft); margin: 0 0 10px; }
 .tf-link-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: var(--sea); text-decoration: underline; cursor: pointer; }
 
+/* ---- traveler home at /view (spec 033): the signed-in landing + anonymous
+   welcome. Reuses .tf-card / .tf-quick-action(s) / .tf-btn; adds only the
+   welcome CTA row and the non-interactive "coming soon" signpost treatment.
+   Placed after .tf-quick-action so the muted overrides win by source order. */
+.tf-client-root a.tf-btn { text-decoration: none; }
+.tf-home-welcome-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.tf-home-soon { opacity: .72; cursor: default; }
+.tf-home-soon:hover { transform: none; box-shadow: var(--shadow); }
+.tf-home-soon b { color: var(--muted); }
+.tf-home-foot { display: flex; justify-content: center; }
+
 /* ---- Discover / "What's Hot" feed (spec 023): editorial, image-forward cards —
    the first cards in the app to render a real photo rather than a gradient
    swatch (.tf-dest-card stays gradient-only elsewhere by design). */
