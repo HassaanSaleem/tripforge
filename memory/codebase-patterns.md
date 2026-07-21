@@ -34,9 +34,15 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   live scenario (fresh-draft-client-view: itinerary-builder×{api,web}×client,
   cross-checked against Postgres ground truth) was a second consecutive clean
   pass — zero product defects, only a test-tooling crash (coverage-matrix
-  vocabulary guard) and a test-writing pitfall (SSR comment-split text). The
-  rule still holds (never skip the INV-027 live gate for product-behavior
-  changes) even though it doesn't guarantee a bug every time.
+  vocabulary guard) and a test-writing pitfall (SSR comment-split text). Iter 7's
+  live scenario (traveler-self-book-attempt: trust/booking×client) was a third
+  consecutive clean pass for product correctness — but the live browser + network
+  trace surfaced a real product GAP (the self-drive "Book it myself" fork fires
+  zero mutations; no client-facing self-book procedure exists) that no unit test
+  can see because there is no code to unit-test yet. The rule still holds (never
+  skip the INV-027 live gate for product-behavior changes): even when it finds no
+  DEFECT, the live surface is where missing-capability gaps against the roadmap
+  become visible.
 
 - **Shared test-flow helpers go stale silently when the underlying flow
   changes shape — confirmed 3 times now.** `tests/e2e/support.ts`'s
@@ -50,6 +56,21 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   — shared or not — not just the one shared helper file; a missing shared
   helper on one side of the test suite is a standing risk, not just a papercut
   (ticket `17840669434037957747` proposes the Node-script-side fix).
+
+- **Vitest + eslint DON'T type-check — real `tsc` breaks hide behind a green
+  oracle (confirmed iter 6 + iter 7).** The oracle runs `pnpm test` (vitest,
+  which transpiles without strict type-checking) and `pnpm run lint` (eslint),
+  neither of which surfaces a `tsc --noEmit` error. Iter 6 found a repo-wide
+  typecheck break (`chat-edit.test.ts` referencing a removed `ChatEditResult`
+  export) invisible to every gate; iter 7 found a different one still open
+  (`l3-agency-admin.test.ts` 4× TS2345 + `l3-booking.test.ts` 2× TS18048, all
+  test-file indexed-access / destructure `undefined`-narrowing) while vitest
+  stayed 619/619 green. Both were in TEST files, so product code compiled and
+  runtime tests passed — the break is pure type-safety debt the oracle cannot
+  see. Rule: regress should run `pnpm run typecheck` in-image as an investigative
+  check every iteration (it's cheap, layer-cached off the same verify image) and
+  ticket any break; whether it JOINS the oracle is a sealed-gate operator decision
+  (desk row `TYPECHECK-GATE-GAP`), not a loop change.
 
 - **State-delta assertions (not just response codes) are the load-bearing
   check on money-conservation scenarios.** L3-style scenarios that assert
@@ -75,7 +96,8 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   0.23s iter 2; 368 tests → 0.88s iter 3, 2.6s with the env-gated L3 specs
   included against live Postgres; 392 tests → iter 4; 483 tests → 1.3s (no
   DB) / 2.9s (DB-inclusive) iter 5; 573 tests → 1.55s (no DB) / 3.0s
-  (DB-inclusive) iter 6). Cost is never a reason to skip or subset it.
+  (DB-inclusive) iter 6; 619 tests → 3.0s (DB-inclusive, 63 files) iter 7).
+  Cost is never a reason to skip or subset it.
 
 ## Integration Patterns
 
@@ -97,6 +119,9 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   `KITCHENLOOP-COVERAGE` declaration — it is now the sole writer, never
   hand-edited. Iter 5 re-ran the derivation and got a byte-for-byte match
   against the committed file (28/36, zero working-tree diff), confirming the
-  fix holds a second time. Regress should keep running
+  fix holds a second time. Iter 6 (30/36) and iter 7 (31/36) both regenerated
+  clean (exit 0, no vocabulary crash after PR #74 removed the out-of-vocab
+  group-travel block) — a 4th consecutive iteration the tool is the sole writer.
+  Regress should keep running
   `derive-coverage.mjs` each iteration (its own exit code flags malformed
   scenario blocks) rather than reconciling the matrix by hand.
