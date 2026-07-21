@@ -1271,10 +1271,10 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 3.\n\nChat already exists on the agent workspace as an adjunct to the structured form (chat-entry.tsx spec 028; chat-edit demo-03). Promote conversation to the PRIMARY build path: the agent (and, on the consumer surface, the traveler) builds the whole trip in the chat, the form remains available as an option a chat can fill, and once the itinerary has what it needs the flow proceeds into the booking workflow. Reuse the existing interpretChatRequest/startDraft path and packages/llm; do not fork the planner.\n\nAcceptance: from an empty state, a multi-turn chat produces a complete draft and offers to proceed to booking without ever touching the form; the form path still works; L3 covers the chat→draft→book handoff. No prod deploy; full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "todo",
+    "state": "in_review",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": "",
-    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 7). Score 12 (U4/A4/I4) — promotes existing agent chat path (interpretChatRequest/startDraft, packages/llm) to the primary build flow; no unmerged prerequisite. Prerequisite for goal-consumer-planner chat-first requirement."
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/7",
+    "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 7). Score 12 (U4/A4/I4) — promotes existing agent chat path (interpretChatRequest/startDraft, packages/llm) to the primary build flow; no unmerged prerequisite. Prerequisite for goal-consumer-planner chat-first requirement. | iter-8 execute: picked (highest-tier feature, smaller bounded scope than goal-ui-depoliteform; explicit reuse of interpret/draft path). Scope = agent/shared-engine chat-first PRIMARY promotion + multi-turn accumulation; consumer-surface chat deferred to goal-consumer-planner (draft path is agentProcedure-gated, INV-024). No schema/money/supply change. | PR #7 opened (spec 035). Verified: lint clean, 621/621 in-image tests (L1 joined-transcript determinism + L3 multi-turn accumulate->draft->book), 51/51 e2e (new chat-first-journey + toggle-updated helper across 12 draftParisTrip specs), Live Test PASS (6-screenshot browser QA), zero-context UAT PASS. NEW sealed uat-card => PRM-SEAL operator hand-merge."
   },
   {
     "id": "goal-traveler-account",
