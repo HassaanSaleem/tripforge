@@ -1345,7 +1345,8 @@
     "priority": "medium",
     "state": "backlog",
     "created": "2026-07-21T18:00:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "[loop-review iter 6-8] EXTEND SCOPE: iteration-8 ideate (report FRICTION-1 / IMP-1) found a consumer-honesty mis-routing NOT covered by this ticket's original 3 places: a SIGNED-IN traveler hitting /marketplace or /discover is told to 'create an account and agency' -- the become-an-agent (supply-side) funnel, wrong for a consumer on a two-sided product. Cheap interim fix, decoupled from the FEAT builds: show a consumer-appropriate response (e.g. 'coming to your account soon' / route back to /view) instead of the agent-signup prompt. Same class as the /for-travelers overpromise already scoped here."
   },
   {
     "id": "landing-demo-video-playback",
@@ -1363,8 +1364,9 @@
     "body": "Found by iteration-7 regress investigative typecheck (in-image, tripforge-verify build target, `docker run --rm tripforge-verify pnpm run typecheck`), exit 2. Errors are all in TEST files, not product code -- `pnpm test` (vitest, loose type-check) and `pnpm run lint` (eslint) both stay green, and product code compiles, so this is invisible to every gate the oracle currently runs (lint + vitest + L3 smoke). Tests still PASS at runtime (619/619 this iteration).\n\nERRORS (evidence: .kitchenloop/logs/regress-iter-7-typecheck.log):\n- packages/api/src/__tests__/l3-agency-admin.test.ts(83,101,114,115): TS2345 -- `callerFor(sessions[\"...\"])` passes `SessionContext | undefined` (index access under noUncheckedIndexedAccess) where `callerFor` expects `SessionContext | null`. Fix: assert/narrow the indexed lookup (e.g. `sessions[name]!` after the makeAgencyWithMembers invariant, or change callerFor's param to accept undefined).\n- packages/api/src/__tests__/l3-booking.test.ts(396,405): TS18048 -- `const [toBook, ...rest] = heldItems;` gives `toBook: T | undefined`; `toBook.quote` / `toBook.itemId` then trip 'possibly undefined'. Fix: narrow after the `expect(heldItems.length).toBeGreaterThan(1)` assertion (destructure with a non-null assertion or an explicit guard).\n\nPROVENANCE: this is the SAME finding iteration-6 regress recorded in loop-state.md ('filed as bug ticket typecheck-break-agency-admin-booking-l3') but the ticket + its TYPECHECK-GATE-GAP desk row never actually persisted -- lost to the documented REGRESS-ARTIFACT-LOSS class (iter-6 had six orphaned rescue attempts). Re-filed here by iteration-7 regress. The unrelated chat-edit/ChatEditResult typecheck break (ticket 17840140457949911) is now RESOLVED (port.ts re-exports ChatEditResult).\n\nBug-sized: direct fix (narrow the two test-file lookups) + confirm `pnpm run typecheck` clean repo-wide in-image. The separate question of whether typecheck should JOIN the oracle is a sealed-gate operator decision -- desk row TYPECHECK-GATE-GAP.",
     "type": "bug",
     "priority": "medium",
-    "state": "backlog",
+    "state": "todo",
     "created": "2026-07-21T18:30:00Z",
-    "pr_url": ""
+    "pr_url": "",
+    "notes": "[loop-review iter 6-8] VERIFIED still-open across iters 6->7->8 (3 consecutive regress runs). Source re-confirmed at HEAD: l3-agency-admin.test.ts callerFor(session: SessionContext | null) rejects the SessionContext|undefined from indexed sessions[...] under noUncheckedIndexedAccess (4x TS2345); l3-booking.test.ts 'const [toBook] = heldItems' is possibly-undefined (2x TS18048). Invisible to every merge gate (vitest loose types + eslint stay green; typecheck not in oracle). Fixing these 6 is the named prerequisite for desk row TYPECHECK-GATE-GAP. Promoted backlog->todo by loop-review."
   }
 ]
