@@ -1250,9 +1250,9 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 1.\n\nBuild three public marketing pages to a premium, travel-grade bar (Constitution II: speed + polish is first-class; see memory 'Premium UI is the product'):\n- Rework the existing global landing (apps/web/app/page.tsx) into a true two-sided overview that forks clearly to the traveler and agent stories.\n- /for-travelers — the consumer story; embed the staged video apps/web/public/demos/tripforge-clients.mp4 (poster from apps/web/public/shots/clients/); CTA to traveler sign-up / plan a trip.\n- /for-agents — the professional story; embed apps/web/public/demos/tripforge-agents.mp4 (poster from apps/web/public/shots/agent/); CTA to agent sign-up / workspace.\n- Nav links all three + traveler/agent sign-in; responsive; theme-aware (light/dark); real imagery only (Compliance & Content Sourcing). Use native <video> with controls, preload=metadata, and a poster; do not autoplay with sound.\n\nAcceptance: all three routes render; both videos play from /demos/*.mp4; pages are responsive (no horizontal scroll on mobile widths) and pass the existing home smoke assertions (role=heading 'TripForge' preserved); e2e covers nav between the three. No prod deploy (campaign branch); full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "backlog",
+    "state": "done",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/2"
   },
   {
     "id": "goal-ui-depoliteform",
