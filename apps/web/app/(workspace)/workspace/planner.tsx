@@ -127,6 +127,11 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
     initialDestination ? { ...INITIAL_VALUES, destination: initialDestination } : INITIAL_VALUES,
   );
   const [view, setView] = useState<PlannerViewState>({ phase: "idle" });
+  // Chat is the PRIMARY build path (spec 035 FR-005); the structured form is an
+  // option behind a toggle. Default to form mode ONLY when Discover pre-seeds a
+  // destination (FR-006, spec 023 hand-off) so that hand-off lands on a filled,
+  // visible form; otherwise start in chat.
+  const [entryMode, setEntryMode] = useState<"chat" | "form">(initialDestination ? "form" : "chat");
   const [destinationOpen, setDestinationOpen] = useState(false);
   const drafting = view.phase === "drafting";
   const selecting = view.phase === "selecting";
@@ -261,6 +266,22 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
         Tell us the essentials and our budget-aware AI drafts a bookable, priced itinerary —
         then compare options and book at your markup.
       </p>
+
+      {/* Chat-first entry (spec 035) is the PRIMARY build path: start or retry a
+          build by conversation. startDraft is the SAME function the form's
+          handleSubmit calls (research.md D5), so compare/select/book/share/
+          refine downstream is byte-identical regardless of which entry produced
+          the request. Shown in chat mode on the idle/failed view. */}
+      {entryMode === "chat" && (view.phase === "idle" || view.phase === "failed") ? (
+        <ChatEntry onResolved={startDraft} />
+      ) : null}
+
+      {/* Structured form — the alternative entry behind a toggle (FR-005), and
+          the default when Discover pre-seeds a destination (FR-006). Rendered
+          across all phases while chosen so it behaves exactly as before this
+          feature (FR-007), including surviving a draft failure with values
+          retained (spec 035 US3). */}
+      {entryMode === "form" ? (
       <form onSubmit={handleSubmit} className="tf-planner-form">
         <div className="tf-form-sectionhead span-2">
           <span className="tf-form-stepn" aria-hidden="true">1</span>
@@ -422,11 +443,32 @@ export function Planner({ initialDestination }: { initialDestination?: string } 
           {drafting ? "Drafting…" : "Draft itinerary"}
         </button>
       </form>
+      ) : null}
 
-      {/* Chat-first entry (spec 028) — an alternative to the form above,
-          visible only before any draft attempt has started; startDraft is
-          the SAME function the form's handleSubmit calls (research.md D5). */}
-      {view.phase === "idle" ? <ChatEntry onResolved={startDraft} /> : null}
+      {/* Switch entry surface (chat ⇄ form) when not mid-draft (spec 035 FR-005). */}
+      {!busy ? (
+        <div className="tf-entry-switch">
+          {entryMode === "chat" ? (
+            <button
+              type="button"
+              className="tf-link-btn"
+              data-testid="entry-toggle-form"
+              onClick={() => setEntryMode("form")}
+            >
+              Prefer a guided form?
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="tf-link-btn"
+              data-testid="entry-toggle-chat"
+              onClick={() => setEntryMode("chat")}
+            >
+              Build by chatting instead
+            </button>
+          )}
+        </div>
+      ) : null}
 
       {view.phase === "drafting" ? (
         <p className="tf-drafting" aria-live="polite">

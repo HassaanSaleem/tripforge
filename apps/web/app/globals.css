@@ -413,6 +413,10 @@ label > input, label > select, label > textarea {
 .tf-chat-suggestion-title { margin: 0; font-weight: 600; font-size: 14px; }
 .tf-chat-form { display: flex; gap: 10px; }
 .tf-chat-form input { flex: 1; }
+/* Chat-first entry (spec 035): resolve confirmation + "Build my trip" CTA, and
+   the chat/form entry-surface toggle. */
+.tf-chat-confirm { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tf-entry-switch { display: flex; justify-content: center; margin-top: 2px; }
 
 /* ---- booking flow (spec 009): markup control, quote review, confirmation ---- */
 .tf-booking { display: grid; gap: 14px; padding: 18px 20px; margin-top: 6px; }

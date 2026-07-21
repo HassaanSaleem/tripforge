@@ -103,6 +103,57 @@ describe.skipIf(!DATABASE_URL)("L3 chat-first trip-request entry (real Postgres)
   );
 
   it(
+    "accumulates a MULTI-TURN conversation, then drafts AND books through the EXISTING pipeline (spec 035 FR-001/FR-004)",
+    async () => {
+      const agency = await makeAgency("Chat Multi-Turn Agency");
+      const caller = callerFor(agency);
+
+      // Turn 1: destination only → needsInfo (budget still missing); no draft.
+      const t1 = await caller.workspace.itinerary.interpretChatRequest({ message: "Plan a trip to Lisbon" });
+      expect(t1.status).toBe("needsInfo");
+
+      // Turn 2: budget + duration, carrying turn 1 as priorMessages → resolves
+      // by ACCUMULATING across turns (neither turn resolves alone — proven above).
+      const interpreted = await caller.workspace.itinerary.interpretChatRequest({
+        message: "around EUR 2000 for 4 nights",
+        priorMessages: ["Plan a trip to Lisbon"],
+      });
+      expect(interpreted.status).toBe("resolved");
+      if (interpreted.status !== "resolved") throw new Error("multi-turn interpretation failed");
+      expect(interpreted.tripRequest.destination).toBe("Lisbon");
+      expect(interpreted.tripRequest.budget).toMatchObject({ amountMinor: 200_000, currency: "EUR" });
+
+      // Determinism (spec 035 SC-004): the same transcript resolves identically.
+      const again = await caller.workspace.itinerary.interpretChatRequest({
+        message: "around EUR 2000 for 4 nights",
+        priorMessages: ["Plan a trip to Lisbon"],
+      });
+      expect(again).toEqual(interpreted);
+
+      // chat → DRAFT: the multi-turn request drives the SAME draft pipeline.
+      const drafted = await draftViaCaller(caller, interpreted.tripRequest);
+      expect(drafted.status).toBe("drafted");
+      if (drafted.status !== "drafted") throw new Error("draft failed");
+      expect(drafted.itinerary.title).toContain("Lisbon");
+
+      // draft → BOOK: the persisted chat-built itinerary books through the
+      // UNCHANGED quote→book money path — completing the chat→draft→book handoff
+      // the acceptance requires L3 to cover.
+      const itineraryId = drafted.itinerary.id;
+      const quoted = await caller.workspace.booking.quote({ itineraryId, markupBps: 1500 });
+      expect(quoted.status).toBe("quoted");
+      if (quoted.status !== "quoted") throw new Error("quote failed");
+      const held = quoted.items.filter((i) => i.outcome === "held");
+      expect(held.length).toBeGreaterThanOrEqual(1);
+      const quoteRowIds = held.flatMap((h) => (h.outcome === "held" ? [h.quote.quoteRowId] : []));
+      const booked = await caller.workspace.booking.book({ itineraryId, quoteRowIds });
+      expect(booked.status).toBe("confirmed");
+      expect(booked.components.every((c) => c.outcome === "confirmed")).toBe(true);
+    },
+    LONG,
+  );
+
+  it(
     "a message missing a destination returns needsInfo with zero side effects (spec 028 FR-004)",
     async () => {
       const agency = await makeAgency("Chat Entry NeedsInfo Agency");

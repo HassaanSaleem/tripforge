@@ -428,9 +428,23 @@ function currencyFractionDigits(currency: string): number {
 export async function interpretChatTripRequest(
   container: Container,
   _session: AgentSessionContext,
-  input: { message: string },
+  input: { message: string; priorMessages?: string[] },
 ): Promise<InterpretChatOutcome> {
-  const result = await container.llm.interpretTripRequest({ purpose: "planner.chatEntry", message: input.message });
+  // Multi-turn accumulation (spec 035 research.md D1): interpret the whole
+  // conversation so far as ONE text, oldest turn first. FakeLLM already scans
+  // the full message text (extractDestination/extractBudget/…), so joining the
+  // transcript accumulates across turns deterministically with ZERO change to
+  // packages/llm — and dates are still resolved below, one layer above the LLM
+  // (spec 028 D3). Turns are COMMA-joined (not newline) with trailing sentence
+  // punctuation trimmed, so the keyless extractor's clause-terminating regexes
+  // read each turn's fields cleanly across the join (verified against the
+  // deterministic FakeLLM). Absent/empty priorMessages with a punctuation-free
+  // single message ⇒ identical to spec 028's single-shot behaviour.
+  const conversation = [...(input.priorMessages ?? []), input.message]
+    .map((turn) => turn.trim().replace(/[.,;!?]+$/u, ""))
+    .filter((turn) => turn.length > 0)
+    .join(", ");
+  const result = await container.llm.interpretTripRequest({ purpose: "planner.chatEntry", message: conversation });
   if (result.status === "needsInfo") {
     return { status: "needsInfo", reply: result.reply };
   }

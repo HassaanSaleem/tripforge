@@ -86,4 +86,20 @@ describe("FakeLLM.interpretTripRequest", () => {
     expect(second).toEqual(first);
     expect(first.destination).toBe("Lisbon");
   });
+
+  it("resolves an accumulated multi-turn transcript, deterministically (spec 035)", async () => {
+    const llm = new FakeLLM();
+    // packages/api comma-joins a conversation's turns above the LLM boundary
+    // (spec 035 research.md D1) — neither turn alone resolves (destination-only
+    // vs budget-only), together the joined transcript does.
+    const joined = ["Plan a trip to Lisbon", "around EUR 2000 for 4 nights"].join(", ");
+    const params = resolved(await llm.interpretTripRequest({ purpose: "test", message: joined }));
+    expect(params.destination).toBe("Lisbon");
+    expect(params.budgetMajor).toBe(2000);
+    expect(params.currency).toBe("EUR");
+    expect(params.nights).toBe(4);
+    // Determinism (spec 035 SC-004): identical params, zero network.
+    const second = resolved(await llm.interpretTripRequest({ purpose: "test", message: joined }));
+    expect(second).toEqual(params);
+  });
 });
