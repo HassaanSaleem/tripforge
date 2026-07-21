@@ -1280,9 +1280,9 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.1.\n\nToday travelers only get a token-scoped identity for viewing a shared trip. Give travelers a real self-serve account: sign-up/sign-in that stands on its own (not gated behind a share token), a traveler home landing after auth, and My Trips reachable from it. Keep INV-018/INV-020/INV-023 (traveler role can never invoke a workspace procedure; client-view stays brand-neutral). Reuse Better Auth; no schema fork.\n\nAcceptance: a traveler can create an account from the consumer surface with no share token, land on a traveler home, and reach My Trips; a traveler session still cannot reach any workspace procedure (INV-023 test). No prod deploy; full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "in_progress",
+    "state": "in_review",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/3"
   },
   {
     "id": "goal-consumer-planner",
