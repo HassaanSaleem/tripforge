@@ -122,4 +122,53 @@ describe("FakeLLM.interpretTripRequest", () => {
     expect(params.currency).toBe("EUR");
     expect(params.adults).toBe(4); // later "for 4 people" wins over "for 2"
   });
+
+  it("recognizes a bare leading city with no 'in'/'to' preposition (chat-keyless-interpreter-grammar)", async () => {
+    const llm = new FakeLLM();
+    const params = resolved(
+      await llm.interpretTripRequest({ purpose: "test", message: "Barcelona, 5 nights, 2 people, around EUR 3000" }),
+    );
+    expect(params.destination).toBe("Barcelona");
+    expect(params.nights).toBe(5);
+    expect(params.budgetMajor).toBe(3000);
+    expect(params.currency).toBe("EUR");
+  });
+
+  it("does NOT mistake a sentence-leading verb for a bare city", async () => {
+    const llm = new FakeLLM();
+    // "Plan …" leads but is not a place; with no in/to and no budget this stays needsInfo.
+    const result = await llm.interpretTripRequest({ purpose: "test", message: "Plan something nice for 2" });
+    expect(result.status).toBe("needsInfo");
+    if (result.status === "needsInfo") expect(result.reply.toLowerCase()).toContain("destination");
+  });
+
+  it("recognizes word-form currencies euros/dollars/pounds (chat-keyless-interpreter-grammar)", async () => {
+    const llm = new FakeLLM();
+    const euros = resolved(
+      await llm.interpretTripRequest({ purpose: "test", message: "Plan a trip to Rome, around 3000 euros for 5 nights" }),
+    );
+    expect(euros.budgetMajor).toBe(3000);
+    expect(euros.currency).toBe("EUR");
+
+    const dollars = resolved(
+      await llm.interpretTripRequest({ purpose: "test", message: "Trip to Miami, 2500 dollars, 4 nights" }),
+    );
+    expect(dollars.currency).toBe("USD");
+    expect(dollars.budgetMajor).toBe(2500);
+
+    const pounds = resolved(
+      await llm.interpretTripRequest({ purpose: "test", message: "Trip to London, 1800 pounds, 3 nights" }),
+    );
+    expect(pounds.currency).toBe("GBP");
+    expect(pounds.budgetMajor).toBe(1800);
+  });
+
+  it("parses a 'k' thousands suffix on a word-form currency (chat-keyless-interpreter-grammar)", async () => {
+    const llm = new FakeLLM();
+    const params = resolved(
+      await llm.interpretTripRequest({ purpose: "test", message: "Trip to Rome, around 3k euros, 5 nights" }),
+    );
+    expect(params.budgetMajor).toBe(3000);
+    expect(params.currency).toBe("EUR");
+  });
 });

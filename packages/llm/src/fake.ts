@@ -32,6 +32,15 @@ import type { ChatEditResult, HotelSuggestion } from "./chat-edit.js";
 import type { InterpretedTripParams, InterpretTripRequestResult } from "./interpret-trip-request.js";
 
 const CURRENCY_SYMBOLS: Record<string, string> = { "$": "USD", "€": "EUR", "£": "GBP" };
+// Word-form currencies (closed 3-currency scope, chat-keyless-interpreter-grammar).
+const CURRENCY_WORDS: Record<string, string> = {
+  euro: "EUR",
+  euros: "EUR",
+  dollar: "USD",
+  dollars: "USD",
+  pound: "GBP",
+  pounds: "GBP",
+};
 
 /** The LAST match of a (global) pattern in a text, or null. The accumulated
  * chat transcript is scanned as one string (packages/api comma-joins the turns),
@@ -45,30 +54,47 @@ function lastMatch(text: string, pattern: RegExp): RegExpMatchArray | null {
 }
 
 /** Deterministic destination extraction (spec 028, research.md D7) — text
- * following "in"/"to", cut at the next clause boundary. Operates on the
- * ORIGINAL-case message so a returned destination reads naturally (supply
- * search is case-insensitive at the sandbox layer). */
+ * following "in"/"to", cut at the next clause boundary, else a bare leading
+ * city. Operates on the ORIGINAL-case message so a returned destination reads
+ * naturally (supply search is case-insensitive at the sandbox layer). */
 function extractDestination(raw: string): string | null {
-  const match = raw.match(/\b(?:in|to)\s+([A-Za-z][A-Za-z\s'-]*?)(?=\s+for\b|\s+with\b|,|$)/i);
-  const destination = match?.[1]?.trim();
-  return destination && destination.length > 0 ? destination : null;
+  // Highest-signal form: a destination introduced by "in"/"to".
+  const prep = raw.match(/\b(?:in|to)\s+([A-Za-z][A-Za-z\s'-]*?)(?=\s+for\b|\s+with\b|,|$)/i);
+  const prepDest = prep?.[1]?.trim();
+  if (prepDest && prepDest.length > 0) return prepDest;
+
+  // Fallback (chat-keyless-interpreter-grammar): a bare leading city with no
+  // "in"/"to" preposition — recognised only in the unambiguous "<City>, …" and
+  // "<City> trip" forms so a sentence-leading verb ("Plan …") is never mistaken
+  // for a place. Proper-noun capitalisation (original case) is the signal.
+  const bare = raw.match(/^\s*([A-Z][A-Za-z'-]*(?:\s+[A-Z][A-Za-z'-]*)*)(?=,|\s+trip\b)/);
+  const bareDest = bare?.[1]?.trim();
+  return bareDest && bareDest.length > 0 ? bareDest : null;
 }
 
-/** Deterministic budget extraction — a currency (ISO code EUR/USD/GBP or symbol
- * $/€/£) adjacent to an amount, in either order ("EUR2000", "$2000", "2000 EUR").
- * Scans the whole text and keeps the LAST match so a later turn's correction
- * overrides an earlier amount in the accumulated transcript
- * (chat-keyless-adjust-drops-correction). */
+/** Deterministic budget extraction — a currency (ISO code EUR/USD/GBP, symbol
+ * $/€/£, or the words euros/dollars/pounds) adjacent to an amount, in either
+ * order ("EUR2000", "$2000", "2000 EUR", "3000 euros"), with an optional "k"
+ * thousands suffix ("3k euros" → 3000). Closed 3-currency scope
+ * (chat-keyless-interpreter-grammar). Scans the whole text and keeps the LAST
+ * match so a later turn's correction overrides an earlier amount in the
+ * accumulated transcript (chat-keyless-adjust-drops-correction). */
 function extractBudget(text: string): { amount: number; currency: string } | null {
-  const pattern = /(eur|usd|gbp|\$|€|£)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(eur|usd|gbp)\b/gi;
+  // The amount MUST start with a digit (commas only group thousands, e.g. "2,000")
+  // — a bare comma is not an amount, so "for 2, EUR 2000" never mis-reads the comma
+  // as an amount that swallows the following currency token.
+  const pattern =
+    /(eur|usd|gbp|\$|€|£)\s*(\d+(?:,\d{3})*(?:\.\d+)?)(k)?|(\d+(?:,\d{3})*(?:\.\d+)?)(k)?\s*((?:euros?|dollars?|pounds?|eur|usd|gbp)\b|\$|€|£)/gi;
   let result: { amount: number; currency: string } | null = null;
   for (const m of text.matchAll(pattern)) {
-    const token = (m[1] ?? m[4])?.toLowerCase();
-    const amountRaw = m[2] ?? m[3];
+    const token = (m[1] ?? m[6])?.toLowerCase();
+    const amountRaw = m[2] ?? m[4];
+    const thousands = m[3] ?? m[5];
     if (!token || !amountRaw) continue;
-    const currency = CURRENCY_SYMBOLS[token] ?? token.toUpperCase();
-    const amount = Number.parseFloat(amountRaw.replace(/,/g, ""));
+    const currency = CURRENCY_SYMBOLS[token] ?? CURRENCY_WORDS[token] ?? token.toUpperCase();
+    let amount = Number.parseFloat(amountRaw.replace(/,/g, ""));
     if (!Number.isFinite(amount) || amount <= 0) continue;
+    if (thousands) amount *= 1000;
     result = { amount, currency }; // keep overwriting → the last valid match wins
   }
   return result;
