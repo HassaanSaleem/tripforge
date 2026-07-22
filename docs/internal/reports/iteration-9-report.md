@@ -1,0 +1,62 @@
+# Kitchen Loop Report - Iteration 9
+
+## Scenario: A brand-new agent builds a client trip entirely through the chat-first AI builder, then books it (GOAL D3, PR #7)
+**Date**: 2026-07-22
+**Mode**: strategy
+**Tier**: T1 Foundation
+**Features Exercised**: itinerary-builder (chat-first path) — platform web+api, user_type agent-seller
+**Campaign**: `campaign/two-sided-surface` (GOAL.md) — Deliverable 3: "the AI builder is chat-first". PR #7 (spec 035) promoted chat to the PRIMARY multi-turn build-to-book path on the agent surface. This T1 pass asks the T1 question of that freshly-landed flagship: **does it work perfectly for a brand-new user?**
+
+## Context / why this scenario
+- **Tier balance.** Iterations 6/7/8 were T2/T2/T3; the 30%-weight T1 slot is under-represented (last clear T1 was iter 2). T1 was due.
+- **Flagship freshly landed.** GOAL D3 (chat-first build-to-book) shipped on the agent surface in PR #7 the day before this pass. T1's mandate — *"the easy stuff must be bulletproof; if ANYTHING goes wrong it's a critical finding"* — is exactly the right lens for a marquee feature that just merged.
+- **Coverage gap was low-value.** The 3 remaining untested cells are all agent-side web-companions of already-passing api cells (`content-library × web × agent-reseller`, `revenue-share × web × {agent-seller, client}`) — a future T2 can sweep them together. T1 is about *robustness of the basics*, not coverage expansion, so I chose the flagship over backfill.
+- Codex feasibility: **PROCEED** — "achievable as a robustness/witness pass … exercises new surface area beyond the pinned e2e … FakeLLM extraction is regex-limited, so bare `Lisbon` and `euros` as a word are likely to expose real gaps rather than pass … provided the scenario records the observed failures explicitly." (It did — see Findings.)
+- L3 smoke gate already exists and passes (47/47); Priority Zero not triggered.
+
+## Environment note (honest provenance)
+The live drive used the already-running keyless compose stack on `:3000` (root checkout's `tripforge` project, ~2h old). I verified it contains the exact PR #7 chat-first code (the `chat-build-cta` and `entry-toggle-form` markers are present in its built `.next` bundle, and PR #7's commit `4639f16` is in this worktree's HEAD) — and the multi-turn *behavior itself* is the proof (the older single-shot spec-028 chat could not accumulate a destination across turns). `ANTHROPIC_API_KEY` is commented out → the deterministic **FakeLLM** path, which is what the credit-free demo and every deterministic test run on. The durable L3 witness ran against that same stack's Postgres.
+
+## What I Did (as a user)
+1. **Signed up a brand-new agency** (`Maya Voyages`, fresh email) via `/sign-up` → landed on `/dashboard` (premium-styled form, no friction).
+2. **Opened the AI Builder** (`/workspace`). **Chat is the primary surface**: the chat entry is present, the structured form is *not* rendered (only a "Prefer a guided form?" toggle), and "Send" is disabled on empty input. Matches FR-005.
+3. **Multi-turn happy path:**
+   - Turn 1 — *"Plan a trip to Lisbon"* → assistant: **"What's your budget for the trip to Lisbon?"** (destination captured, budget missing, no draft, no CTA — FR-003).
+   - Turn 2 — *"around EUR 2000 for 4 nights"* → assistant confirms **"Here's what I've got: Lisbon · 4 nights · 2 travellers · budget up to 2,000.00 EUR. Ready to build it?"** and the **"Build my trip"** CTA + "or keep chatting to adjust it" hint appear. This resolves *only* because turn 1's Lisbon accumulated (turn 2 alone has no destination).
+4. **Build my trip** → the **same compare→choose pipeline** the form uses: 3 options (Budget-savvy / Balanced / Premium), all within the EUR 2,000 budget with distinct highlights. Chose **Balanced**.
+5. **Drafted itinerary** rendered end-to-end: "Lisbon balanced trip" (2,000.00 EUR, hard cap), 4 priced days, an honest indicative-flights card ("TripForge never books flights"), an all-"fits" budget summary, and the **inline booking flow**, Share, and Refine-with-chat panels — identical to a form-built trip.
+6. **Booked the money path on the chat-built trip:** Quote at 15% → **7 items held** at firm net rates (with USD→EUR FX on the transfers, showing net / markup / client price / hold window) → **Book selected items** → **Booking confirmed**, reference `9762cd3b…`, all 7 components confirmed with supplier refs + the honest "never books an item twice" idempotency note.
+7. **Zero console errors/warnings** across the entire happy-path journey.
+8. **Probed the adjacent easy-path phrasings a brand-new user would try** (the pinned e2e never does): bare leading destination, word-form currency, single-shot all-in-one, and the "keep chatting to adjust it" affordance. Findings below.
+9. **Wrote a durable L3 witness** (`scenarios/incubating/chat-first-build-to-book/scenario.mjs`, **29 checks, all pass** against the live stack) covering multi-turn accumulation, single-shot, the chat→draft→book money path (+ markup-ledger conservation), needsInfo state-conservation, and the three findings pinned as known behavior.
+
+## What Worked
+- **The full chat→draft→compare→choose→quote→book path is bulletproof.** Every step worked on the first try, end-to-end, on a trip built entirely by conversation with the form never touched. Money conserved (markup ledger net+markup=sell), supplier refs issued, zero console errors.
+- **Multi-turn accumulation is genuine.** Turn 2 (budget only) resolved solely because turn 1's destination was carried as `priorMessages` — proven both live and headlessly. Deterministic (identical transcript → identical resolution, SC-004).
+- **Single-shot works too.** *"Plan a trip to Rome for 2 people, 5 nights, around USD 3000, boutique style"* resolved in one turn with every field correct, including "boutique" → premium style and "for 2 people" → 2 travellers (correctly not confused with "5 nights").
+- **Honest, well-crafted surface.** Chat is primary with the form one click away; the confirmation summary is display-only (real prices come from live supply on build); empty/whitespace input disables Send; the flights card is honest about never booking flights.
+
+## Friction Points
+All three are in the **keyless FakeLLM path** (the demo + deterministic-test path). A funded Anthropic key runs the real Haiku tool-loop and would likely handle all three naturally — but the demo and every pinned test run keyless, and the UI makes promises the keyless extractor can't keep.
+- **[FRICTION-1] A bare leading destination (no "to"/"in") is not recognized.** *"Barcelona, 5 nights, 2 people, around EUR 3000"* → **"Which destination would you like to plan for?"** The city is right there at the start, but the deterministic `extractDestination` only matches a destination preceded by "in"/"to". A brand-new user who leads with the city name (very natural) is asked for a destination they already gave.
+- **[FRICTION-2] A word-form currency is not recognized as a budget.** *"Plan a trip to Rome, around 3000 euros for 5 nights"* → **"What's your budget for the trip to Rome?"** (Rome *is* captured.) `extractBudget` only matches ISO codes (EUR/USD/GBP) and symbols ($/€/£), not the words "euros"/"dollars"/"pounds". The user is asked for a budget they clearly stated.
+- **[FRICTION-3] The "keep chatting to adjust it" affordance can't actually adjust a stated field (see BUG-1).** The confirmation hint invites refinement, but a correction to an already-supplied field is silently ignored in the keyless path.
+
+## Bugs Found
+- **[BUG-1] The "keep chatting to adjust it" affordance silently drops a correction to an already-stated field, and the assistant re-confirms the stale value.** After the chat resolved to *"Rome · 5 nights · …"*, I sent **"actually make it 7 nights instead"**. The assistant replied **"Here's what I've got: Rome · 5 nights · … Ready to build it?"** — **still 5 nights**, and the Build CTA stayed live over the stale value. Root cause (verified in code + reproduced headlessly): `interpretChatTripRequest` (packages/api/src/services/planner.ts) **append-joins** `priorMessages + message` into one transcript, and the keyless `extractNights`/`extractBudget`/`extractAdults` (packages/llm/src/fake.ts) take the **first** regex match — so the earlier "5 nights" wins and "7 nights" is ignored. The sharp edge is that the assistant *echoes the old value as if it heard the change*, so a user would build a 5-night trip believing they'd corrected it to 7. Reproduced live (screenshot `iter9-adjust-ignored-stale-5nights.png`) and pinned as a known-behavior assertion in the L3 witness (`nights` stays 5 after "make it 7 nights"). Keyless-path only; a funded key likely honors the override. Severity: **medium** (no money/data-integrity impact — degrades to a valid-but-wrong-duration trip — but the UI actively promises adjustment and the misleading re-confirmation makes it look applied). Cheap fix: prefer the latest turn's fields (last-match-wins) for the keyless extractors, or have the confirmation surface *what changed*.
+
+## Missing Features
+(Out-of-band for this T1 pass; noted for triage. Within the operator-authorized P2 campaign.)
+- **[FEAT-1] Consumer-surface chat-first builder (GOAL D3, second half).** PR #7 shipped chat-first on the *agent* surface; the traveler "Plan a trip" tile is still a "Coming soon" stub (iter-7/8 findings). GOAL D3 wants the same conversational build on the consumer surface. Deferred by PR #7 to `goal-consumer-planner` (the traveler draft path is `agentProcedure`-gated, INV-024 — a money-path-adjacent feature).
+
+## Improvements
+- **[IMP-1] Broaden the keyless interpreter's destination grammar** to accept a bare leading city (FRICTION-1) — e.g. treat a leading proper-noun token, or "trip to X" / "X trip" / "X, N nights" forms — so the most natural brand-new-user phrasings resolve instead of round-tripping a needless clarifying question. Keyless-only change (packages/llm/src/fake.ts `extractDestination`); the real-LLM path is unaffected.
+- **[IMP-2] Recognize word-form currencies** ("euros"/"dollars"/"pounds", maybe "k" suffixes) in `extractBudget` (FRICTION-2). Keeps the closed 3-currency scope but matches how people actually type amounts.
+- **[IMP-3] Make "adjust" real in the keyless path** (BUG-1): last-turn-wins for nights/budget/party/style, and/or a confirmation that names the field it just changed, so the "keep chatting to adjust it" promise holds.
+
+## Tests Added
+- **`scenarios/incubating/chat-first-build-to-book/scenario.mjs`** — L3, 4-layer (real HTTP against the built compose image → parsed responses → Postgres ground truth → state-delta asserts), **29 checks, all pass** against the live stack. Proves: multi-turn accumulation (turn 1 needsInfo → turn 2 resolves via `priorMessages`) with correct destination/budget/nights/party + determinism; single-shot resolution; the chat→draft→select→quote→book money path with **markup_ledger net+markup=sell conserved** on every row; needsInfo creates **zero** itineraries (no side effect); and pins **FRICTION-1 / FRICTION-2 / BUG-1** as documented known-behavior assertions (green today; a fix flips them loudly, same convention as golden-path's known-red pins). Companion live-browser (Playwright MCP) evidence: `.kitchenloop/uat-runs/chat-first-build-to-book/` (2 screenshots, git-ignored).
+- **Coverage matrix regenerated** (`node scripts/kitchenloop/derive-coverage.mjs`, exit 0, no vocabulary crash) → **33/36 (91.7%)**. The scenario re-covers `itinerary-builder × {api,web} × agent-seller` = pass via the *chat-first* surface with deeper robustness; no new cell (T1 is a robustness probe of an already-covered combo, by design).
+
+## Outcome
+**SUCCESS** — the campaign's flagship chat-first build-to-book flow (GOAL D3, PR #7) is **bulletproof on the happy path**: a brand-new agent builds and books a client trip entirely by conversation, form untouched, money conserved, zero console errors — end-to-end on the first try. Pushing past the single pinned e2e path surfaced three real keyless-path robustness gaps a brand-new user hits with natural phrasing (bare-leading destination, word-form currency, and — the sharpest — a silently-ignored mid-conversation correction that the assistant misleadingly re-confirms). None is a money/data-integrity defect; all are keyless-extractor limitations, cheap to fix, and now captured as a durable green L3 witness plus reproducible findings for triage.

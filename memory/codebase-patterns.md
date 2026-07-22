@@ -44,11 +44,20 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   consecutive clean pass for product correctness AND a second consecutive
   live-surface-reveals-a-roadmap-gap (no consumer marketplace browse/discover/act
   surface — a traveler is FORBIDDEN on every agent marketplace procedure and every
-  `clientView.*` marketplace procedure is NOT_FOUND; state fully conserved). The
-  rule still holds (never skip the INV-027 live gate for product-behavior changes):
-  even when it finds no DEFECT, the live surface is where missing-capability gaps
-  against the roadmap become visible — now the DOMINANT signal two iterations
-  running as the campaign builds out the (largely absent) consumer surface.
+  `clientView.*` marketplace procedure is NOT_FOUND; state fully conserved). Iter 9's
+  live scenario (`chat-first-build-to-book`, a T1 robustness probe of the merged
+  chat-first flagship) broke the clean-pass streak the RIGHT way: the happy path
+  was bulletproof (build+book by conversation, money conserved, zero console
+  errors), but pushing past the single pinned e2e into the natural phrasings a
+  brand-new user tries surfaced 3 real keyless-FakeLLM extractor gaps + a medium
+  bug (BUG-1: a mid-conversation correction is silently dropped AND the assistant
+  misleadingly re-confirms the stale value) — none a money/data defect, all
+  invisible to the 621/621-green oracle because they live in phrasing-robustness,
+  not in any assertion the unit suite makes. The rule holds (never skip the
+  INV-027 live gate for product-behavior changes): the live surface is where BOTH
+  missing-capability roadmap gaps (iter 7/8) AND real-but-non-money robustness
+  defects the oracle can't see (iter 9) become visible — and a T1 "push past the
+  pinned path" probe is what turns a green flagship into an honest findings list.
 
 - **Shared test-flow helpers go stale silently when the underlying flow
   changes shape — confirmed 3 times now.** `tests/e2e/support.ts`'s
@@ -64,21 +73,25 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   (ticket `17840669434037957747` proposes the Node-script-side fix).
 
 - **Vitest + eslint DON'T type-check — real `tsc` breaks hide behind a green
-  oracle (confirmed iter 6 + iter 7 + iter 8).** The oracle runs `pnpm test`
-  (vitest, which transpiles without strict type-checking) and `pnpm run lint`
-  (eslint), neither of which surfaces a `tsc --noEmit` error. Iter 6 found a
-  repo-wide typecheck break (`chat-edit.test.ts` referencing a removed
-  `ChatEditResult` export, since fixed) invisible to every gate; iter 7 found a
-  different one (`l3-agency-admin.test.ts` 4× TS2345 + `l3-booking.test.ts` 2×
-  TS18048, all test-file indexed-access / destructure `undefined`-narrowing), and
-  iter 8 confirmed the SAME 6 errors STILL unfixed a third consecutive iteration
-  while vitest stayed 619/619 green. All were in TEST files, so product code
-  compiled and runtime tests passed — the break is pure type-safety debt the
-  oracle cannot see, and it PERSISTS because nothing gates it (bug ticket
-  `typecheck-break-agency-admin-booking-l3` sat open across iter 6→7→8). Rule:
-  regress should run `pnpm run typecheck` in-image as an investigative check every
-  iteration (it's cheap, layer-cached off the same verify image) and ticket any
-  break; whether it JOINS the oracle is a sealed-gate operator decision (desk row
+  oracle, and PERSIST because nothing gates them (iter 6→7→8 break; RESOLVED
+  iter 9).** The oracle runs `pnpm test` (vitest, which transpiles without strict
+  type-checking) and `pnpm run lint` (eslint), neither of which surfaces a
+  `tsc --noEmit` error. Iter 6 found a repo-wide typecheck break
+  (`chat-edit.test.ts` referencing a removed `ChatEditResult` export) invisible to
+  every gate; iter 7 found a different one (`l3-agency-admin.test.ts` 4× TS2345 +
+  `l3-booking.test.ts` 2× TS18048, all test-file indexed-access / destructure
+  `undefined`-narrowing), and iter 8 confirmed the SAME 6 errors STILL unfixed a
+  third consecutive iteration while vitest stayed 619/619 green. All were in TEST
+  files, so product code compiled and runtime tests passed — the break was pure
+  type-safety debt the oracle can't see, and it persisted for THREE iterations
+  precisely because nothing gates it. Iter 9's in-image typecheck came back clean
+  (exit 0, 9/9 packages) — the 6 errors were fixed in the merged tree. The
+  lesson stands: the break survived 3 iterations *because* the loop's investigative
+  typecheck isn't a gate; its eventual fix was incidental (rode in on a merge), not
+  loop-enforced, so the same class can silently return. Rule: regress runs
+  `pnpm run typecheck` in-image as an investigative check every iteration (cheap,
+  layer-cached off the verify image) and tickets/closes breaks against reality;
+  whether it JOINS the oracle is a sealed-gate operator decision (desk row
   `TYPECHECK-GATE-GAP` — itself lost/re-filed 3× via REGRESS-ARTIFACT-LOSS), not a
   loop change.
 
@@ -108,7 +121,9 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   DB) / 2.9s (DB-inclusive) iter 5; 573 tests → 1.55s (no DB) / 3.0s
   (DB-inclusive) iter 6; 619 tests → 3.0s (DB-inclusive, 63 files) iter 7;
   619 tests → 3.19s (DB-inclusive, 63 files) iter 8, unchanged — no test files
-  landed on the iter-8 branch (campaign-sync + ideate only)).
+  landed on the iter-8 branch (campaign-sync + ideate only);
+  621 tests → 3.08s (DB-inclusive, 63 files) iter 9, +2 tests from the
+  now-merged chat-first PR #7).
   Cost is never a reason to skip or subset it.
 
 ## Integration Patterns
@@ -131,9 +146,10 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   `KITCHENLOOP-COVERAGE` declaration — it is now the sole writer, never
   hand-edited. Iter 5 re-ran the derivation and got a byte-for-byte match
   against the committed file (28/36, zero working-tree diff), confirming the
-  fix holds a second time. Iter 6 (30/36), iter 7 (31/36), and iter 8 (33/36)
+  fix holds a second time. Iter 6 (30/36), iter 7 (31/36), iter 8 (33/36), and
+  iter 9 (33/36, unchanged — a T1 robustness re-cover of an already-tested cell)
   all regenerated clean (exit 0, no vocabulary crash after PR #74 removed the
-  out-of-vocab group-travel block) — a 5th consecutive iteration the tool is the
+  out-of-vocab group-travel block) — a 6th consecutive iteration the tool is the
   sole writer.
   Regress should keep running
   `derive-coverage.mjs` each iteration (its own exit code flags malformed
