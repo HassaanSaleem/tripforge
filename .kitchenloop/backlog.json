@@ -1271,7 +1271,7 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 3.\n\nChat already exists on the agent workspace as an adjunct to the structured form (chat-entry.tsx spec 028; chat-edit demo-03). Promote conversation to the PRIMARY build path: the agent (and, on the consumer surface, the traveler) builds the whole trip in the chat, the form remains available as an option a chat can fill, and once the itinerary has what it needs the flow proceeds into the booking workflow. Reuse the existing interpretChatRequest/startDraft path and packages/llm; do not fork the planner.\n\nAcceptance: from an empty state, a multi-turn chat produces a complete draft and offers to proceed to booking without ever touching the form; the form path still works; L3 covers the chat→draft→book handoff. No prod deploy; full live validation.",
     "type": "feature",
     "priority": "high",
-    "state": "in_review",
+    "state": "done",
     "created": "2026-07-21T16:00:00Z",
     "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/7",
     "notes": "Promoted to todo by Kitchen Loop backlog grooming (iteration 7). Score 12 (U4/A4/I4) — promotes existing agent chat path (interpretChatRequest/startDraft, packages/llm) to the primary build flow; no unmerged prerequisite. Prerequisite for goal-consumer-planner chat-first requirement. | iter-8 execute: picked (highest-tier feature, smaller bounded scope than goal-ui-depoliteform; explicit reuse of interpret/draft path). Scope = agent/shared-engine chat-first PRIMARY promotion + multi-turn accumulation; consumer-surface chat deferred to goal-consumer-planner (draft path is agentProcedure-gated, INV-024). No schema/money/supply change. | PR #7 opened (spec 035). Verified: lint clean, 621/621 in-image tests (L1 joined-transcript determinism + L3 multi-turn accumulate->draft->book), 51/51 e2e (new chat-first-journey + toggle-updated helper across 12 draftParisTrip specs), Live Test PASS (6-screenshot browser QA), zero-context UAT PASS. NEW sealed uat-card => PRM-SEAL operator hand-merge."
@@ -1292,8 +1292,8 @@
     "title": "Self-serve budget-aware AI planner for travelers (chat-first)",
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.3.\n\nOffer the SAME budget-aware planning engine (Constitution III) self-serve on the consumer surface: a traveler describes the trip + budget and the AI assembles a live-priced, bookable itinerary. Chat-first (see goal-chat-first-builder). Powered by the same allocator + supply adapters as the agent builder; no schema fork; consumer output must remain marketplace/agent-connected (Principle I — feed the marketplace, not a standalone planner).\n\nAcceptance: a signed-in traveler plans a budget-fit itinerary end-to-end on the consumer surface; every item is live-priced; the result offers self-book or request-an-agent (fork). No prod deploy; full live validation.\n\n--- iter-7 triage (2026-07-21 · report FEAT-2) ---\nConfirmed still unbuilt on the campaign branch: planning lives only under (workspace) (agent org required); there is no consumer planner. /for-travelers already advertises 'plan a new trip with AI'. Chat-first per goal-chat-first-builder.\n\n--- iter-9 triage (2026-07-22 · report FEAT-1) ---\nStill the right home for GOAL D3's second half. PR #7 (goal-chat-first-builder,\ncommit 4639f16) shipped chat-first build-to-book on the AGENT surface; the traveler\n\"Plan a trip\" tile remains a \"Coming soon\" stub. The consumer-surface chat-first\nplanner is this ticket — build it on the same interpretChatTripRequest/startDraft\npath PR #7 promoted (do not fork the planner). Note the traveler draft path is\nagentProcedure-gated today (INV-024), so this is money-path-adjacent and pairs with\ngoal-consumer-selfbook. Keyless-interpreter robustness gaps found in the agent chat\n(chat-keyless-adjust-drops-correction, chat-keyless-interpreter-grammar) will carry\nover to the consumer chat since it reuses the same extractors — fix once in\npackages/llm/src/fake.ts benefits both surfaces.",
     "type": "feature",
-    "priority": "high",
-    "state": "backlog",
+    "priority": "critical",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
     "pr_url": ""
   },
@@ -1303,7 +1303,7 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.4. MONEY PATH.\n\nReplace the trip-fork 'book it myself' stub (currently a confirmation-only no-op, apps/web/app/(client-view)/view/[token]/trip-fork.tsx) with real self-drive booking through the platform, using the existing quote-then-book money path + supply adapters (Constitution V/VI). Surface concrete recommendations (which flight/airline, which hotels) and contextual trip advisories (mountainous/off-road terrain, altitude, security risk, local tips) as clearly-sourced guidance, not fabricated facts.\n\nAcceptance: a traveler completes a real self-drive booking on the consumer surface; state-conservation holds on partial failure (one leg fails → nothing charged); L3 money-path integration tests with failure-path conservation assertions; advisories are sourced/labeled. Money-path change → L3 mandatory + full live validation. Revenue-share/schema changes ALWAYS HALT for the operator. No prod deploy.\n\n--- iter-7 triage (2026-07-21 · report BUG-1/FEAT-1) ---\nMechanically witnessed baseline: a signed-in traveler clicking 'Book it myself' produces ZERO server calls (browser network trace) and ZERO booking_component rows (DB delta 0). clientView.book does not exist (procedure-not-found); workspace.booking.{book,quote} are agentProcedure → FORBIDDEN to a traveler session (INV-024). Repro + standing guard: scenarios/incubating/traveler-self-book-attempt/scenario.mjs (L3, 29 checks, all pass). Coverage matrix now flags booking × web × client = fail. Campaign's marquee money-path gap; the /for-travelers landing already promises it. Highest priority.",
     "type": "feature",
     "priority": "critical",
-    "state": "backlog",
+    "state": "in_review",
     "created": "2026-07-21T16:00:00Z",
     "pr_url": ""
   },
@@ -1312,8 +1312,8 @@
     "title": "Consumer 'What's Hot' discovery feed (every item actionable)",
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.2 (PRD 9.7).\n\nBring a 'What's Hot' discovery feed to the consumer surface. Every feed item MUST be actionable — tapping it opens a plannable, budget-priced, bookable itinerary connected to an agent or the marketplace (Principle I). Reuse the existing agent-side Discover feed building blocks where possible; licensed/real imagery only (Compliance & Content Sourcing); no fabricated place photos.\n\nAcceptance: a traveler browses What's Hot and every card opens a plannable, priced itinerary; no dead/decorative-only items; imagery is licensed/real. No prod deploy; full live validation.\n\n--- iter-7 triage (2026-07-21 · report FEAT-4) ---\nConfirmed: as a signed-in traveler, /discover is agent-gated ('You need an agency membership to use Discover', routes to create-an-agency) — there is NO consumer discovery surface today.",
     "type": "feature",
-    "priority": "medium",
-    "state": "backlog",
+    "priority": "critical",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
     "pr_url": ""
   },
@@ -1322,8 +1322,8 @@
     "title": "Group trips: create/post/join/finalize with identity-gated members + in-group chat",
     "body": "Feature-sized — route through Spec Kit. NEW CAPABILITY (not in PRD) — operator-authorized this pass (GOAL.md Deliverable 2.5/2.6). File a PRD/constitution amendment note in the plan; the amendment itself is an operator gate (do not self-merge constitution changes).\n\nBuild traveler group travel: create a group, post it so others can join, and finalize the trip collectively — plus join group trips already running, including agent-hosted departures. Trust/safety is in-scope, not deferred (Constitution VI — enforce mechanically): in-group chat, explicit confirmation from ALL parties before finalize, and gating so ONLY verified, identity-validated premium members may post or join. Model group membership on the canonical itinerary entity (Principle IV — no schema fork); respect the identity/data compliance posture.\n\nAcceptance: a verified premium member creates + posts a group; other verified members join and chat; finalize requires all-party confirmation; unverified/non-premium users are mechanically blocked from posting/joining (test the negative); a traveler can join an agent-hosted departure. No prod deploy; full live validation. Schema/constitution changes ALWAYS HALT for the operator.",
     "type": "feature",
-    "priority": "high",
-    "state": "backlog",
+    "priority": "critical",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
     "pr_url": ""
   },
@@ -1332,8 +1332,8 @@
     "title": "Act on a marketplace itinerary: book/fork→request-or-selfbook + white-label + add-client-to-departure",
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.7 + Deliverable 4.\n\nFrom a marketplace itinerary a user can: book it as-is, or fork+edit it and then either request the agent to host/book it OR self-book it through the platform. Agent-side marketplace mechanics: white-label an entire trip when a matching offering exists on the marketplace, and add your own client into another agent's group departure when a seat is available and that agent listed the departure as joinable. Fork/resale/client-ownership/revenue-share semantics are Constitution VI — encode + enforce in the transaction path; ANY change to those semantics ALWAYS HALTS for the operator (DIRECTIVE §2).\n\nAcceptance: fork→edit→(request-agent | self-book) both work; white-label produces a rebranded copy with the original seller's revenue-share + the reseller's client-ownership enforced (L3 money-path + conservation); add-client-to-joinable-departure respects seat availability + the host agent's listing terms. No prod deploy; full live validation.",
     "type": "feature",
-    "priority": "high",
-    "state": "backlog",
+    "priority": "critical",
+    "state": "todo",
     "created": "2026-07-21T16:00:00Z",
     "pr_url": ""
   },
@@ -1441,5 +1441,15 @@
     "created": "2026-07-22T16:30:00Z",
     "pr_url": "",
     "blockedBy": []
+  },
+  {
+    "id": "goal-client-side-panel",
+    "title": "Consumer-surface navigation side panel (signed-in traveler)",
+    "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md (client surface). Operator-flagged gap 2026-07-22.\n\nThe signed-in traveler / consumer surface has NO persistent navigation — the agent workspace has its side panel, but the client surface (traveler home, my-trips, and the coming consumer planner / What's-Hot / group trips) has no equivalent way to move between sections. Add a persistent consumer-surface navigation (a side panel on desktop, collapsing to a mobile-appropriate nav) for the SIGNED-IN traveler, linking: Home, My Trips, Plan a trip (AI), Discover / What's Hot, Group trips, and Account/sign-out. Premium, responsive, theme-aware; reuse the existing .tf-* theme kit; do not fork per-page styles.\n\nScope/guards: this is the traveler's OWN consumer surface (TripForge-branded), NOT the brand-neutral token-shared /view/[token] proposal view — the anonymous share-token view MUST stay brand-neutral and nav-free (INV-020/INV-018 unchanged; no side panel leaks onto an anonymous shared trip). A traveler session still cannot reach any workspace/agent procedure (INV-023). Sections not yet built link to their existing pages or a clear 'coming soon' placeholder, wired to the real routes as those tickets land.\n\nAcceptance: a signed-in traveler sees a persistent side panel/nav across the consumer surface and can navigate between the available sections; it is responsive (no horizontal scroll on mobile) and theme-aware; the anonymous /view/[token] view is byte-unchanged (still brand-neutral, no nav); e2e covers signed-in nav + anonymous-view-unchanged. No prod deploy (campaign branch); full live validation.",
+    "type": "feature",
+    "priority": "critical",
+    "state": "todo",
+    "created": "2026-07-22T10:55:00Z",
+    "pr_url": ""
   }
 ]
