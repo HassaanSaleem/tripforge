@@ -73,8 +73,7 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   (ticket `17840669434037957747` proposes the Node-script-side fix).
 
 - **Vitest + eslint DON'T type-check — real `tsc` breaks hide behind a green
-  oracle, and PERSIST because nothing gates them (iter 6→7→8 break; RESOLVED
-  iter 9).** The oracle runs `pnpm test` (vitest, which transpiles without strict
+  oracle, and PERSIST because nothing gates them (iter 6→7→8 break; RESOLVED iter 9, fix landed by PR #11 iter 10).** The oracle runs `pnpm test` (vitest, which transpiles without strict
   type-checking) and `pnpm run lint` (eslint), neither of which surfaces a
   `tsc --noEmit` error. Iter 6 found a repo-wide typecheck break
   (`chat-edit.test.ts` referencing a removed `ChatEditResult` export) invisible to
@@ -87,8 +86,7 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   precisely because nothing gates it. Iter 9's in-image typecheck came back clean
   (exit 0, 9/9 packages) — the 6 errors were fixed in the merged tree. The
   lesson stands: the break survived 3 iterations *because* the loop's investigative
-  typecheck isn't a gate; its eventual fix was incidental (rode in on a merge), not
-  loop-enforced, so the same class can silently return. Rule: regress runs
+  typecheck isn't a gate; its eventual fix was incidental in iter 9 (rode in on a merge), then made loop-enforced in iter 10 via ticket→PR #11 (`e9d466f`, narrowing the indexed-access lookups) — a 2nd consecutive clean run, so the specific break is genuinely closed. But the gate-gap is unchanged: nothing enforces `tsc`, so a NEW break in the same class can still land invisibly. Rule: regress runs
   `pnpm run typecheck` in-image as an investigative check every iteration (cheap,
   layer-cached off the verify image) and tickets/closes breaks against reality;
   whether it JOINS the oracle is a sealed-gate operator decision (desk row
@@ -123,7 +121,7 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   619 tests → 3.19s (DB-inclusive, 63 files) iter 8, unchanged — no test files
   landed on the iter-8 branch (campaign-sync + ideate only);
   621 tests → 3.08s (DB-inclusive, 63 files) iter 9, +2 tests from the
-  now-merged chat-first PR #7).
+  now-merged chat-first PR #7; 621 tests → 3.02s (DB-inclusive, 63 files) iter 10, unchanged — only PR #11's test-only type fix landed).
   Cost is never a reason to skip or subset it.
 
 ## Integration Patterns
@@ -147,10 +145,7 @@ Patterns confirmed across multiple Kitchen Loop iterations. Updated automaticall
   hand-edited. Iter 5 re-ran the derivation and got a byte-for-byte match
   against the committed file (28/36, zero working-tree diff), confirming the
   fix holds a second time. Iter 6 (30/36), iter 7 (31/36), iter 8 (33/36), and
-  iter 9 (33/36, unchanged — a T1 robustness re-cover of an already-tested cell)
-  all regenerated clean (exit 0, no vocabulary crash after PR #74 removed the
-  out-of-vocab group-travel block) — a 6th consecutive iteration the tool is the
-  sole writer.
+  iter 9 (33/36, unchanged — a T1 robustness re-cover of an already-tested cell), and iter 10 (36/36 = 100%, the T2 `trade-layer-trust-web` composition closing the last 3 cells) all regenerated clean (exit 0, no vocabulary crash after PR #74 removed the out-of-vocab group-travel block) — a 7th consecutive iteration the tool is the sole writer. Caveat surfaced at 100%: `coverage_pct` credits a combo from its scenario's *declared* `KITCHENLOOP-COVERAGE` block, not from a passing run — 5/36 cells are recorded `fail` (2 intentional-red RESALE-SHARE-SEMANTICS + 3 known GOAL consumer-surface gaps), so "100%" means fully *witnessed*, not fully *green*.
   Regress should keep running
   `derive-coverage.mjs` each iteration (its own exit code flags malformed
   scenario blocks) rather than reconciling the matrix by hand.
