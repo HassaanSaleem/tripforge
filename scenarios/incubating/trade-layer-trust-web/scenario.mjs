@@ -148,7 +148,6 @@ async function trpcSubscribe(jar, proc, input) {
   const terminal = events.find((e) => e?.type === "result");
   return { res, text, data: terminal?.outcome ?? null };
 }
-const errCode = (r) => r.error?.data?.code ?? r.error?.code ?? null;
 /** Operator-side psql against the compose Postgres. */
 function psql(sql) {
   return execFileSync(

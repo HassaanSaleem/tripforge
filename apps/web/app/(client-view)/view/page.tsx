@@ -8,14 +8,17 @@
 // NO trip data (FR-005) and keeps the exact heading + INV-020/024 negatives the
 // existing anonymous-/view guards pin (smoke.spec.ts, trust-boundary.spec.ts).
 // Signed in ⇒ a personalized home that greets by name and links to My Trips,
-// signposting the not-yet-built consumer surfaces as coming soon. It reads ONLY
-// the existing session-aware clientView.me / clientView.myTrips — no new server
-// capability, so INV-023 (traveler → workspace = FORBIDDEN) is unchanged.
+// signposting the not-yet-built consumer surfaces as coming soon, wrapped in the
+// persistent consumer navigation shell (spec 037). It reads ONLY the existing
+// session-aware clientView.me / clientView.myTrips — no new server capability, so
+// INV-023 (traveler → workspace = FORBIDDEN) is unchanged. The shell (and its nav
+// panel) render ONLY on this signed-in branch — the AnonymousWelcome below stays
+// brand-neutral and nav-free (INV-020 / INV-018, FR-005).
 import { headers } from "next/headers";
 import Link from "next/link";
 import { getSessionContext } from "../../../lib/auth.js";
 import { getAuthenticatedCaller } from "../../../lib/trpc/server.js";
-import { TravelerSignOut } from "./traveler-home.js";
+import { ClientSurfaceShell } from "./components/client-surface-shell.js";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +39,11 @@ export default async function ClientViewHomePage() {
   ]);
   const name = identity?.name?.trim() || null;
 
-  return <TravelerHome name={name} tripCount={trips.length} />;
+  return (
+    <ClientSurfaceShell activeNav="home" travelerName={name}>
+      <TravelerHome name={name} tripCount={trips.length} />
+    </ClientSurfaceShell>
+  );
 }
 
 /** Anonymous /view: a brand-neutral welcome. Heading contains "Your trip" so the
@@ -68,44 +75,41 @@ function AnonymousWelcome() {
   );
 }
 
-/** Signed-in traveler home: greeting + My Trips + coming-soon signposts + sign out. */
+/** Signed-in traveler home CONTENT (greeting + My Trips + coming-soon tiles).
+ *  Rendered inside <ClientSurfaceShell>, which supplies the data-plain wrapper,
+ *  the <main>, and the persistent nav (with sign-out in its Account area) — so this
+ *  is just the page body, no outer chrome. */
 function TravelerHome({ name, tripCount }: { name: string | null; tripCount: number }) {
   return (
-    <div data-plain className="tf-client-root">
-      <main>
-        <header className="tf-client-head">
-          <p className="tf-eyebrow">Your account</p>
-          <h1 data-testid="traveler-home-greeting">{name ? `Welcome, ${name}` : "Welcome back"}</h1>
-          <p>Pick up a trip your agent shared with you, or explore what&apos;s coming next.</p>
-        </header>
+    <>
+      <header className="tf-client-head">
+        <p className="tf-eyebrow">Your account</p>
+        <h1 data-testid="traveler-home-greeting">{name ? `Welcome, ${name}` : "Welcome back"}</h1>
+        <p>Pick up a trip your agent shared with you, or explore what&apos;s coming next.</p>
+      </header>
 
-        <section className="tf-quick-actions" aria-label="Your account" data-testid="traveler-home-actions">
-          <Link href="/view/my-trips" className="tf-card tf-quick-action" data-testid="home-my-trips">
-            <b>My Trips</b>
-            <span>
-              {tripCount > 0
-                ? `${tripCount} ${tripCount === 1 ? "trip" : "trips"} shared with you`
-                : "Trips your agent shares with you show up here"}
-            </span>
-          </Link>
+      <section className="tf-quick-actions" aria-label="Your account" data-testid="traveler-home-actions">
+        <Link href="/view/my-trips" className="tf-card tf-quick-action" data-testid="home-my-trips">
+          <b>My Trips</b>
+          <span>
+            {tripCount > 0
+              ? `${tripCount} ${tripCount === 1 ? "trip" : "trips"} shared with you`
+              : "Trips your agent shares with you show up here"}
+          </span>
+        </Link>
 
-          <div className="tf-card tf-quick-action tf-home-soon" data-testid="home-plan" aria-disabled="true">
-            <p className="tf-eyebrow">Coming soon</p>
-            <b>Plan a trip</b>
-            <span>Build a trip with our AI — arriving on the traveler surface soon.</span>
-          </div>
+        <div className="tf-card tf-quick-action tf-home-soon" data-testid="home-plan" aria-disabled="true">
+          <p className="tf-eyebrow">Coming soon</p>
+          <b>Plan a trip</b>
+          <span>Build a trip with our AI — arriving on the traveler surface soon.</span>
+        </div>
 
-          <div className="tf-card tf-quick-action tf-home-soon" data-testid="home-discover" aria-disabled="true">
-            <p className="tf-eyebrow">Coming soon</p>
-            <b>Discover what&apos;s hot</b>
-            <span>A feed of trending, bookable trips — arriving soon.</span>
-          </div>
-        </section>
-
-        <footer className="tf-client-foot tf-home-foot">
-          <TravelerSignOut />
-        </footer>
-      </main>
-    </div>
+        <div className="tf-card tf-quick-action tf-home-soon" data-testid="home-discover" aria-disabled="true">
+          <p className="tf-eyebrow">Coming soon</p>
+          <b>Discover what&apos;s hot</b>
+          <span>A feed of trending, bookable trips — arriving soon.</span>
+        </div>
+      </section>
+    </>
   );
 }

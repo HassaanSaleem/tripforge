@@ -142,10 +142,6 @@ async function trpcSubscribe(jar, proc, input) {
   const terminal = events.find((e) => e?.type === "result");
   return { res, text, data: terminal?.outcome ?? null };
 }
-/** The tRPC error CODE for a single non-batched call. */
-function errCode(r) {
-  return r.error?.data?.code ?? r.error?.code ?? null;
-}
 /** Operator-side psql against the compose Postgres. */
 function psql(sql) {
   return execFileSync(

@@ -545,6 +545,34 @@ label > input, label > select, label > textarea {
 .tf-home-soon b { color: var(--muted); }
 .tf-home-foot { display: flex; justify-content: center; }
 
+/* ---- consumer navigation shell (spec 037): the SIGNED-IN traveler's persistent
+   nav. Reuses the shared .tf-app-shell / .tf-sidebar theme kit (layout + the
+   checkbox-driven @media(max-width:880px) off-canvas collapse) — this block adds
+   ONLY the brand-neutral wordmark, the coming-soon (non-link) signpost treatment,
+   and the bottom Account region. No new responsive system; INV-020 keeps the
+   wordmark neutral (never "TripForge"/"Trellis"). */
+.tf-client-main { display: grid; gap: 24px; align-content: start; }
+.tf-client-nav-brand { color: var(--ink); }
+/* coming-soon nav rows mirror the .tf-sidebar link layout but are muted and
+   non-interactive (they are <span>, not <a> — no dead ends, FR-003). */
+.tf-client-nav .tf-client-nav-soon {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+  border-radius: var(--r-sm); color: var(--muted); font-weight: 600; font-size: 14px;
+  cursor: default;
+}
+.tf-client-nav .tf-client-nav-soon svg { flex: none; opacity: .7; }
+.tf-client-nav-soon-badge {
+  margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-soft); background: var(--sand);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
+}
+/* Account region pinned to the bottom of the flex-column sidebar. */
+.tf-client-nav-account {
+  margin-top: auto; padding: 14px 12px 4px; border-top: 1px solid var(--line);
+  display: grid; gap: 8px; justify-items: start;
+}
+.tf-client-nav-name { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+
 /* ---- Discover / "What's Hot" feed (spec 023): editorial, image-forward cards —
    the first cards in the app to render a real photo rather than a gradient
    swatch (.tf-dest-card stays gradient-only elsewhere by design). */
