@@ -277,16 +277,18 @@ async function main() {
     `status=${wordCur.data?.status} reply=${wordCur.data?.reply}`,
   );
 
-  // BUG-1 — the "keep chatting to adjust it" affordance silently drops a
-  // correction to an already-stated field (append-only transcript + first-match).
+  // BUG-1 (FIXED, chat-keyless-adjust-drops-correction) — the "keep chatting to
+  // adjust it" affordance now honors a correction to an already-stated field: the
+  // keyless extractors are last-match-wins over the accumulated transcript, so a
+  // later "make it 7 nights" overrides the earlier "5 nights" (was: silently dropped).
   const priorFive = "Plan a trip to Lisbon for 2, 5 nights, EUR 2000";
   const before = await interpret(agent, priorFive);
-  check("finding BUG-1 (setup): the initial message resolves to 5 nights", before.data?.status === "resolved" && nights(before.data.tripRequest) === 5, `nights=${before.data?.status === "resolved" ? nights(before.data.tripRequest) : "n/a"}`);
+  check("BUG-1 (setup): the initial message resolves to 5 nights", before.data?.status === "resolved" && nights(before.data.tripRequest) === 5, `nights=${before.data?.status === "resolved" ? nights(before.data.tripRequest) : "n/a"}`);
   const adjusted = await interpret(agent, "actually make it 7 nights instead", [priorFive]);
   check(
-    "finding BUG-1: an override of an already-stated field is IGNORED — 'make it 7 nights' still resolves to 5 (KNOWN BUG, not desired)",
-    adjusted.data?.status === "resolved" && nights(adjusted.data.tripRequest) === 5,
-    `resolved nights=${adjusted.data?.status === "resolved" ? nights(adjusted.data.tripRequest) : "n/a"} (a fix would make this 7 and flip this assertion)`,
+    "BUG-1 (FIXED): a later correction to an already-stated field WINS — 'make it 7 nights' resolves to 7",
+    adjusted.data?.status === "resolved" && nights(adjusted.data.tripRequest) === 7,
+    `resolved nights=${adjusted.data?.status === "resolved" ? nights(adjusted.data.tripRequest) : "n/a"} (expected 7 after last-match-wins fix)`,
   );
 
   console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);

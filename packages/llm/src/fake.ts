@@ -33,6 +33,17 @@ import type { InterpretedTripParams, InterpretTripRequestResult } from "./interp
 
 const CURRENCY_SYMBOLS: Record<string, string> = { "$": "USD", "€": "EUR", "£": "GBP" };
 
+/** The LAST match of a (global) pattern in a text, or null. The accumulated
+ * chat transcript is scanned as one string (packages/api comma-joins the turns),
+ * so a later turn that re-states a field must WIN over an earlier one — e.g.
+ * "5 nights … actually make it 7 nights" resolves to 7, not 5
+ * (chat-keyless-adjust-drops-correction). The pattern MUST carry the `g` flag. */
+function lastMatch(text: string, pattern: RegExp): RegExpMatchArray | null {
+  let last: RegExpMatchArray | null = null;
+  for (const m of text.matchAll(pattern)) last = m;
+  return last;
+}
+
 /** Deterministic destination extraction (spec 028, research.md D7) — text
  * following "in"/"to", cut at the next clause boundary. Operates on the
  * ORIGINAL-case message so a returned destination reads naturally (supply
@@ -43,29 +54,30 @@ function extractDestination(raw: string): string | null {
   return destination && destination.length > 0 ? destination : null;
 }
 
-/** Deterministic budget extraction — currency symbol/code adjacent to an
- * amount, either order ("EUR2000", "$2000", "2000 EUR"). */
+/** Deterministic budget extraction — a currency (ISO code EUR/USD/GBP or symbol
+ * $/€/£) adjacent to an amount, in either order ("EUR2000", "$2000", "2000 EUR").
+ * Scans the whole text and keeps the LAST match so a later turn's correction
+ * overrides an earlier amount in the accumulated transcript
+ * (chat-keyless-adjust-drops-correction). */
 function extractBudget(text: string): { amount: number; currency: string } | null {
-  const before = text.match(/(eur|usd|gbp|\$|€|£)\s*([\d,]+(?:\.\d+)?)/i);
-  if (before?.[1] && before[2]) {
-    const token = before[1].toLowerCase();
+  const pattern = /(eur|usd|gbp|\$|€|£)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(eur|usd|gbp)\b/gi;
+  let result: { amount: number; currency: string } | null = null;
+  for (const m of text.matchAll(pattern)) {
+    const token = (m[1] ?? m[4])?.toLowerCase();
+    const amountRaw = m[2] ?? m[3];
+    if (!token || !amountRaw) continue;
     const currency = CURRENCY_SYMBOLS[token] ?? token.toUpperCase();
-    const amount = Number.parseFloat(before[2].replace(/,/g, ""));
-    return Number.isFinite(amount) && amount > 0 ? { amount, currency } : null;
+    const amount = Number.parseFloat(amountRaw.replace(/,/g, ""));
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    result = { amount, currency }; // keep overwriting → the last valid match wins
   }
-  const after = text.match(/([\d,]+(?:\.\d+)?)\s*(eur|usd|gbp)\b/i);
-  if (after?.[1] && after[2]) {
-    const amount = Number.parseFloat(after[1].replace(/,/g, ""));
-    const currency = after[2].toUpperCase();
-    return Number.isFinite(amount) && amount > 0 ? { amount, currency } : null;
-  }
-  return null;
+  return result;
 }
 
 /** "N days"/"N nights" -> a nights count (days convert via days-1, min 1,
  * research.md D7); absent when the message states neither. */
 function extractNights(text: string): number | null {
-  const match = text.match(/(\d+)\s*(day|days|night|nights)\b/);
+  const match = lastMatch(text, /(\d+)\s*(day|days|night|nights)\b/g);
   if (!match?.[1] || !match[2]) return null;
   const count = Number.parseInt(match[1], 10);
   if (!Number.isFinite(count) || count <= 0) return null;
@@ -76,7 +88,7 @@ function extractNights(text: string): number | null {
 /** "for N" (party size) — never matches when immediately followed by a
  * day/night unit, so "for 2 nights" isn't mistaken for 2 travelers. */
 function extractAdults(text: string): number | null {
-  const match = text.match(/\bfor\s+(\d+)\b(?!\s*(?:day|days|night|nights)\b)/);
+  const match = lastMatch(text, /\bfor\s+(\d+)\b(?!\s*(?:day|days|night|nights)\b)/g);
   if (!match?.[1]) return null;
   const count = Number.parseInt(match[1], 10);
   return Number.isFinite(count) && count > 0 ? count : null;
