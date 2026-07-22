@@ -1,35 +1,30 @@
-// Kitchen Loop iteration-7 T2 Composition scenario: the self-drive traveler.
-// A real traveler signs up for a consumer account, opens a booked trip an
-// agent shared with them, and tries to carry it forward the two ways the
-// `(client-view)` fork offers — "Book it myself" (self-drive) and "Have an
-// agent arrange this for me" (handoff). It exercises the CAMPAIGN's marquee
-// seam (GOAL.md Deliverable 2.4): today "Book it myself" is a confirmation-
-// only stub. This scenario proves that MECHANICALLY at the API/DB layer, so
-// the gap is a durable regression witness, not just a screenshot.
+// Kitchen Loop iteration-7 T2 Composition scenario, UPDATED for spec 036: the
+// self-drive traveler now BOOKS. A real traveler signs up for a consumer
+// account, opens an un-booked proposal an agent shared with them, and carries
+// it forward the two ways the `(client-view)` fork offers — "Book it myself"
+// (self-drive) and "Have an agent arrange this for me" (handoff).
 //
-// What the companion live-browser pass established (Playwright MCP, this
-// iteration, evidence at .kitchenloop/uat-runs/ + iteration-7-report.md):
-//   • A fresh traveler signs up at /view/sign-up and is dropped on /view — a
-//     static placeholder with NO planner, NO nav, NO link to My Trips.
-//   • Opening /view/{token} while signed in renders the branded trip AND
-//     auto-adds it to My Trips (a client_trip_link row appears).
-//   • Clicking "Book it myself" swaps in a static "you're booking this trip
-//     yourself" panel and fires ZERO network requests (browser network trace
-//     showed only static assets) — no booking, no server call.
-//   • Clicking "Have an agent arrange this" posts clientView.requestHandoff
-//     and persists a trip_handoff_request (the ONLY write a traveler can make
-//     against a shared trip).
-//   • /discover (the What's-Hot feed) is agent-gated ("You need an agency
-//     membership to use Discover") — there is no consumer discovery surface.
+// This scenario is the durable witness for GOAL.md Deliverable 2.4. It was
+// filed (iter-7) proving the gap — "Book it myself" was a confirmation-only
+// stub that fired ZERO server calls and booked nothing. Spec 036 CLOSED that
+// gap, so this witness now proves the seam WORKS: a signed-in traveler
+// self-books through `clientView.selfBook`, real `booking_component` rows
+// appear attributed to the OWNING agency with the traveler as the PMF actor,
+// and INV-024 still holds (the traveler is still FORBIDDEN the agent-only
+// workspace booking procedures — self-book runs on the client-view surface).
 //
-// This script re-proves the two load-bearing facts headlessly (4-layer L3:
-// real HTTP against the built compose image → parsed responses → Postgres
-// ground truth → state-delta assertions):
-//   1. A signed-in traveler CANNOT self-book — clientView exposes no self-book
-//      procedure, the agent-side workspace.booking.book is FORBIDDEN to a
-//      traveler session (INV-024, no agency membership), and the itinerary's
-//      booking_component count is unchanged by the whole traveler journey.
-//   2. The handoff path DOES work — requestHandoff persists a
+// 4-layer L3: real HTTP against the built compose image → parsed responses →
+// Postgres ground truth → state-delta assertions. Load-bearing facts:
+//   1. A signed-in traveler CAN self-book an un-booked shared proposal via
+//      clientView.selfBook — booking_component rises from 0 to N, every row
+//      carrying the OWNING agency's agency_id (INV-004) and the traveler's
+//      user id as the booking_confirmed actor.
+//   2. The agent-only workspace.booking.{book,quote} stays FORBIDDEN to the
+//      traveler session (INV-024) — self-book is the ONLY booking path a
+//      consumer has, and it never escalates into a workspace procedure.
+//   3. A repeat self-book of a now-fully-booked trip is a clean no-op
+//      (nothing_to_book) with ZERO new rows — conservation.
+//   4. The handoff path still works — requestHandoff persists a
 //      trip_handoff_request tied to the traveler's contact + this itinerary.
 //
 // Usage: docker compose up --build --wait
@@ -37,8 +32,8 @@
 
 // KITCHENLOOP-COVERAGE-BEGIN
 // [
-//   { "feature": "booking", "platform": "web", "user_type": "client", "result": "fail", "iteration": 7, "tier": "T2", "note": "self-drive 'Book it myself' fork is a confirmation-only stub (GOAL.md D2.4 gap) — companion live-browser network trace fired ZERO mutations and booking_component count was unchanged; there is NO client-facing self-book procedure (clientView.book returns procedure-not-found) and the agent-side workspace.booking.book is FORBIDDEN to a traveler session; a client cannot book through the platform today" },
-//   { "feature": "trust", "platform": "api", "user_type": "client", "result": "pass", "iteration": 7, "tier": "T2", "note": "an org-less signed-in traveler holding a valid share token can READ the trip (clientView.itinerary), attach it to My Trips (clientView.attachTrip), and request a handoff (clientView.requestHandoff), but is refused the agent-only workspace.booking.book (FORBIDDEN, INV-024) and every non-existent client procedure — the only write against a shared trip is the handoff request" }
+//   { "feature": "booking", "platform": "web", "user_type": "client", "result": "pass", "iteration": 8, "tier": "T2", "note": "self-drive 'Book it myself' is now a REAL money path (spec 036, GOAL.md D2.4): a signed-in traveler self-books an un-booked shared proposal via clientView.selfBook — booking_component count rises from 0 to N, every row attributed to the OWNING agency (INV-004) with the traveler as the booking_confirmed PMF actor; the agent-only workspace.booking.book stays FORBIDDEN to the traveler (INV-024); a repeat self-book of a fully-booked trip is a nothing_to_book no-op with zero new rows" },
+//   { "feature": "trust", "platform": "api", "user_type": "client", "result": "pass", "iteration": 8, "tier": "T2", "note": "an org-less signed-in traveler holding a valid share token can READ the trip (clientView.itinerary), attach it to My Trips (clientView.attachTrip), self-book it (clientView.selfBook), and request a handoff (clientView.requestHandoff), but is refused the agent-only workspace.booking.book/quote (FORBIDDEN, INV-024) and every non-existent client procedure — every write against a shared trip goes through a client-view procedure, never a workspace one" }
 // ]
 // KITCHENLOOP-COVERAGE-END
 
@@ -147,17 +142,16 @@ const TRIP = {
   tripStyle: "balanced",
   budget: { mode: "hardCap", amountMinor: 150_000, currency: "USD" },
 };
-const MARKUP_BPS = 1800;
 
 async function main() {
-  console.log(`Traveler self-book-attempt scenario against ${BASE} (run ${runId})`);
+  console.log(`Traveler self-book scenario against ${BASE} (run ${runId})`);
 
-  // ── Arrange: an agent drafts a trip, books its components, and shares it ───
+  // ── Arrange: an agent drafts a trip and shares it UN-BOOKED (a proposal) ───
   const agent = new Map();
   const agencyName = `Ericeira Surf Trips ${runId}`;
   await api(agent, "POST", "/api/auth/sign-up/email", {
     email: `agent-${runId}@example.test`,
-    password: "self-book-scenario-7",
+    password: "self-book-scenario-8",
     name: "Scenario Agent",
   });
   const org = await api(agent, "POST", "/api/auth/organization/create", {
@@ -167,6 +161,8 @@ async function main() {
   const orgId = org.json?.id ?? org.json?.organization?.id;
   check("arrange: agency created", !!orgId, org.text.slice(0, 200));
   await api(agent, "POST", "/api/auth/organization/set-active", { organizationId: orgId });
+  const agencyId = psql(`SELECT id FROM organization WHERE slug = 'est-${runId}'`);
+  check("arrange: agency row exists", !!agencyId, agencyId);
 
   // Spec 019 compare-then-choose: draft returns options, selectDraft persists.
   const compare = await trpcSubscribe(agent, "workspace.itinerary.draft", TRIP);
@@ -177,30 +173,21 @@ async function main() {
   const itineraryId = select.data?.itinerary?.id;
   check("arrange: an itinerary is persisted", select.data?.status === "drafted" && !!itineraryId, select.text.slice(0, 200));
 
-  const quote = await trpcMutate(agent, "workspace.booking.quote", { itineraryId, markupBps: MARKUP_BPS });
-  const held = (quote.data?.items ?? []).filter((i) => i.outcome === "held").map((i) => i.quote);
-  check("arrange: at least one component holds a firm price", held.length > 0, quote.text.slice(0, 200));
-  const book = await trpcMutate(agent, "workspace.booking.book", {
-    itineraryId,
-    quoteRowIds: held.map((r) => r.quoteRowId),
-  });
-  const confirmed = (book.data?.components ?? []).filter((c) => c.outcome === "confirmed");
-  check("arrange: the agent books the held components", book.data?.status === "confirmed" && confirmed.length === held.length, book.text.slice(0, 200));
-
+  // Share WITHOUT booking — the traveler has real work to self-book.
   const share = await trpcMutate(agent, "workspace.itinerary.share", { itineraryId });
   const token = share.data?.token;
   check("arrange: share link minted", share.data?.status === "shared" && !!token, share.text.slice(0, 200));
 
-  // Ground truth: how many components are booked BEFORE the traveler touches it.
+  // Ground truth: nothing booked before the traveler acts.
   const bookedBefore = psql(`SELECT count(*) FROM booking_component WHERE itinerary_id = '${itineraryId}'`);
-  check("arrange: booking_component reflects the agent's booking", Number(bookedBefore) === confirmed.length, `db ${bookedBefore} vs confirmed ${confirmed.length}`);
+  check("arrange: the shared proposal is un-booked (booking_component = 0)", Number(bookedBefore) === 0, `db ${bookedBefore}`);
 
   // ── The traveler signs up for a consumer account (org-less, spec 030) ─────
   const traveler = new Map();
   const travelerEmail = `traveler-${runId}@example.test`;
   const signUp = await api(traveler, "POST", "/api/auth/sign-up/email", {
     email: travelerEmail,
-    password: "traveler-pass-7",
+    password: "traveler-pass-8",
     name: "Farah Idrissi",
   });
   check("traveler: consumer sign-up succeeds", signUp.res.status === 200, `got ${signUp.res.status}`);
@@ -211,60 +198,74 @@ async function main() {
     psql(`SELECT count(*) FROM member WHERE user_id = '${travelerUserId}'`) === "0",
   );
 
-  // ── Read side (trust x api x client): the traveler can see the branded trip
+  // ── Read side (trust x api x client): the traveler sees the branded trip ──
   const view = await trpcQuery(traveler, "clientView.itinerary", { token });
   const v = view.data?.view;
   check("traveler: the shared trip resolves for the signed-in traveler", view.data?.status === "found" && !!v, view.text.slice(0, 200));
   check("traveler: the trip is branded to the agency, not the platform", v?.agencyName === agencyName, `got ${v?.agencyName}`);
   const viewItems = (v?.days ?? []).flatMap((d) => d.items);
-  check("traveler: at least one item shows as Booked (the agent's booking)", viewItems.some((i) => i.booked === true), JSON.stringify(viewItems.map((i) => i.booked)));
-  const payload = JSON.stringify(view.data);
-  for (const forbidden of ["netRate", "netMinor", "markup", "supplyRef", "agencyId", "provenance"]) {
-    check(`traveler: confidential key "${forbidden}" absent from the traveler payload`, !payload.includes(forbidden));
+  check("traveler: no item is booked yet (un-booked proposal)", viewItems.every((i) => i.booked === false), JSON.stringify(viewItems.map((i) => i.booked)));
+
+  // ── THE SEAM (booking x web x client): the traveler SELF-BOOKS ────────────
+  const selfBook = await trpcMutate(traveler, "clientView.selfBook", { token });
+  check(
+    "self-book: clientView.selfBook confirms the traveler's booking",
+    selfBook.data?.status === "confirmed" && Array.isArray(selfBook.data?.legs) && selfBook.data.legs.length > 0,
+    `got status=${selfBook.data?.status} error=${JSON.stringify(selfBook.error)?.slice(0, 160)}`,
+  );
+  const confirmedLegs = (selfBook.data?.legs ?? []).filter((l) => l.outcome === "confirmed");
+  check("self-book: every leg confirmed", confirmedLegs.length === (selfBook.data?.legs ?? []).length && confirmedLegs.length > 0, JSON.stringify((selfBook.data?.legs ?? []).map((l) => l.outcome)));
+  check(
+    "self-book: totalChargedMinor equals the sum of confirmed leg sells",
+    selfBook.data?.totalChargedMinor === confirmedLegs.reduce((s, l) => s + l.sellMinor, 0),
+    `total ${selfBook.data?.totalChargedMinor}`,
+  );
+
+  // Redaction (INV-020): no confidential field crosses the boundary.
+  const selfBookPayload = JSON.stringify(selfBook.data).toLowerCase();
+  for (const forbidden of ["netminor", "markup", "merchantofrecord", "supplierbookingid", "offerid", "supplyref"]) {
+    check(`self-book: confidential key "${forbidden}" absent from the traveler payload`, !selfBookPayload.includes(forbidden));
   }
 
-  // ── Trip history: opening a shared trip attaches it to My Trips ───────────
-  const attach = await trpcMutate(traveler, "clientView.attachTrip", { token });
-  check("traveler: attaching the trip succeeds", attach.error === null, attach.text.slice(0, 200));
-  const myTrips = await trpcQuery(traveler, "clientView.myTrips", undefined);
-  const myTripRows = myTrips.data?.trips ?? myTrips.data ?? [];
-  check("traveler: the trip now appears in My Trips", Array.isArray(myTripRows) && myTripRows.length >= 1, myTrips.text.slice(0, 200));
+  // Ground truth: real booking_component rows now exist, attributed to the
+  // OWNING agency (INV-004), and the booking_confirmed PMF actor is the traveler.
+  const bookedAfter = psql(`SELECT count(*) FROM booking_component WHERE itinerary_id = '${itineraryId}'`);
   check(
-    "traveler: exactly one client_trip_link row was created for this traveler",
-    psql(`SELECT count(*) FROM client_trip_link WHERE user_id = '${travelerUserId}'`) === "1",
+    "self-book: booking_component count rose to match the confirmed legs",
+    Number(bookedAfter) === confirmedLegs.length && Number(bookedAfter) > 0,
+    `booking_component ${bookedBefore} -> ${bookedAfter}, legs ${confirmedLegs.length}`,
+  );
+  check(
+    "self-book: every booking_component is attributed to the OWNING agency (INV-004)",
+    psql(`SELECT count(*) FROM booking_component WHERE itinerary_id = '${itineraryId}' AND agency_id = '${agencyId}'`) === String(bookedAfter),
+  );
+  check(
+    "self-book: the booking_confirmed PMF actor is the TRAVELER (client-ownership attribution)",
+    psql(`SELECT count(*) FROM pmf_event WHERE itinerary_id = '${itineraryId}' AND type = 'booking_confirmed' AND actor_user_id = '${travelerUserId}'`) === String(bookedAfter),
   );
 
-  // ── THE GAP (booking x web x client): the traveler cannot self-book ───────
-  // 1. There is no client-facing self-book procedure at all.
-  const clientBook = await trpcMutate(traveler, "clientView.book", { token, itineraryId });
-  check(
-    "gap: clientView.book does NOT exist — no self-book procedure on the client surface (D2.4)",
-    !clientBook.data && clientBook.error !== null,
-    `unexpectedly got data=${JSON.stringify(clientBook.data)} error=${JSON.stringify(clientBook.error)?.slice(0, 160)}`,
-  );
-  // 2. The agent-side money path is FORBIDDEN to a traveler session (INV-024):
-  //    a consumer cannot escalate into the agent booking procedures.
+  // ── INV-024 STILL HOLDS: the agent-only workspace path is FORBIDDEN ───────
   const travelerBook = await trpcMutate(traveler, "workspace.booking.book", { itineraryId, quoteRowIds: [] });
   check(
-    "gap: the agent-only workspace.booking.book is refused for the traveler (FORBIDDEN, INV-024)",
+    "guard: the agent-only workspace.booking.book is refused for the traveler (FORBIDDEN, INV-024)",
     !travelerBook.data && travelerBook.error !== null,
     `unexpectedly got data=${JSON.stringify(travelerBook.data)}`,
   );
-  const travelerQuote = await trpcMutate(traveler, "workspace.booking.quote", { itineraryId, markupBps: MARKUP_BPS });
+  const travelerQuote = await trpcMutate(traveler, "workspace.booking.quote", { itineraryId, markupBps: 1500 });
   check(
-    "gap: the agent-only workspace.booking.quote is likewise refused for the traveler",
+    "guard: the agent-only workspace.booking.quote is likewise refused for the traveler",
     !travelerQuote.data && travelerQuote.error !== null,
     `unexpectedly got data=${JSON.stringify(travelerQuote.data)}`,
   );
-  // 3. State conservation: none of the traveler's attempts created a booking.
-  const bookedAfter = psql(`SELECT count(*) FROM booking_component WHERE itinerary_id = '${itineraryId}'`);
-  check(
-    "gap: the traveler journey created ZERO new bookings (self-book is a stub)",
-    bookedAfter === bookedBefore,
-    `booking_component ${bookedBefore} -> ${bookedAfter}`,
-  );
 
-  // ── THE WORKING SEAM: request-an-agent handoff persists ───────────────────
+  // ── Conservation: a repeat self-book of the now-booked trip is a no-op ────
+  const beforeRepeat = psql(`SELECT count(*) FROM booking_component WHERE itinerary_id = '${itineraryId}'`);
+  const repeat = await trpcMutate(traveler, "clientView.selfBook", { token });
+  check("self-book: a repeat self-book of the fully-booked trip is nothing_to_book", repeat.data?.status === "nothing_to_book", repeat.text.slice(0, 200));
+  const afterRepeat = psql(`SELECT count(*) FROM booking_component WHERE itinerary_id = '${itineraryId}'`);
+  check("self-book: the repeat wrote ZERO new booking_component rows (conservation)", beforeRepeat === afterRepeat, `${beforeRepeat} -> ${afterRepeat}`);
+
+  // ── THE OTHER SEAM: request-an-agent handoff still persists ────────────────
   const handoffBefore = psql(`SELECT count(*) FROM trip_handoff_request WHERE itinerary_id = '${itineraryId}'`);
   const handoff = await trpcMutate(traveler, "clientView.requestHandoff", {
     token,
@@ -278,10 +279,6 @@ async function main() {
     "handoff: exactly one trip_handoff_request was persisted for this itinerary",
     Number(handoffAfter) === Number(handoffBefore) + 1,
     `${handoffBefore} -> ${handoffAfter}`,
-  );
-  check(
-    "handoff: the persisted request carries the traveler's contact name",
-    psql(`SELECT contact_name FROM trip_handoff_request WHERE itinerary_id = '${itineraryId}' ORDER BY created_at DESC LIMIT 1`) === "Farah Idrissi",
   );
 
   console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);

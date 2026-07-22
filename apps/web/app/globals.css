@@ -528,6 +528,13 @@ label > input, label > select, label > textarea {
 .tf-client-fork form label { display: grid; gap: 6px; }
 .tf-client-fork form button[type="submit"] { justify-self: start; min-width: 200px; margin-top: 4px; }
 
+/* ---- traveler self-book review + advisory (spec 036): the "Before you book"
+   panel is clearly-labeled, sourced-only guidance — never fabricated facts. */
+.tf-client-advisory { margin: 16px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft, rgba(0,0,0,0.02)); }
+.tf-client-advisory ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.tf-client-advisory li { font-size: 13px; color: var(--ink-soft); }
+.tf-client-fork [data-testid="self-book-confirm"] { min-width: 220px; margin-top: 4px; }
+
 /* ---- traveler account strip (spec 030): OPTIONAL sign-in affordance on the
    fork's initial state — never a workspace affordance (INV-024), just a plain
    inline link/button. */

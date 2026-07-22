@@ -10,10 +10,11 @@ import {
   scopedWhere,
 } from "@tripforge/db";
 import { z } from "zod";
-import type { AgentSessionContext, Container } from "../../context.js";
+import type { Container } from "../../context.js";
 import { findRate } from "../../rates.js";
 import { verifiedSupplyCatalog } from "../planner.js";
 import { logger, loadItinerary, portFor } from "./shared.js";
+import type { BookingActor } from "./actor.js";
 
 export const quoteInputSchema = z.strictObject({
   itineraryId: z.uuid(),
@@ -39,12 +40,12 @@ type QuoteItemOutcome =
 
 export async function quoteItinerary(
   container: Container,
-  session: AgentSessionContext,
+  actor: BookingActor,
   input: QuoteInput,
 ): Promise<{ status: "not_found" } | { status: "quoted"; items: QuoteItemOutcome[] }> {
   const db = container.db;
   if (!db) throw new Error("database not configured");
-  const row = await loadItinerary(container, session, input.itineraryId);
+  const row = await loadItinerary(container, actor, input.itineraryId);
   if (!row) return { status: "not_found" };
 
   // Re-register supply state from the persisted request so quoting works in a
@@ -56,7 +57,7 @@ export async function quoteItinerary(
       await db
         .select({ itemId: bookingComponentTable.itemId })
         .from(bookingComponentTable)
-        .where(scopedWhere(bookingComponentTable.agencyId, session.agencyId, eq(bookingComponentTable.itineraryId, row.id)))
+        .where(scopedWhere(bookingComponentTable.agencyId, actor.agencyId, eq(bookingComponentTable.itineraryId, row.id)))
     ).map((r) => r.itemId),
   );
 
@@ -98,7 +99,7 @@ export async function quoteItinerary(
       rate = { numerator: found.numerator, denominator: found.denominator };
       // Conversions are explicit, logged operations (INV-009).
       logger.info("booking.quote.currency_conversion", {
-        agencyId: session.agencyId,
+        agencyId: actor.agencyId,
         itineraryId: row.id,
         itemId,
         from: quote.netRate.currency,
@@ -112,7 +113,7 @@ export async function quoteItinerary(
 
     const sell = applyMarkupBps(convertedNet, input.markupBps);
     rowsToInsert.push({
-      agencyId: session.agencyId,
+      agencyId: actor.agencyId,
       itineraryId: row.id,
       itemId,
       port: supplyRef.port,

@@ -14,6 +14,10 @@ export type {
 // declaration emit must be able to NAME them (TS4023), so they are public
 // surface here, not incidental service exports (QS3-1).
 export type { BookOutcome, HeldQuote } from "./services/booking.js";
+// Traveler self-book outcome types surfaced the same way (spec 036, TS4023):
+// clientView.selfBook is a mutation riding the inferred AppRouter type, so its
+// redacted outcome union must be nameable in the emitted declarations.
+export type { SelfBookOutcome, SelfBookLeg, SelfBookFailureReason } from "./services/booking.js";
 // Draft streaming types surfaced the same way (spec 016): itinerary.draft is
 // now a subscription, so DraftEvent/DraftOutcome ride the inferred AppRouter
 // type and must be nameable (TS4023). Spec 019: draft is compare-only

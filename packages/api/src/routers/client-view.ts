@@ -14,6 +14,7 @@ import {
   attachTraveler,
   listTravelerTrips,
 } from "../services/client-view.js";
+import { selfBookItinerary } from "../services/booking.js";
 import { submitTripHandoffRequest, submitTripHandoffRequestInputSchema } from "../services/trip-handoffs.js";
 
 const getInputSchema = z.strictObject({ token: z.uuid() });
@@ -45,4 +46,15 @@ export const clientViewRouter = router({
   /** The signed-in caller's own "My Trips" list (spec 031 contract §2) — never
    * another visitor's trips (FR-005). */
   myTrips: protectedProcedure.query(({ ctx }) => listTravelerTrips(ctx.container, ctx.session.userId)),
+
+  /** Traveler self-drive booking (spec 036 contract; GOAL.md D2.4 — MONEY PATH).
+   * A signed-in traveler books the shared itinerary's bookable un-booked items
+   * through the SAME quote-then-book path an agent uses, scoped to the owning
+   * agency resolved from the token (INV-024: a traveler NEVER invokes a
+   * workspace procedure). protectedProcedure — anonymous callers get
+   * UNAUTHORIZED and are prompted to sign in (FR-009). The outcome is redacted
+   * (INV-020); state conservation is inherited from bookItinerary (INV-011). */
+  selfBook: protectedProcedure
+    .input((value) => getInputSchema.parse(value))
+    .mutation(({ ctx, input }) => selfBookItinerary(ctx.container, ctx.session, input.token)),
 });

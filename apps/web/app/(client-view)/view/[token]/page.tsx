@@ -109,6 +109,11 @@ export default async function SharedItineraryPage({ params }: PageProps) {
   // Booked prices come from the booking record (spec 013); when any shown
   // price is still an un-booked estimate, the total must say so (FR-004).
   const allItems = view.days.flatMap((day) => day.items);
+  // The un-booked items a traveler would self-book (spec 036), projected to the
+  // client-safe subset the fork's review screen shows (INV-020).
+  const reviewItems = allItems
+    .filter((item) => !item.booked)
+    .map((item) => ({ title: item.title, kind: item.kind, sellMinor: item.sellMinor }));
   return (
     <div data-plain className="tf-client-root">
       <main>
@@ -165,7 +170,7 @@ export default async function SharedItineraryPage({ params }: PageProps) {
           ))
         )}
 
-        <TripFork token={token} identity={identity} />
+        <TripFork token={token} identity={identity} reviewItems={reviewItems} currency={view.currency} />
 
         <footer className="tf-client-foot">
           <small>Shared with you by {view.agencyName}.</small>
