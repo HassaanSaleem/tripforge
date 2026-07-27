@@ -62,6 +62,31 @@ out of scope.
     validation mandatory. Traveler-owned bookings and any platform take-rate are
     **deferred** to a future operator decision (would each be a schema /
     revenue-share change that re-halts).
+- **Marketplace fork/white-label semantics (goal-marketplace-fork-whitelabel) —
+  RULED 2026-07-27:** build a **v0 that stays inside existing money math** (mirrors
+  the `goal-consumer-selfbook` ruling), deferring every new payout/ownership change
+  to a P1 operator decision. Operator (Hassaan) ratified the loop's
+  `MARKETPLACE-FORK-SEMANTICS` recommendation via AskUserQuestion ("Build safe-v0"):
+  - **(a) Fork** = an **agency-owned** copy (originating/seller agency), **no
+    traveler-owner**; attach the signed-in traveler via the existing
+    `client_trip_link` (INV-020 sell-price-only). **No canonical-schema change.**
+  - **(b) Book a listing as-is** = the traveler pays the seller's **existing
+    marked-up sell price**; the seller keeps the markup via `markup_ledger`
+    unchanged; **NO new platform take-rate** on direct traveler booking at v0.
+  - **(c) Resale revenue-share payout** = keep the **two-way** split at v0; the
+    three-way original-author payout stays **deferred** (ruled together with the
+    open `RESALE-SHARE-SEMANTICS` row — still open). The "earn a share on every
+    resale" copy is already softened (PR #44).
+  - **(d) Add-my-client-to-another-agent's departure** = add an **opt-in
+    `joinable` flag + vetting gate** on agent departures (additive, backfill-free
+    column, SCHEMA-GATE-78 discipline, **no `SCHEMA_VERSION` bump**); the joined
+    client stays the **joining agent's** (no ownership transfer), **no per-seat
+    revenue split** at v0.
+  - **Mandatory:** full SDD flow under these bounds; **L3 money-path +
+    conservation tests + live validation**; the PR stays **operator-gated at
+    merge**. Any step that would exceed these bounds (a new take-rate, a resale
+    payout, a traveler-owner, or a cross-agent ownership transfer) **re-halts** for
+    the operator.
 
 ## Deliverable 1 — Landing pages (global + travelers + agents) with demo videos
 
