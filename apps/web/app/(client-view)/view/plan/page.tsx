@@ -20,7 +20,14 @@ export const metadata = {
   description: "Describe your trip and budget — our AI builds a live-priced, bookable itinerary.",
 };
 
-export default async function ConsumerPlannerPage() {
+interface ConsumerPlannerPageProps {
+  // Optional ?destination= seed from the Discover feed's "Plan this" handoff
+  // (spec 039, contracts/discover-to-consumer-planner-handoff.md) — absent/empty
+  // is byte-identical to opening /view/plan directly.
+  searchParams: Promise<{ destination?: string | string[] }>;
+}
+
+export default async function ConsumerPlannerPage({ searchParams }: ConsumerPlannerPageProps) {
   const requestHeaders = await headers();
   const session = await getSessionContext(requestHeaders);
   if (!session) {
@@ -35,6 +42,10 @@ export default async function ConsumerPlannerPage() {
   // name in the shell and to pre-fill the request-an-agent form.
   const identity = await caller.clientView.me();
   const name = identity?.name?.trim() || null;
+
+  const { destination } = await searchParams;
+  const initialDestination =
+    typeof destination === "string" && destination.trim() ? destination : undefined;
 
   return (
     <ClientSurfaceShell activeNav="plan" travelerName={name}>
@@ -51,6 +62,7 @@ export default async function ConsumerPlannerPage() {
       <ConsumerPlanner
         contactName={name}
         contactEmail={identity?.email?.trim() || null}
+        {...(initialDestination ? { initialDestination } : {})}
       />
     </ClientSurfaceShell>
   );

@@ -7,7 +7,7 @@
 import { headers } from "next/headers";
 import { getWorkspaceIdentity } from "../../../lib/auth.js";
 import { WorkspacePageShell } from "../components/workspace-page-shell.js";
-import { DiscoverFeedView } from "./discover-feed-view.js";
+import { DiscoverFeedView } from "../../components/discover-feed-view.js";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export default async function DiscoverPage() {
         <h1>What&apos;s hot</h1>
         <p>Pick a destination for trending places and experiences — tap any card to start planning it.</p>
       </header>
-      <DiscoverFeedView />
+      <DiscoverFeedView planPath="/workspace" />
     </WorkspacePageShell>
   );
 }

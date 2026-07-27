@@ -228,3 +228,15 @@ export const WHATS_HOT_FEED: DiscoverFeedItem[] = buildFeedItems();
 export function feedItemsForDestination(destinationId: HeroDestination["id"]): DiscoverFeedItem[] {
   return WHATS_HOT_FEED.filter((item) => item.destinationId === destinationId);
 }
+
+/**
+ * The "Plan this" handoff URL a Discover feed card links to (spec 039,
+ * contracts/discover-to-consumer-planner-handoff.md). `planPath` is the base path
+ * of the AI planner for the surface rendering the feed — "/workspace" for the agent
+ * workspace, "/view/plan" for the traveler consumer surface — so the same card
+ * component serves both without either route group importing the other's UI
+ * (INV-024). Pure + surface-agnostic, so the cross-page contract is L1-testable.
+ */
+export function discoverPlanHref(planPath: string, planDestination: string): string {
+  return `${planPath}?destination=${encodeURIComponent(planDestination)}`;
+}

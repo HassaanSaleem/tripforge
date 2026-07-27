@@ -39,6 +39,6 @@ export const CLIENT_NAV_DESTINATIONS: readonly ClientNavDestination[] = [
   { id: "home", label: "Home", href: "/view", status: "live", icon: "home" },
   { id: "myTrips", label: "My Trips", href: "/view/my-trips", status: "live", icon: "suitcase" },
   { id: "plan", label: "Plan a trip", href: "/view/plan", status: "live", icon: "sparkle" },
-  { id: "discover", label: "Discover", href: null, status: "soon", icon: "compass" },
+  { id: "discover", label: "Discover", href: "/view/discover", status: "live", icon: "compass" },
   { id: "groupTrips", label: "Group trips", href: null, status: "soon", icon: "users" },
 ];

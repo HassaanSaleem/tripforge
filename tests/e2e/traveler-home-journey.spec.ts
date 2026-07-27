@@ -44,9 +44,10 @@ test("a traveler signs up with no share token, lands on a real home, reaches My 
   // "Plan a trip" went LIVE in spec 038 — a real link to the consumer planner.
   await expect(page.getByTestId("home-plan")).toHaveAttribute("href", "/view/plan");
   await expect(page.getByTestId("home-plan")).not.toContainText(/Coming soon/i);
-  // FR-003: Discover is still an honest coming-soon signpost, not a dead link.
-  await expect(page.getByTestId("home-discover")).toContainText(/Coming soon/i);
-  await expect(page.getByTestId("home-discover").locator("a")).toHaveCount(0);
+  // Discover went LIVE in spec 039 (consumer "What's Hot" feed) — the home tile is
+  // now a real link into the feed, no longer a coming-soon signpost.
+  await expect(page.getByTestId("home-discover")).toHaveAttribute("href", "/view/discover");
+  await expect(page.getByTestId("home-discover")).not.toContainText(/Coming soon/i);
   // INV-020/024 on the SIGNED-IN home too.
   await expect(page.getByText(/TripForge/i)).toHaveCount(0);
   await expect(page.getByText(/Trellis/i)).toHaveCount(0);
@@ -65,11 +66,12 @@ test("a traveler signs up with no share token, lands on a real home, reaches My 
   await expect(page.getByTestId("traveler-home-greeting")).toHaveCount(0);
 });
 
-// consumer-copy-honesty-interim (FRICTION-7): a hopeful /view/marketplace or
-// /view/discover URL used to fall through to /view/[token] and render the
-// dead-token message. As static segments they now show an honest coming-soon
-// affordance pointing at My Trips — still brand-neutral (INV-020).
-for (const route of ["/view/marketplace", "/view/discover"]) {
+// consumer-copy-honesty-interim (FRICTION-7): a hopeful /view/marketplace URL used
+// to fall through to /view/[token] and render the dead-token message. As a static
+// segment it now shows an honest coming-soon affordance pointing at My Trips — still
+// brand-neutral (INV-020). (/view/discover went LIVE in spec 039 and is now signed-in
+// gated — its anonymous redirect is covered by consumer-discover-journey.spec.ts.)
+for (const route of ["/view/marketplace"]) {
   test(`${route}: honest coming-soon affordance, not the dead-token message`, async ({ page }) => {
     await page.goto(route);
     await expect(page.getByTestId("discovery-coming")).toBeVisible();

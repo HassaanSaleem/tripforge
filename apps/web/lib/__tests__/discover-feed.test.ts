@@ -5,7 +5,7 @@
 // runtime parsing.
 import { describe, it, expect } from "vitest";
 import { HERO_DESTINATIONS } from "../planner-form.js";
-import { feedItemsForDestination, WHATS_HOT_FEED } from "../discover-feed.js";
+import { discoverPlanHref, feedItemsForDestination, WHATS_HOT_FEED } from "../discover-feed.js";
 
 describe("WHATS_HOT_FEED", () => {
   it("gives every HERO_DESTINATIONS entry at least 3 feed items (SC-004)", () => {
@@ -52,6 +52,34 @@ describe("WHATS_HOT_FEED", () => {
       expect(item.image.url).toMatch(/^https:\/\/(images|plus)\.unsplash\.com\//);
       expect(item.image.alt.trim().length).toBeGreaterThan(0);
       expect(item.image.attribution.trim()).toMatch(/^Photo by .+ on Unsplash$/);
+    }
+  });
+});
+
+// spec 039 FR-005 — the "Plan this" handoff URL. The SAME feed card serves both
+// surfaces, so the only difference is the planPath base: the consumer surface links
+// into /view/plan, the agent workspace into /workspace. Pinned here so a regression
+// that repoints a surface (e.g. consumer Discover leaking into /workspace) fails at
+// L1, not just live QA.
+describe("discoverPlanHref (spec 039, contracts/discover-to-consumer-planner-handoff.md)", () => {
+  it("targets the consumer planner for the consumer surface", () => {
+    expect(discoverPlanHref("/view/plan", "Lisbon, Portugal")).toBe(
+      "/view/plan?destination=Lisbon%2C%20Portugal",
+    );
+  });
+
+  it("targets the agent workspace for the workspace surface", () => {
+    expect(discoverPlanHref("/workspace", "Tokyo, Japan")).toBe(
+      "/workspace?destination=Tokyo%2C%20Japan",
+    );
+  });
+
+  it("url-encodes the destination for every real feed item so the seed round-trips", () => {
+    for (const item of WHATS_HOT_FEED) {
+      const href = discoverPlanHref("/view/plan", item.planDestination);
+      const url = new URL(href, "https://example.test");
+      expect(url.pathname).toBe("/view/plan");
+      expect(url.searchParams.get("destination")).toBe(item.planDestination);
     }
   });
 });

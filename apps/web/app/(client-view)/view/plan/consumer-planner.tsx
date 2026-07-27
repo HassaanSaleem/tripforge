@@ -76,13 +76,20 @@ function draftFailureMessage(outcome: Extract<PlanDraftEvent, { type: "result" }
 export function ConsumerPlanner({
   contactName,
   contactEmail,
+  initialDestination,
 }: {
   contactName: string | null;
   contactEmail: string | null;
+  // Optional seed from the Discover feed's "Plan this" handoff (spec 039,
+  // contracts/discover-to-consumer-planner-handoff.md). Pre-fills the first chat
+  // message so the traveler proceeds with one Send — it is ONLY composer text: it
+  // never auto-submits, skips confirm, or bypasses any interpret/validation step
+  // (FR-007). Absent/empty → the composer starts empty, byte-identical to today.
+  initialDestination?: string;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [travelerTurns, setTravelerTurns] = useState<string[]>([]);
-  const [draftText, setDraftText] = useState("");
+  const [draftText, setDraftText] = useState(initialDestination ? `Plan a trip to ${initialDestination}` : "");
   const [thinking, setThinking] = useState(false);
   const [resolved, setResolved] = useState<ConsumerTripRequest | null>(null);
   const [view, setView] = useState<View>({ phase: "chat" });

@@ -39,7 +39,8 @@ describe("CLIENT_NAV_DESTINATIONS (spec 037, data-model Consumer Nav Destination
     expect(byId.get("myTrips")).toMatchObject({ href: "/view/my-trips", status: "live" });
     // Plan a trip is LIVE as of spec 038 (consumer AI planner).
     expect(byId.get("plan")).toMatchObject({ href: "/view/plan", status: "live" });
-    expect(byId.get("discover")).toMatchObject({ href: null, status: "soon" });
+    // Discover is LIVE as of spec 039 (consumer "What's Hot" feed).
+    expect(byId.get("discover")).toMatchObject({ href: "/view/discover", status: "live" });
     expect(byId.get("groupTrips")).toMatchObject({ href: null, status: "soon" });
   });
 
