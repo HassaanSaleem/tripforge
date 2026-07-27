@@ -1293,9 +1293,9 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.3.\n\nOffer the SAME budget-aware planning engine (Constitution III) self-serve on the consumer surface: a traveler describes the trip + budget and the AI assembles a live-priced, bookable itinerary. Chat-first (see goal-chat-first-builder). Powered by the same allocator + supply adapters as the agent builder; no schema fork; consumer output must remain marketplace/agent-connected (Principle I — feed the marketplace, not a standalone planner).\n\nAcceptance: a signed-in traveler plans a budget-fit itinerary end-to-end on the consumer surface; every item is live-priced; the result offers self-book or request-an-agent (fork). No prod deploy; full live validation.\n\n--- iter-7 triage (2026-07-21 · report FEAT-2) ---\nConfirmed still unbuilt on the campaign branch: planning lives only under (workspace) (agent org required); there is no consumer planner. /for-travelers already advertises 'plan a new trip with AI'. Chat-first per goal-chat-first-builder.\n\n--- iter-9 triage (2026-07-22 · report FEAT-1) ---\nStill the right home for GOAL D3's second half. PR #7 (goal-chat-first-builder,\ncommit 4639f16) shipped chat-first build-to-book on the AGENT surface; the traveler\n\"Plan a trip\" tile remains a \"Coming soon\" stub. The consumer-surface chat-first\nplanner is this ticket — build it on the same interpretChatTripRequest/startDraft\npath PR #7 promoted (do not fork the planner). Note the traveler draft path is\nagentProcedure-gated today (INV-024), so this is money-path-adjacent and pairs with\ngoal-consumer-selfbook. Keyless-interpreter robustness gaps found in the agent chat\n(chat-keyless-adjust-drops-correction, chat-keyless-interpreter-grammar) will carry\nover to the consumer chat since it reuses the same extractors — fix once in\npackages/llm/src/fake.ts benefits both surfaces.",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/19"
   },
   {
     "id": "goal-consumer-selfbook",
