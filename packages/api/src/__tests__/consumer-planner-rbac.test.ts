@@ -49,7 +49,7 @@ describe("consumer planner authorization (INV-023/INV-024)", () => {
     const caller = appRouter.createCaller(ctxFor(traveler));
     // interpret needs no db (rides FakeLLM) — proves the traveler is past the gate.
     const result = await caller.clientView.planInterpret({
-      message: "Plan a trip to Lisbon around EUR 2000 for 4 nights, 2 people",
+      message: "Plan a trip to Lisbon for 2, 4 nights, EUR 2000",
     });
     expect(result.status).toBe("resolved");
   });

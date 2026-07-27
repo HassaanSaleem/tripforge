@@ -89,9 +89,12 @@ describe.skipIf(!DATABASE_URL)("L3 consumer AI planner (real Postgres)", () => {
 
       const before = await snapshot();
 
-      // 1) Chat interpret — a single message with both destination + budget resolves.
+      // 1) Chat interpret — a single message with destination + party + nights +
+      // budget resolves. Party size uses the "for N" form the keyless FakeLLM
+      // parses; bare "N people" is a pre-existing keyless interpreter-grammar
+      // gap (extractAdults only matches "for N"), out of scope for this money-path L3.
       const interpreted = await caller.clientView.planInterpret({
-        message: "Plan a trip to Lisbon around EUR 2000 for 4 nights, 2 people",
+        message: "Plan a trip to Lisbon for 2, 4 nights, EUR 2000",
       });
       expect(interpreted.status).toBe("resolved");
       if (interpreted.status !== "resolved") throw new Error("interpret did not resolve");
@@ -168,7 +171,7 @@ describe.skipIf(!DATABASE_URL)("L3 consumer AI planner (real Postgres)", () => {
       const before = (await snapshot()).leads;
 
       const interpreted = await caller.clientView.planInterpret({
-        message: "Plan a trip to Porto around EUR 1500 for 3 nights, 2 people",
+        message: "Plan a trip to Porto for 2, 3 nights, EUR 1500",
       });
       expect(interpreted.status).toBe("resolved");
       if (interpreted.status !== "resolved") throw new Error("interpret did not resolve");
