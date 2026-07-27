@@ -89,6 +89,26 @@ export type {
   SubmitConsumerPlanRequestInput,
   SubmitConsumerPlanRequestOutcome,
 } from "./services/consumer-planner.js";
+// Traveler group-trips types surfaced the same way (spec 040, TS4023): every
+// clientView.groups.* procedure rides the inferred AppRouter type, so its
+// input/outcome/view unions must be nameable in the emitted declarations.
+export type {
+  MembershipState,
+  CreateGroupInput,
+  CreateGroupOutcome,
+  JoinGroupInput,
+  JoinGroupOutcome,
+  GroupSummary,
+  GroupMemberView,
+  GroupMessageView,
+  GroupDetailView,
+  GroupDetailOutcome,
+  PostMessageInput,
+  PostMessageOutcome,
+  ConfirmOutcome,
+  FinalizeOutcome,
+  CancelOutcome,
+} from "./services/group-trips.js";
 export { buildContainer } from "./container.js";
 export type { BuildContainerOptions } from "./container.js";
 export {

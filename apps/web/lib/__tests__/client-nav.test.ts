@@ -41,7 +41,8 @@ describe("CLIENT_NAV_DESTINATIONS (spec 037, data-model Consumer Nav Destination
     expect(byId.get("plan")).toMatchObject({ href: "/view/plan", status: "live" });
     // Discover is LIVE as of spec 039 (consumer "What's Hot" feed).
     expect(byId.get("discover")).toMatchObject({ href: "/view/discover", status: "live" });
-    expect(byId.get("groupTrips")).toMatchObject({ href: null, status: "soon" });
+    // Group trips is LIVE as of spec 040 (traveler group coordination).
+    expect(byId.get("groupTrips")).toMatchObject({ href: "/view/groups", status: "live" });
   });
 
   it("no label leaks the platform wordmark (INV-020 belt-and-suspenders, FR-004, INV-D)", () => {
@@ -50,10 +51,19 @@ describe("CLIENT_NAV_DESTINATIONS (spec 037, data-model Consumer Nav Destination
     }
   });
 
-  it("exactly one link label contains the substring 'Trips' — the rest are non-links (research R4)", () => {
-    const linkLabelsWithTrips = CLIENT_NAV_DESTINATIONS.filter(
-      (d) => d.status === "live" && /Trips/i.test(d.label),
-    );
-    expect(linkLabelsWithTrips.map((d) => d.id)).toEqual(["myTrips"]);
+  it("the two live 'trips' labels are My Trips and Group trips, and no live label is a substring of another — so exact-match selectors stay unambiguous (research R4, spec 040)", () => {
+    // Spec 040 made "Group trips" a live link, so TWO live labels now contain
+    // "trips" (My Trips, Group trips). consumer-nav-journey.spec.ts selects them
+    // with `exact: true`; this L1 test guards the property that makes that safe.
+    const liveTripsLabels = CLIENT_NAV_DESTINATIONS.filter((d) => d.status === "live" && /trips/i.test(d.label));
+    expect(liveTripsLabels.map((d) => d.label).sort()).toEqual(["Group trips", "My Trips"]);
+    // No live label is a substring of another → an `exact: true` getByRole name
+    // selector can never resolve to two links.
+    const liveLabels = CLIENT_NAV_DESTINATIONS.filter((d) => d.status === "live").map((d) => d.label);
+    for (const outer of liveLabels) {
+      for (const inner of liveLabels) {
+        if (outer !== inner) expect(outer.includes(inner)).toBe(false);
+      }
+    }
   });
 });
