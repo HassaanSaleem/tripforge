@@ -26,6 +26,7 @@ export {
   groupDeparture,
   groupDepartureSeat,
   tripHandoffRequest,
+  consumerPlanRequest,
   clientTripLink,
 } from "./schema.js";
 export type { Schema } from "./schema.js";

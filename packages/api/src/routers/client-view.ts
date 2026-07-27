@@ -16,6 +16,16 @@ import {
 } from "../services/client-view.js";
 import { selfBookItinerary } from "../services/booking.js";
 import { submitTripHandoffRequest, submitTripHandoffRequestInputSchema } from "../services/trip-handoffs.js";
+import {
+  interpretChatRequestInputSchema,
+  interpretChatTripRequest,
+  tripRequestSchema,
+} from "../services/planner.js";
+import {
+  draftConsumerOptions,
+  submitConsumerPlanRequest,
+  submitConsumerPlanRequestInputSchema,
+} from "../services/consumer-planner.js";
 
 const getInputSchema = z.strictObject({ token: z.uuid() });
 
@@ -57,4 +67,27 @@ export const clientViewRouter = router({
   selfBook: protectedProcedure
     .input((value) => getInputSchema.parse(value))
     .mutation(({ ctx, input }) => selfBookItinerary(ctx.container, ctx.session, input.token)),
+
+  /** Consumer chat-first planner — interpret one chat turn (+ prior turns) into
+   * a TripRequest (spec 038 US1). REUSES the agent chat interpreter, which is
+   * session-free; protectedProcedure so a traveler (no agency) may call it but
+   * anonymous callers get UNAUTHORIZED (INV-024: NOT a workspace procedure). */
+  planInterpret: protectedProcedure
+    .input((value) => interpretChatRequestInputSchema.parse(value))
+    .mutation(({ ctx, input }) => interpretChatTripRequest(ctx.container, input)),
+
+  /** Consumer compare — 1-3 budget-fit, live-priced options for the traveler
+   * (spec 038 US1). Streamed like the agent `draft` (INV-028). REUSES the SAME
+   * draftOptions engine under an ephemeral tenant; redacted to sell-price-only
+   * (INV-020) and NEVER persisted (no booking/markup/trip_created write). */
+  planDraft: protectedProcedure
+    .input((value) => tripRequestSchema.parse(value))
+    .subscription(({ ctx, input }) => draftConsumerOptions(ctx.container, input)),
+
+  /** Request-an-agent fork (spec 038 US2) — a durable, agency-less, NON-money
+   * lead that routes the traveler's self-planned demand into the agent network
+   * (Constitution I). protectedProcedure; anonymous → UNAUTHORIZED. */
+  requestPlan: protectedProcedure
+    .input((value) => submitConsumerPlanRequestInputSchema.parse(value))
+    .mutation(({ ctx, input }) => submitConsumerPlanRequest(ctx.container, ctx.session, input)),
 });

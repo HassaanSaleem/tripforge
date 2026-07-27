@@ -41,11 +41,11 @@ test("a traveler signs up with no share token, lands on a real home, reaches My 
   await expect(page.getByTestId("traveler-home-greeting")).toHaveText(`Welcome, ${traveler.name}`);
   await expect(page.getByText("This is the traveler-facing view")).toHaveCount(0);
   await expect(page.getByTestId("home-my-trips")).toBeVisible();
-  // FR-003: not-yet-built surfaces are honest coming-soon signposts, not links.
-  await expect(page.getByTestId("home-plan")).toContainText(/Coming soon/i);
+  // "Plan a trip" went LIVE in spec 038 — a real link to the consumer planner.
+  await expect(page.getByTestId("home-plan")).toHaveAttribute("href", "/view/plan");
+  await expect(page.getByTestId("home-plan")).not.toContainText(/Coming soon/i);
+  // FR-003: Discover is still an honest coming-soon signpost, not a dead link.
   await expect(page.getByTestId("home-discover")).toContainText(/Coming soon/i);
-  // Coming-soon signposts carry no navigable link (no dead ends, FR-003).
-  await expect(page.getByTestId("home-plan").locator("a")).toHaveCount(0);
   await expect(page.getByTestId("home-discover").locator("a")).toHaveCount(0);
   // INV-020/024 on the SIGNED-IN home too.
   await expect(page.getByText(/TripForge/i)).toHaveCount(0);

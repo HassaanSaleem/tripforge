@@ -79,6 +79,16 @@ export type {
 // Agency admin member roster surfaced the same way (seed-0009, TS4023):
 // workspace.agencyAdmin.members rides the inferred AppRouter type.
 export type { AgencyMemberSummary } from "./services/agency-members.js";
+// Consumer planner types surfaced the same way (spec 038, TS4023): clientView.
+// planDraft is a subscription and clientView.requestPlan a mutation, both riding
+// the inferred AppRouter type, so their outcome/event unions must be nameable.
+export type {
+  ConsumerDraftOption,
+  ConsumerCompareOutcome,
+  ConsumerCompareEvent,
+  SubmitConsumerPlanRequestInput,
+  SubmitConsumerPlanRequestOutcome,
+} from "./services/consumer-planner.js";
 export { buildContainer } from "./container.js";
 export type { BuildContainerOptions } from "./container.js";
 export {

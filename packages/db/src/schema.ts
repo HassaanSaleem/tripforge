@@ -27,6 +27,7 @@ export {
 } from "./schema-marketplace";
 export { groupDeparture, groupDepartureSeat } from "./schema-group-travel";
 export { tripHandoffRequest } from "./schema-trip-handoffs";
+export { consumerPlanRequest } from "./schema-consumer-planner";
 
 import { user, session, account, verification, organization, member, invitation } from "./schema-auth";
 import { itinerary, itineraryShareLink, mediaAsset, clientTripLink } from "./schema-itinerary";
@@ -41,6 +42,7 @@ import {
 } from "./schema-marketplace";
 import { groupDeparture, groupDepartureSeat } from "./schema-group-travel";
 import { tripHandoffRequest } from "./schema-trip-handoffs";
+import { consumerPlanRequest } from "./schema-consumer-planner";
 
 export const schema = {
   user,
@@ -66,6 +68,7 @@ export const schema = {
   groupDeparture,
   groupDepartureSeat,
   tripHandoffRequest,
+  consumerPlanRequest,
   clientTripLink,
 };
 
