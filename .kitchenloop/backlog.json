@@ -1323,9 +1323,10 @@
     "body": "Feature-sized — route through Spec Kit. NEW CAPABILITY (not in PRD) — operator-authorized this pass (GOAL.md Deliverable 2.5/2.6). File a PRD/constitution amendment note in the plan; the amendment itself is an operator gate (do not self-merge constitution changes).\n\nBuild traveler group travel: create a group, post it so others can join, and finalize the trip collectively — plus join group trips already running, including agent-hosted departures. Trust/safety is in-scope, not deferred (Constitution VI — enforce mechanically): in-group chat, explicit confirmation from ALL parties before finalize, and gating so ONLY verified, identity-validated premium members may post or join. Model group membership on the canonical itinerary entity (Principle IV — no schema fork); respect the identity/data compliance posture.\n\nAcceptance: a verified premium member creates + posts a group; other verified members join and chat; finalize requires all-party confirmation; unverified/non-premium users are mechanically blocked from posting/joining (test the negative); a traveler can join an agent-hosted departure. No prod deploy; full live validation. Schema/constitution changes ALWAYS HALT for the operator.",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/21",
+    "execute_note": "spec 040 v0; PR #21 to campaign; UAT PASS; GROUP-TRIPS-AMEND desk row filed"
   },
   {
     "id": "goal-marketplace-fork-whitelabel",
