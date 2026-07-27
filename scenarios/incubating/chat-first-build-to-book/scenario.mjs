@@ -31,26 +31,25 @@
 //      net+markup=sell on every row (INV-009/010).
 //   4. STATE CONSERVATION on needsInfo. A message that cannot resolve creates
 //      ZERO itineraries (no side effect before the agent confirms).
-//   5. THREE DOCUMENTED KEYLESS-EXTRACTOR FINDINGS (pinned known behavior, same
-//      convention as golden-path/content-library-media-gap). These assert the
-//      CURRENT behavior faithfully so a future fix flips them loudly — they are
-//      NOT desired behavior:
-//        • FRICTION-1 — a bare leading city with no "to"/"in" preposition
-//          ("Barcelona, 5 nights, …") is NOT recognized as a destination.
-//        • FRICTION-2 — a word-form currency ("3000 euros") is NOT recognized as
-//          a budget (only ISO codes EUR/USD/GBP and symbols $/€/£ parse).
-//        • BUG-1 — the "keep chatting to adjust it" affordance SILENTLY DROPS a
-//          correction to an already-stated field: appending "make it 7 nights"
-//          to a transcript that already said "5 nights" still resolves to 5
-//          (append-only transcript + first-regex-match-wins extractor), while the
-//          UI re-confirms the stale value as if it heard the change.
+//   5. THREE KEYLESS-EXTRACTOR FINDINGS, NOW FIXED (the pins flipped loudly, per
+//      the golden-path convention — the checks now assert the DESIRED behavior):
+//        • FRICTION-1 (fixed, chat-keyless-interpreter-grammar) — a bare leading
+//          city with no "to"/"in" preposition ("Barcelona, 5 nights, …") IS now
+//          recognized as the destination.
+//        • FRICTION-2 (fixed, chat-keyless-interpreter-grammar) — a word-form
+//          currency ("3000 euros") IS now parsed as a budget (closed 3-currency
+//          scope EUR/USD/GBP, alongside ISO codes and symbols $/€/£).
+//        • BUG-1 (fixed, chat-keyless-adjust-drops-correction) — the "keep chatting
+//          to adjust it" affordance now HONORS a correction to an already-stated
+//          field: appending "make it 7 nights" to a transcript that said "5 nights"
+//          resolves to 7 (last-match-wins over the accumulated transcript).
 //
 // Usage: docker compose up --build --wait
 //        BASE_URL=http://localhost:3000 node scenarios/incubating/chat-first-build-to-book/scenario.mjs
 
 // KITCHENLOOP-COVERAGE-BEGIN
 // [
-//   { "feature": "itinerary-builder", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 9, "tier": "T1", "note": "chat-first build-to-book robustness (spec 035): HTTP interpretChatRequest accumulates a multi-turn transcript (destination turn 1 → needsInfo, budget turn 2 with priorMessages → resolved), resolves single-shot, and the resolved chat request drives the UNCHANGED draft→select→quote→book money path with markup_ledger net+markup=sell conserved; needsInfo creates zero itineraries. Also pins 3 keyless-extractor findings as known behavior: bare-leading-destination + word-currency both fall to needsInfo, and a mid-conversation override of an already-stated field is silently dropped (BUG-1)" },
+//   { "feature": "itinerary-builder", "platform": "api", "user_type": "agent-seller", "result": "pass", "iteration": 9, "tier": "T1", "note": "chat-first build-to-book robustness (spec 035): HTTP interpretChatRequest accumulates a multi-turn transcript (destination turn 1 → needsInfo, budget turn 2 with priorMessages → resolved), resolves single-shot, and the resolved chat request drives the UNCHANGED draft→select→quote→book money path with markup_ledger net+markup=sell conserved; needsInfo creates zero itineraries. Also verifies 3 keyless-extractor fixes: a bare-leading destination ('Barcelona, …') and a word-form currency ('3000 euros') both resolve, and a mid-conversation override of an already-stated field WINS (last-match-wins: 'make it 7 nights' → 7)" },
 //   { "feature": "itinerary-builder", "platform": "web", "user_type": "agent-seller", "result": "pass", "iteration": 9, "tier": "T1", "note": "companion live-browser (Playwright MCP) pass: a brand-new agency signs up and builds a Lisbon trip across TWO chat turns on the now-PRIMARY chat surface (form hidden behind a toggle), clicks 'Build my trip' → compare (3 options) → choose → drafted itinerary → quote at 15% (7 items held, USD→EUR FX) → BOOK confirmed with supplier refs; zero console errors/warnings across the whole journey (evidence in .kitchenloop/uat-runs/chat-first-build-to-book/)" }
 // ]
 // KITCHENLOOP-COVERAGE-END
@@ -251,38 +250,45 @@ async function main() {
     `itinerary list ${listBefore} -> ${listAfter}`,
   );
 
-  // ── 5. DOCUMENTED KEYLESS-EXTRACTOR FINDINGS (pinned known behavior) ───────
-  // These assert CURRENT behavior faithfully. They are NOT desired behavior — a
-  // fix (accept bare-leading destinations / word currencies / last-match-wins
-  // override) SHOULD flip them, at which point this block is updated. See the
-  // iteration-9 report FRICTION-1/FRICTION-2/BUG-1 for the full analysis.
+  // ── 5. KEYLESS-EXTRACTOR FINDINGS — NOW FIXED ─────────────────────────────
+  // These pins were flipped when the fix landed (chat-keyless-adjust-drops-
+  // correction + chat-keyless-interpreter-grammar). They now assert the DESIRED
+  // behavior: bare-leading destinations and word-form currencies resolve, and a
+  // later-turn override wins (last-match-wins). See the iteration-9 report
+  // FRICTION-1/FRICTION-2/BUG-1 for the original analysis.
 
-  // FRICTION-1 — a bare leading city with no "to"/"in" is not seen as a destination.
+  // FRICTION-1 (FIXED, chat-keyless-interpreter-grammar) — a bare leading city
+  // with no "to"/"in" is now recognized as the destination.
   const bare = await interpret(agent, "Barcelona, 5 nights, 2 people, around EUR 3000");
   check(
-    "finding FRICTION-1: a bare leading destination (no 'to'/'in') falls to needsInfo, asking for a destination already given",
-    bare.data?.status === "needsInfo" && /which destination/i.test(bare.data?.reply ?? ""),
-    `status=${bare.data?.status} reply=${bare.data?.reply}`,
+    "FRICTION-1 (FIXED): a bare leading destination ('Barcelona, …') resolves with destination=Barcelona",
+    bare.data?.status === "resolved" && bare.data?.tripRequest?.destination === "Barcelona",
+    `status=${bare.data?.status} destination=${bare.data?.tripRequest?.destination}`,
   );
 
-  // FRICTION-2 — a word-form currency is not recognized as a budget (dest IS captured).
+  // FRICTION-2 (FIXED, chat-keyless-interpreter-grammar) — a word-form currency
+  // is now parsed as a budget (dest IS captured; "3000 euros" → EUR 3000).
   const wordCur = await interpret(agent, "Plan a trip to Rome, around 3000 euros for 5 nights");
   check(
-    "finding FRICTION-2: a word-form currency ('3000 euros') is not parsed as a budget → needsInfo (only ISO codes/symbols parse)",
-    wordCur.data?.status === "needsInfo" && /budget/i.test(wordCur.data?.reply ?? ""),
-    `status=${wordCur.data?.status} reply=${wordCur.data?.reply}`,
+    "FRICTION-2 (FIXED): a word-form currency ('3000 euros') resolves budget=EUR 3000",
+    wordCur.data?.status === "resolved" &&
+      wordCur.data?.tripRequest?.budget?.amountMinor === 300_000 &&
+      wordCur.data?.tripRequest?.budget?.currency === "EUR",
+    `status=${wordCur.data?.status} budget=${JSON.stringify(wordCur.data?.tripRequest?.budget)}`,
   );
 
-  // BUG-1 — the "keep chatting to adjust it" affordance silently drops a
-  // correction to an already-stated field (append-only transcript + first-match).
+  // BUG-1 (FIXED, chat-keyless-adjust-drops-correction) — the "keep chatting to
+  // adjust it" affordance now honors a correction to an already-stated field: the
+  // keyless extractors are last-match-wins over the accumulated transcript, so a
+  // later "make it 7 nights" overrides the earlier "5 nights" (was: silently dropped).
   const priorFive = "Plan a trip to Lisbon for 2, 5 nights, EUR 2000";
   const before = await interpret(agent, priorFive);
-  check("finding BUG-1 (setup): the initial message resolves to 5 nights", before.data?.status === "resolved" && nights(before.data.tripRequest) === 5, `nights=${before.data?.status === "resolved" ? nights(before.data.tripRequest) : "n/a"}`);
+  check("BUG-1 (setup): the initial message resolves to 5 nights", before.data?.status === "resolved" && nights(before.data.tripRequest) === 5, `nights=${before.data?.status === "resolved" ? nights(before.data.tripRequest) : "n/a"}`);
   const adjusted = await interpret(agent, "actually make it 7 nights instead", [priorFive]);
   check(
-    "finding BUG-1: an override of an already-stated field is IGNORED — 'make it 7 nights' still resolves to 5 (KNOWN BUG, not desired)",
-    adjusted.data?.status === "resolved" && nights(adjusted.data.tripRequest) === 5,
-    `resolved nights=${adjusted.data?.status === "resolved" ? nights(adjusted.data.tripRequest) : "n/a"} (a fix would make this 7 and flip this assertion)`,
+    "BUG-1 (FIXED): a later correction to an already-stated field WINS — 'make it 7 nights' resolves to 7",
+    adjusted.data?.status === "resolved" && nights(adjusted.data.tripRequest) === 7,
+    `resolved nights=${adjusted.data?.status === "resolved" ? nights(adjusted.data.tripRequest) : "n/a"} (expected 7 after last-match-wins fix)`,
   );
 
   console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);
