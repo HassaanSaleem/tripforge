@@ -1313,9 +1313,9 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.2 (PRD 9.7).\n\nBring a 'What's Hot' discovery feed to the consumer surface. Every feed item MUST be actionable — tapping it opens a plannable, budget-priced, bookable itinerary connected to an agent or the marketplace (Principle I). Reuse the existing agent-side Discover feed building blocks where possible; licensed/real imagery only (Compliance & Content Sourcing); no fabricated place photos.\n\nAcceptance: a traveler browses What's Hot and every card opens a plannable, priced itinerary; no dead/decorative-only items; imagery is licensed/real. No prod deploy; full live validation.\n\n--- iter-7 triage (2026-07-21 · report FEAT-4) ---\nConfirmed: as a signed-in traveler, /discover is agent-gated ('You need an agency membership to use Discover', routes to create-an-agency) — there is NO consumer discovery surface today.",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/20"
   },
   {
     "id": "goal-group-trips",
