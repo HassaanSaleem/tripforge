@@ -44,11 +44,12 @@ test("a signed-in traveler navigates the consumer surface via the persistent pan
 
   // FR-002/FR-003: the built destinations are links; not-yet-built sections are
   // non-link "coming soon" signposts (no dead ends). "Plan a trip" went LIVE in
-  // spec 038, so there are now THREE links (Home, My Trips, Plan a trip) and two
-  // coming-soon signposts (Discover, Group trips).
-  await expect(nav.getByRole("link")).toHaveCount(3);
+  // spec 038 and "Discover" in spec 039, so there are now FOUR links (Home, My
+  // Trips, Plan a trip, Discover) and one coming-soon signpost (Group trips).
+  await expect(nav.getByRole("link")).toHaveCount(4);
   await expect(nav.getByRole("link", { name: "Plan a trip", exact: true })).toHaveAttribute("href", "/view/plan");
-  for (const soon of ["client-nav-discover", "client-nav-groupTrips"]) {
+  await expect(nav.getByRole("link", { name: "Discover", exact: true })).toHaveAttribute("href", "/view/discover");
+  for (const soon of ["client-nav-groupTrips"]) {
     const item = page.getByTestId(soon);
     await expect(item).toBeVisible();
     await expect(item).toContainText(/Soon/i);

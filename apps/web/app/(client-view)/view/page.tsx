@@ -103,11 +103,12 @@ function TravelerHome({ name, tripCount }: { name: string | null; tripCount: num
           <span>Describe your trip and budget — our AI builds a live-priced, bookable itinerary.</span>
         </Link>
 
-        <div className="tf-card tf-quick-action tf-home-soon" data-testid="home-discover" aria-disabled="true">
-          <p className="tf-eyebrow">Coming soon</p>
+        {/* Discover went LIVE in spec 039 (consumer "What's Hot" feed) — a real
+            link into the feed, no longer a coming-soon signpost. */}
+        <Link href="/view/discover" className="tf-card tf-quick-action" data-testid="home-discover">
           <b>Discover what&apos;s hot</b>
-          <span>A feed of trending, bookable trips — arriving soon.</span>
-        </div>
+          <span>Browse trending places and experiences — tap any to start planning a bookable trip.</span>
+        </Link>
       </section>
     </>
   );
