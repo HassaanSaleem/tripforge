@@ -29,16 +29,16 @@ export interface ClientNavDestination {
 // href, set status "live") once its consumer route lands — the sidebar and the
 // active-item marker both read this list, so no other file changes.
 //
-// "My Trips" is the ONLY entry whose label contains the substring "Trips"; the
-// coming-soon "Group trips" is a NON-link, so Playwright's substring-based
-// getByRole("link", { name: "Trips" }) can never resolve to two links (the same
-// caution `lib/nav.ts` documents for the agent surface). The nav landmark is
-// labelled "Traveler navigation" (see ClientNavSidebar), distinct from the agent
-// "Main navigation", so cross-surface selectors never collide.
+// "My Trips" and "Group trips" (spec 040 — now LIVE) both contain the substring
+// "trips", so consumer-surface Playwright selectors MUST use `exact: true` (they
+// do — see consumer-nav-journey.spec.ts) so `name: "My Trips"`/`"Group trips"`
+// never resolves to two links. The nav landmark is labelled "Traveler navigation"
+// (see ClientNavSidebar), distinct from the agent "Main navigation" (whose specs
+// use a bare `name: "Trips"`), so cross-surface selectors never collide either.
 export const CLIENT_NAV_DESTINATIONS: readonly ClientNavDestination[] = [
   { id: "home", label: "Home", href: "/view", status: "live", icon: "home" },
   { id: "myTrips", label: "My Trips", href: "/view/my-trips", status: "live", icon: "suitcase" },
   { id: "plan", label: "Plan a trip", href: "/view/plan", status: "live", icon: "sparkle" },
   { id: "discover", label: "Discover", href: "/view/discover", status: "live", icon: "compass" },
-  { id: "groupTrips", label: "Group trips", href: null, status: "soon", icon: "users" },
+  { id: "groupTrips", label: "Group trips", href: "/view/groups", status: "live", icon: "users" },
 ];

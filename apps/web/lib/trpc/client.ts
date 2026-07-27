@@ -161,3 +161,20 @@ export type ConsumerDraftedOptions = Extract<PlanDraftOutput, { status: "drafted
 export type ConsumerDraftOption = ConsumerDraftedOptions[number];
 export type RequestPlanInput = inferRouterInputs<AppRouter>["clientView"]["requestPlan"];
 export type RequestPlanOutput = inferRouterOutputs<AppRouter>["clientView"]["requestPlan"];
+
+/**
+ * Traveler group-trips types via the same inference (spec 040): verified premium
+ * travelers form a group around a trip, invite members, chat, confirm, and
+ * finalize collectively. The server outcome unions stay un-exported as a direct
+ * import surface (QS3-1); inference keeps the browser in sync with the deployed
+ * contract. All under clientView.groups (the traveler surface, INV-024).
+ */
+export type GroupMembershipOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["membership"];
+export type CreateGroupOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["create"];
+export type JoinGroupOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["join"];
+export type MyGroupsOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["mine"];
+export type GroupSummaryView = MyGroupsOutput[number];
+export type GroupDetailOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["get"];
+export type GroupDetail = Extract<GroupDetailOutput, { status: "ok" }>["group"];
+export type PostGroupMessageOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["message"];
+export type FinalizeGroupOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["finalize"];

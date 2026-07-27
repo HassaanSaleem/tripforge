@@ -28,6 +28,10 @@ export {
   tripHandoffRequest,
   consumerPlanRequest,
   clientTripLink,
+  travelerMembership,
+  travelerGroup,
+  travelerGroupMember,
+  travelerGroupMessage,
 } from "./schema.js";
 export type { Schema } from "./schema.js";
 export { tenantScope, scopedWhere } from "./tenant.js";

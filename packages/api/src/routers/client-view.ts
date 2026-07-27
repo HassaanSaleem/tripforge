@@ -8,6 +8,7 @@
 // protectedProcedure, any authenticated user.
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
+import { groupTripsRouter } from "./group-trips.js";
 import {
   resolveShareLink,
   getSignedInIdentity,
@@ -90,4 +91,9 @@ export const clientViewRouter = router({
   requestPlan: protectedProcedure
     .input((value) => submitConsumerPlanRequestInputSchema.parse(value))
     .mutation(({ ctx, input }) => submitConsumerPlanRequest(ctx.container, ctx.session, input)),
+
+  /** Traveler group trips (spec 040) — verified premium travelers form a group
+   * around a trip, invite members, chat, confirm, and finalize collectively.
+   * Nested under the traveler surface (INV-024); all protectedProcedure. */
+  groups: groupTripsRouter,
 });

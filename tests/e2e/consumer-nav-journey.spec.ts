@@ -42,19 +42,16 @@ test("a signed-in traveler navigates the consumer surface via the persistent pan
   await expect(myTripsLink).toBeVisible();
   await expect(homeLink).toHaveAttribute("aria-current", "page");
 
-  // FR-002/FR-003: the built destinations are links; not-yet-built sections are
-  // non-link "coming soon" signposts (no dead ends). "Plan a trip" went LIVE in
-  // spec 038 and "Discover" in spec 039, so there are now FOUR links (Home, My
-  // Trips, Plan a trip, Discover) and one coming-soon signpost (Group trips).
-  await expect(nav.getByRole("link")).toHaveCount(4);
+  // FR-002/FR-003: the built destinations are links (no dead ends). "Plan a trip"
+  // went LIVE in spec 038, "Discover" in spec 039, and "Group trips" in spec 040,
+  // so ALL FIVE nav destinations (Home, My Trips, Plan a trip, Discover, Group
+  // trips) are now live links — no coming-soon signpost remains. Names are matched
+  // `exact: true`, so the "My Trips"/"Group trips" shared "trips" substring never
+  // resolves a selector to two links (the caution lib/client-nav.ts documents).
+  await expect(nav.getByRole("link")).toHaveCount(5);
   await expect(nav.getByRole("link", { name: "Plan a trip", exact: true })).toHaveAttribute("href", "/view/plan");
   await expect(nav.getByRole("link", { name: "Discover", exact: true })).toHaveAttribute("href", "/view/discover");
-  for (const soon of ["client-nav-groupTrips"]) {
-    const item = page.getByTestId(soon);
-    await expect(item).toBeVisible();
-    await expect(item).toContainText(/Soon/i);
-    await expect(item.locator("a")).toHaveCount(0);
-  }
+  await expect(nav.getByRole("link", { name: "Group trips", exact: true })).toHaveAttribute("href", "/view/groups");
 
   // FR-004/FR-006: brand-neutral, no workspace affordance on the signed-in surface.
   await expect(page.getByText(/TripForge/i)).toHaveCount(0);
