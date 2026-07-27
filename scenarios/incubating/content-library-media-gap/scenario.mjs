@@ -268,7 +268,11 @@ async function main() {
   check("gap: the refused draft persisted nothing", rowsAfterRefusal === "0", `${rowsAfterRefusal} rows`);
 
   // ── 2. Dormant schema: fresh drafts round-trip defaulted media fields ────
-  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  // Spec 019 compare-then-choose: draft RETURNS options (persists nothing);
+  // selectDraft persists the chosen one and answers with the itinerary.
+  const draftCompare = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draftVariant = (draftCompare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draftCompare.data?.options?.[0]?.variant ?? "balanced";
+  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draftVariant });
   const itineraryId = draft.data?.itinerary?.id;
   check("seller: AI draft persists an itinerary", draft.data?.status === "drafted" && !!itineraryId, draft.text.slice(0, 300));
 
@@ -357,7 +361,9 @@ async function main() {
     registered.text.slice(0, 200),
   );
 
-  const draft3 = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft3Compare = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft3Variant = (draft3Compare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draft3Compare.data?.options?.[0]?.variant ?? "balanced";
+  const draft3 = await trpcSubscribe(seller.jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draft3Variant });
   const realItineraryId = draft3.data?.itinerary?.id;
   const attached = await trpcMutate(seller.jar, "workspace.itinerary.attachMedia", {
     itineraryId: realItineraryId,
@@ -440,7 +446,9 @@ async function main() {
   // Separate itinerary so the arranged-invalid document can't contaminate the
   // checks above; share link minted BEFORE the arrangement (mint re-reads the
   // document too).
-  const draft2 = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft2Compare = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draft2Variant = (draft2Compare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draft2Compare.data?.options?.[0]?.variant ?? "balanced";
+  const draft2 = await trpcSubscribe(seller.jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draft2Variant });
   const badItineraryId = draft2.data?.itinerary?.id;
   const share2 = await trpcMutate(seller.jar, "workspace.itinerary.share", { itineraryId: badItineraryId });
   const badToken = share2.data?.token;

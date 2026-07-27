@@ -8,9 +8,9 @@ import Link from "next/link";
 import { MarketingNav } from "../components/marketing-nav.js";
 
 export const metadata = {
-  title: "TripForge for travelers — plan a trip, then book it or hand it to an agent",
+  title: "TripForge for travelers — see your trip, book it yourself or hand it to an agent",
   description:
-    "Describe your trip and budget and get a live-priced, bookable itinerary. Book it yourself, or hand it to a vetted travel agent.",
+    "Sign in to see the itinerary your travel agent built for you, priced against real net rates. Book it yourself, or hand it to a vetted agent to arrange.",
 };
 
 export default function ForTravelersPage() {
@@ -22,16 +22,17 @@ export default function ForTravelersPage() {
         <section className="lp-hero">
           <div className="lp-hero-copy">
             <p className="tf-eyebrow">For travelers</p>
-            <h1>Your trip, planned in a sentence — and actually bookable</h1>
+            <h1>Your trip, priced for real — and yours to run</h1>
             <p className="home-lede">
-              Describe where you want to go and what you want to spend. Our AI
-              assembles a day-by-day itinerary priced against real net rates —
-              then you book it yourself, or hand it to a vetted travel agent to
-              arrange for you.
+              Sign in to see the day-by-day itinerary your travel agent built for
+              you, priced against real net rates. When you&apos;re ready, book it
+              yourself — or hand it back to a vetted agent to arrange and book for
+              you. Planning your own trip with AI is coming to your traveler
+              account.
             </p>
             <div className="home-cta">
               <Link href="/view/sign-in" className="tf-btn tf-btn--cta">
-                Sign in to plan a trip →
+                Sign in to see your trips →
               </Link>
               <Link href="/for-agents" className="tf-btn tf-btn--ghost">
                 Are you a travel agent?
@@ -47,15 +48,15 @@ export default function ForTravelersPage() {
               controls
               preload="metadata"
               poster="/shots/clients/01-shared-trip.png"
-              aria-label="TripForge traveler demo: planning and booking a shared trip"
+              aria-label="TripForge traveler demo: reviewing and booking a shared trip"
             >
               <source src="/demos/tripforge-clients.mp4" type="video/mp4" />
               Your browser cannot play this video.{" "}
               <a href="/demos/tripforge-clients.mp4">Download the traveler demo</a>.
             </video>
             <figcaption>
-              A shared trip, end to end — plan, review the priced itinerary, and
-              choose how to book.
+              A shared trip, end to end — review the priced itinerary and choose
+              how to book.
             </figcaption>
           </figure>
         </section>
@@ -63,11 +64,11 @@ export default function ForTravelersPage() {
         <section className="lp-story" aria-label="How it works for travelers">
           <article className="lp-step">
             <span className="lp-step-n">1</span>
-            <h2>Describe the trip and the budget</h2>
+            <h2>Get a plan built around your budget</h2>
             <p>
-              A destination, some dates, who is going, and a number. The
-              budget-aware planner allocates it across flights, stays, transfers,
-              and activities and fills it in.
+              Tell a vetted TripForge agent where you want to go and what you want
+              to spend. They build a budget-aware, day-by-day itinerary across
+              flights, stays, transfers, and activities — and share it with you.
             </p>
           </article>
           <article className="lp-step">
@@ -75,16 +76,16 @@ export default function ForTravelersPage() {
             <h2>See it priced for real</h2>
             <p>
               Every item sits on a live net rate — a real, bookable price, not a
-              guess. Adjust the plan and the numbers move with it, day by day.
+              guess. You see the whole trip totalled, day by day.
             </p>
           </article>
           <article className="lp-step">
             <span className="lp-step-n">3</span>
             <h2>Book it yourself, or ask an agent</h2>
             <p>
-              Confident? Book it through the platform. Want a human on it? Hand
-              the same trip to a vetted marketplace agent who arranges and books
-              it for you.
+              Confident? Take the plan and book each part yourself. Want a human
+              on it? Hand the same trip back to a vetted agent who arranges and
+              books it for you.
             </p>
           </article>
         </section>
@@ -92,8 +93,7 @@ export default function ForTravelersPage() {
         <section className="lp-cta-band">
           <h2>Ready when you are</h2>
           <p>
-            Sign in to open a shared trip, plan a new one, and see your trips in
-            one place.
+            Sign in to open a shared trip and keep all your trips in one place.
           </p>
           <Link href="/view/sign-in" className="tf-btn tf-btn--cta">
             Sign in to view your trips →

@@ -371,6 +371,10 @@ label > input, label > select, label > textarea {
 .tf-media-card { display: grid; gap: 6px; }
 .tf-media-thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line); background: var(--sea-tint); }
 .tf-media-thumb--link { display: flex; align-items: center; justify-content: center; color: var(--sea-deep); font-weight: 600; text-decoration: none; }
+/* Graceful placeholder when a registered media URL is unreachable/expired
+   (iter9-gallery-media-fallback) — a labeled tile, never the browser's broken glyph. */
+.tf-media-thumb--fallback { display: flex; align-items: center; justify-content: center; padding: 6px; text-align: center; overflow: hidden; background: var(--sea-tint); color: var(--muted); }
+.tf-media-thumb-fallback-label { font-size: 12px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
 .tf-media-alt { font-size: 13px; color: var(--muted); }
 .tf-media-gallery { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 0; padding: 0; }
 .tf-media-gallery-item { position: relative; width: 96px; }

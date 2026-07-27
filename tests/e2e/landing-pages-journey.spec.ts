@@ -69,7 +69,7 @@ test("travelers page: non-autoplay demo video with poster + real source, CTA to 
   // visible label carries a decorative "→" (site convention), so an exact match
   // would miss it; this still pins the human label AND the href.
   await expect(
-    page.getByRole("link", { name: "Sign in to plan a trip" }).first(),
+    page.getByRole("link", { name: "Sign in to see your trips" }).first(),
   ).toHaveAttribute("href", "/view/sign-in");
 });
 

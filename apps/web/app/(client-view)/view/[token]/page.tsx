@@ -20,6 +20,7 @@ import {
   totalIncludesEstimates,
 } from "../../../../lib/client-view.js";
 import { TripFork } from "./trip-fork.js";
+import { MediaThumbImage } from "../../../components/media-thumb-image.js";
 
 export const dynamic = "force-dynamic";
 
@@ -217,7 +218,7 @@ function ItemRow({ item, currency }: { item: ClientViewItem; currency: string })
  * ever reaches a client (FR-010: no id/source/attribution here). */
 function MediaThumb({ media }: { media: ClientViewMedia }) {
   if (media.kind === "image") {
-    return <img src={media.url} alt={media.alt} className="tf-media-thumb" />;
+    return <MediaThumbImage src={media.url} alt={media.alt} />;
   }
   return (
     <a href={media.url} target="_blank" rel="noreferrer" className="tf-media-thumb tf-media-thumb--link">

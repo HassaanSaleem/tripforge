@@ -179,7 +179,11 @@ async function main() {
   check("agent: agency created", !!orgId, org.text.slice(0, 200));
   await api(jar, "POST", "/api/auth/organization/set-active", { organizationId: orgId });
 
-  const draft = await trpcSubscribe(jar, "workspace.itinerary.draft", TRIP);
+  // Spec 019 compare-then-choose: draft RETURNS options (persists nothing);
+  // selectDraft persists the chosen one and answers with the itinerary.
+  const draftCompare = await trpcSubscribe(jar, "workspace.itinerary.draft", TRIP);
+  const draftVariant = (draftCompare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draftCompare.data?.options?.[0]?.variant ?? "balanced";
+  const draft = await trpcSubscribe(jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draftVariant });
   const itineraryId = draft.data?.itinerary?.id;
   check("agent: AI draft persists an itinerary", draft.data?.status === "drafted" && !!itineraryId, draft.text.slice(0, 300));
 

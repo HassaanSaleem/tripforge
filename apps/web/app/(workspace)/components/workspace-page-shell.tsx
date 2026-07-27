@@ -32,6 +32,10 @@ export function WorkspacePageShell({ identity, activeNav, guardTitle, guardVerb,
             <Link href="/sign-in">Sign in</Link> via the agency you belong to, or{" "}
             <Link href="/sign-up">create an account and agency</Link>.
           </p>
+          <p className="tf-guard-traveler">
+            Not an agent? If a travel agent shared a trip with you,{" "}
+            <Link href="/view">go to your trips</Link>.
+          </p>
         </section>
       </main>
     );

@@ -14,6 +14,7 @@ import { formatMinorAmount } from "../../../lib/planner-form.js";
 import type { DraftedItinerary } from "../../../lib/booking-flow.js";
 import { stayCoveringDay } from "../../../lib/itinerary-days.js";
 import type { MediaAsset } from "../../../lib/trpc/client.js";
+import { MediaThumbImage } from "../../components/media-thumb-image.js";
 
 export interface ItemMediaControls {
   assets: MediaAsset[];
@@ -111,7 +112,7 @@ function ItemMedia({
       {item.media.map((ref) => (
         <span key={ref.id} className="tf-item-media-item">
           {ref.kind === "image" ? (
-            <img src={ref.url} alt={ref.alt} className="tf-media-thumb" />
+            <MediaThumbImage src={ref.url} alt={ref.alt} />
           ) : (
             <a href={ref.url} target="_blank" rel="noreferrer" className="tf-media-thumb tf-media-thumb--link">
               ▶

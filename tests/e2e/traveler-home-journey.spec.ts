@@ -64,3 +64,19 @@ test("a traveler signs up with no share token, lands on a real home, reaches My 
   await expect(page.getByTestId("traveler-welcome")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId("traveler-home-greeting")).toHaveCount(0);
 });
+
+// consumer-copy-honesty-interim (FRICTION-7): a hopeful /view/marketplace or
+// /view/discover URL used to fall through to /view/[token] and render the
+// dead-token message. As static segments they now show an honest coming-soon
+// affordance pointing at My Trips — still brand-neutral (INV-020).
+for (const route of ["/view/marketplace", "/view/discover"]) {
+  test(`${route}: honest coming-soon affordance, not the dead-token message`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page.getByTestId("discovery-coming")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Go to My Trips" })).toHaveAttribute("href", "/view/my-trips");
+    await expect(page.getByText(/isn't available/i)).toHaveCount(0);
+    // INV-020: no platform naming on the consumer surface.
+    await expect(page.getByText(/TripForge/i)).toHaveCount(0);
+    await expect(page.getByText(/Trellis/i)).toHaveCount(0);
+  });
+}

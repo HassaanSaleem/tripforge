@@ -192,7 +192,11 @@ async function main() {
 
   // ── itinerary-builder x api x agent-reseller: the AI draft mutation
   //    succeeds for a pure demand-side identity, exactly like a seller ──────
-  const draft = await trpcSubscribe(reseller.jar, "workspace.itinerary.draft", TRIP);
+  // Spec 019 compare-then-choose: draft RETURNS options (persists nothing);
+  // selectDraft persists the chosen one and answers with the itinerary.
+  const draftCompare = await trpcSubscribe(reseller.jar, "workspace.itinerary.draft", TRIP);
+  const draftVariant = (draftCompare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draftCompare.data?.options?.[0]?.variant ?? "balanced";
+  const draft = await trpcSubscribe(reseller.jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draftVariant });
   const itineraryId = draft.data?.itinerary?.id;
   check(
     "reseller: AI draft persists an ORIGINAL itinerary (not a licensed copy — no marketplace step ran)",

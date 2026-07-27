@@ -105,6 +105,15 @@ test("an agent registers media, attaches it to the gallery and an item, and the 
     await expect(traveler.getByTestId("client-gallery").getByRole("img", { name: IMAGE_ALT })).toBeVisible();
     await expect(traveler.getByTestId("client-item-media").first().getByRole("img", { name: IMAGE_ALT })).toBeVisible();
 
+    // iter9-gallery-media-fallback: IMAGE_URL points at images.example.test,
+    // which never resolves — a bare <img> would ship the browser's broken-image
+    // glyph to the client. Assert the graceful placeholder tile renders instead
+    // (it keeps role="img" + the alt as its accessible name, so the two
+    // assertions above still match it).
+    await expect(traveler.getByTestId("client-gallery").getByTestId("media-thumb-fallback")).toBeVisible({
+      timeout: 15_000,
+    });
+
     // FR-010/SC-004: no internal library id, source label, or attribution
     // string reaches the page — negative scan over the full HTML, mirroring
     // the client-view journey's field-name-leak pattern.

@@ -15,6 +15,7 @@ import {
   uploadMediaErrorMessage,
   uploadMediaRefusalMessage,
 } from "../../../lib/media-library.js";
+import { MediaThumbImage } from "../../components/media-thumb-image.js";
 
 type ListState =
   | { phase: "loading" }
@@ -245,7 +246,7 @@ export function MediaLibraryPanel({ onChanged }: { onChanged?: () => void } = {}
           {list.assets.map((asset) => (
             <li key={asset.id} className="tf-media-card" data-testid="media-card">
               {asset.kind === "image" ? (
-                <img src={asset.url} alt={asset.alt} className="tf-media-thumb" />
+                <MediaThumbImage src={asset.url} alt={asset.alt} />
               ) : (
                 <a href={asset.url} target="_blank" rel="noreferrer" className="tf-media-thumb tf-media-thumb--link">
                   ▶ {mediaKindLabel(asset.kind)}
