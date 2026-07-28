@@ -251,9 +251,11 @@ export type ResolveShareLinkOutcome =
   | { status: "found"; view: ClientItineraryView };
 
 /** Token → `{agencyId, itineraryId}`, or undefined for an unknown token. Shared
- * by `resolveShareLink` (anonymous) and `attachTraveler` (spec 031) — the one
- * place either reads `itinerary_share_link` by its token. */
-async function findShareLinkByToken(
+ * by `resolveShareLink` (anonymous), `attachTraveler` (spec 031), and the
+ * traveler self-book path (spec 036) — the one place any of them reads
+ * `itinerary_share_link` by its token, so the owning agency (the money-path
+ * tenant, INV-004) is resolved from the link exactly once. */
+export async function resolveShareLinkTenant(
   db: Db,
   token: string,
 ): Promise<{ agencyId: string; itineraryId: string } | undefined> {
@@ -280,7 +282,7 @@ export async function resolveShareLink(
   const db = container.db;
   if (!db) throw new Error("database not configured");
 
-  const link = await findShareLinkByToken(db, token);
+  const link = await resolveShareLinkTenant(db, token);
   if (!link) return { status: "not_found" };
 
   const rows = await db
@@ -377,7 +379,7 @@ export async function attachTraveler(
   const db = container.db;
   if (!db) throw new Error("database not configured");
 
-  const link = await findShareLinkByToken(db, token);
+  const link = await resolveShareLinkTenant(db, token);
   if (!link) return { status: "not_found" };
 
   await db

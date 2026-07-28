@@ -206,7 +206,7 @@ type PlannerCoreEvent = { type: "progress"; step: DraftStep } | { type: "core"; 
  * only), so calling this twice (once to compare, once to select) never
  * double-writes anything.
  */
-async function* plannerCore(container: Container, session: AgentSessionContext, input: TripRequest): AsyncGenerator<PlannerCoreEvent> {
+async function* plannerCore(container: Container, agencyId: string, input: TripRequest): AsyncGenerator<PlannerCoreEvent> {
   const days = tripDayCount(input.checkIn, input.checkOut);
   const allocation = allocateBudget({
     totalMinor: input.budget.amountMinor,
@@ -267,7 +267,7 @@ async function* plannerCore(container: Container, session: AgentSessionContext, 
     const assembled = assembleItinerary({
       request: {
         id,
-        agencyId: session.agencyId,
+        agencyId,
         currency: input.budget.currency,
         destination: input.destination,
         checkIn: input.checkIn,
@@ -303,11 +303,11 @@ async function* plannerCore(container: Container, session: AgentSessionContext, 
  * ZERO persistence — no DB row, no trip_created PMF event, regardless of how
  * many options come back or whether the caller ever picks one.
  */
-export async function* draftOptions(container: Container, session: AgentSessionContext, input: TripRequest): AsyncGenerator<CompareEvent> {
+export async function* draftOptions(container: Container, agencyId: string, input: TripRequest): AsyncGenerator<CompareEvent> {
   if (!container.db) {
     throw new Error("database not configured");
   }
-  for await (const event of plannerCore(container, session, input)) {
+  for await (const event of plannerCore(container, agencyId, input)) {
     if (event.type === "progress") {
       yield { type: "progress", step: event.step };
       continue;
@@ -368,7 +368,7 @@ export async function* selectDraftOption(container: Container, session: AgentSes
   if (!db) {
     throw new Error("database not configured");
   }
-  for await (const event of plannerCore(container, session, input.tripRequest)) {
+  for await (const event of plannerCore(container, session.agencyId, input.tripRequest)) {
     if (event.type === "progress") {
       yield { type: "progress", step: event.step };
       continue;
@@ -401,6 +401,17 @@ export type InterpretChatOutcome =
   | { status: "needsInfo"; reply: string }
   | { status: "failed"; reason: "malformed_output" };
 
+/** Chat-first interpret input (spec 035): the latest turn plus the earlier turns
+ * of this unstarted build (oldest first). `priorMessages` is additive — absent/[]
+ * is byte-identical to spec 028's single-shot behaviour. Exported here (spec 038)
+ * so BOTH the agent router (`workspace.itinerary.interpretChatRequest`) and the
+ * consumer router (`clientView.planInterpret`) share ONE schema for ONE service. */
+export const interpretChatRequestInputSchema = z.strictObject({
+  message: z.string().min(1),
+  priorMessages: z.array(z.string().min(1)).max(20).optional(),
+});
+export type InterpretChatRequestInput = z.infer<typeof interpretChatRequestInputSchema>;
+
 /** The LLM boundary only returns a duration (`nights`), never absolute dates
  * (research.md D3) — "now" is resolved here, one layer above the LLM
  * package. A fixed near-term horizon, not a clock port — `Container` has no
@@ -427,10 +438,23 @@ function currencyFractionDigits(currency: string): number {
 
 export async function interpretChatTripRequest(
   container: Container,
-  _session: AgentSessionContext,
-  input: { message: string },
+  input: { message: string; priorMessages?: string[] },
 ): Promise<InterpretChatOutcome> {
-  const result = await container.llm.interpretTripRequest({ purpose: "planner.chatEntry", message: input.message });
+  // Multi-turn accumulation (spec 035 research.md D1): interpret the whole
+  // conversation so far as ONE text, oldest turn first. FakeLLM already scans
+  // the full message text (extractDestination/extractBudget/…), so joining the
+  // transcript accumulates across turns deterministically with ZERO change to
+  // packages/llm — and dates are still resolved below, one layer above the LLM
+  // (spec 028 D3). Turns are COMMA-joined (not newline) with trailing sentence
+  // punctuation trimmed, so the keyless extractor's clause-terminating regexes
+  // read each turn's fields cleanly across the join (verified against the
+  // deterministic FakeLLM). Absent/empty priorMessages with a punctuation-free
+  // single message ⇒ identical to spec 028's single-shot behaviour.
+  const conversation = [...(input.priorMessages ?? []), input.message]
+    .map((turn) => turn.trim().replace(/[.,;!?]+$/u, ""))
+    .filter((turn) => turn.length > 0)
+    .join(", ");
+  const result = await container.llm.interpretTripRequest({ purpose: "planner.chatEntry", message: conversation });
   if (result.status === "needsInfo") {
     return { status: "needsInfo", reply: result.reply };
   }

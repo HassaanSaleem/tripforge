@@ -22,7 +22,7 @@ export default async function ClientSignUpPage({ searchParams }: PageProps) {
 
   return (
     <ClientAuthShell
-      tagline="Create an account to have your name and email fill in automatically."
+      tagline="Create an account to keep your trips in one place and fill in your name and email automatically."
       footer={
         <>
           Already have an account?{" "}

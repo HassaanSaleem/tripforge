@@ -3,9 +3,11 @@
 // no supplier port is imported anywhere in this package (Constitution V holds
 // trivially), and no in-process state exists (INV-028-safe by construction).
 export { DEFAULT_PLATFORM_TAKE_RATE_BPS } from "./config.js";
-export { isVetted } from "./vetting.js";
+export { isVetted, vettedAgencyIds } from "./vetting.js";
 export { whiteLabelCopy } from "./white-label.js";
 export type { WhiteLabelOptions } from "./white-label.js";
+export { travelerForkCopy } from "./traveler-fork.js";
+export type { TravelerForkOptions } from "./traveler-fork.js";
 export {
   createListing,
   createListingInputSchema,

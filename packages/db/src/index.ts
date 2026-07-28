@@ -26,7 +26,13 @@ export {
   groupDeparture,
   groupDepartureSeat,
   tripHandoffRequest,
+  consumerPlanRequest,
   clientTripLink,
+  travelerMembership,
+  travelerGroup,
+  travelerGroupMember,
+  travelerGroupMessage,
+  marketplaceFork,
 } from "./schema.js";
 export type { Schema } from "./schema.js";
 export { tenantScope, scopedWhere } from "./tenant.js";

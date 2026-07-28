@@ -28,3 +28,5 @@ test-results/
 .kitchenloop/*.lock
 scripts/pr-manager/state.json
 scripts/pr-manager/*.log
+survey
+resources

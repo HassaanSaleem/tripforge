@@ -8,9 +8,12 @@
 # node_modules and hangs for ~forever on upload from the runner.
 name: Deploy to Vercel
 
+# Auto-deploy on push to main is PAUSED (operator, 2026-07-21) while the
+# two-sided-surface campaign runs on a branch. Re-enable by uncommenting the
+# `push:` trigger below. Manual deploys still work via `workflow_dispatch`.
 on:
-  push:
-    branches: [main]
+  # push:
+  #   branches: [main]
   workflow_dispatch: {}
 
 concurrency:

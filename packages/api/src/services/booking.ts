@@ -6,3 +6,10 @@
 export { quoteInputSchema, quoteItinerary, type HeldQuote } from "./booking/quote.js";
 export { bookInputSchema, bookItinerary, type BookOutcome } from "./booking/book.js";
 export { itineraryOverview } from "./booking/overview.js";
+export type { BookingActor } from "./booking/actor.js";
+export {
+  selfBookItinerary,
+  type SelfBookOutcome,
+  type SelfBookLeg,
+  type SelfBookFailureReason,
+} from "./booking/self-book.js";

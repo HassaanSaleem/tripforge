@@ -1,16 +1,18 @@
-// Discover / "What's Hot" feed body (spec 023 US1) — destination picker
-// (reuses HERO_DESTINATIONS, the same seed set the planner's own picker
-// uses) + a feed grid of that destination's curated items. Replaces the
-// static "coming soon" placeholder this route previously rendered (spec 017
-// research D7).
+// Discover / "What's Hot" feed body (spec 023 US1, generalized in spec 039) —
+// destination picker (reuses HERO_DESTINATIONS, the same seed set the planners'
+// own pickers use) + a feed grid of that destination's curated items. SHARED,
+// user-type-agnostic component: both the agent workspace Discover and the traveler
+// consumer Discover render this, differing only by `planPath` (the base path each
+// card's "Plan this" links into). Kept out of either route group so neither
+// imports the other's UI (INV-024).
 "use client";
 
 import { useState } from "react";
-import { HERO_DESTINATIONS } from "../../../lib/planner-form.js";
-import { feedItemsForDestination } from "../../../lib/discover-feed.js";
-import { FeedItemCard } from "./feed-item-card.js";
+import { HERO_DESTINATIONS } from "../../lib/planner-form.js";
+import { feedItemsForDestination } from "../../lib/discover-feed.js";
+import { DiscoverFeedCard } from "./discover-feed-card.js";
 
-export function DiscoverFeedView() {
+export function DiscoverFeedView({ planPath }: { planPath: string }) {
   const [selectedId, setSelectedId] = useState(HERO_DESTINATIONS[0]!.id);
   const items = feedItemsForDestination(selectedId);
 
@@ -37,7 +39,7 @@ export function DiscoverFeedView() {
       </div>
       <div className="tf-discover-grid" data-testid="discover-feed-grid">
         {items.map((item) => (
-          <FeedItemCard key={item.id} item={item} />
+          <DiscoverFeedCard key={item.id} item={item} planPath={planPath} />
         ))}
       </div>
     </>

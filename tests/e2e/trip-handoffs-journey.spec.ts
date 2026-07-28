@@ -4,12 +4,12 @@ import { DRAFT_TIMEOUT_MS, draftParisTrip, signUpAgency } from "./support.js";
 // L4 request-agent fork journey (spec 022, ticket demo-09-request-agent;
 // INV-027). Runs against the BUILT compose image. An agent shares a drafted
 // trip; a fresh anonymous traveler opens it and sees the two-choice fork:
-// "Book it myself" shows a confirmation stub with NO server call and NO
-// persisted state (US3), while a SECOND anonymous open of the same link
-// chooses "Have an agent arrange this for me," submits a name/notes, and
-// creates a trip handoff request the owning agent sees in their "Trip
-// Requests" inbox and can accept (US1+US2). A second, unrelated agency's
-// inbox never shows it (INV-004).
+// "Book it myself" is now a real MONEY PATH (spec 036), so an ANONYMOUS
+// visitor is prompted to sign in first and NO booking fires (US3, FR-009/
+// INV-024), while a SECOND anonymous open of the same link chooses "Have an
+// agent arrange this for me," submits a name/notes, and creates a trip handoff
+// request the owning agent sees in their "Trip Requests" inbox and can accept
+// (US1+US2). A second, unrelated agency's inbox never shows it (INV-004).
 
 const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const owner = {
@@ -33,7 +33,7 @@ async function openAnonymously(browser: Browser, url: string) {
   return { context, page };
 }
 
-test("the request-agent fork: self-drive is a no-op stub, request-an-agent reaches the owning agent's inbox and is accepted, and a different agency never sees it (US1+US2+US3, INV-004)", async ({
+test("the request-agent fork: self-drive prompts an anonymous visitor to sign in (no booking fires), request-an-agent reaches the owning agent's inbox and is accepted, and a different agency never sees it (US1+US2+US3, INV-004)", async ({
   page,
   browser,
 }) => {
@@ -47,14 +47,16 @@ test("the request-agent fork: self-drive is a no-op stub, request-an-agent reach
   await expect(urlText).toBeVisible({ timeout: 15_000 });
   const sharedUrl = (await urlText.textContent())?.trim() ?? "";
 
-  // US3: "Book it myself" is a confirmation-only stub — no persisted request.
+  // US3: "Book it myself" is a real money path (spec 036) — an ANONYMOUS
+  // visitor is prompted to sign in first and no booking fires (FR-009/INV-024).
   const selfDrive = await openAnonymously(browser, sharedUrl);
   try {
     const fork = selfDrive.page.getByTestId("trip-fork");
     await expect(fork).toBeVisible();
     await fork.getByTestId("fork-self-drive").click();
-    await expect(selfDrive.page.getByTestId("trip-fork-self-drive")).toBeVisible();
-    await expect(selfDrive.page.getByText(/booking this trip yourself/i)).toBeVisible();
+    await expect(selfDrive.page.getByTestId("trip-fork-self-drive-signin")).toBeVisible();
+    await expect(selfDrive.page.getByText(/sign in to book this trip yourself/i)).toBeVisible();
+    await expect(selfDrive.page.getByTestId("self-drive-sign-in-link")).toBeVisible();
   } finally {
     await selfDrive.context.close();
   }

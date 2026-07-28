@@ -29,6 +29,7 @@ import { FlightsCard } from "./flights-card.js";
 import { ItineraryDays, type ItemMediaControls } from "./itinerary-days.js";
 import { ManualItineraryForm } from "./manual-itinerary-form.js";
 import { ShareControl } from "./share-control.js";
+import { MediaThumbImage } from "../../components/media-thumb-image.js";
 
 type MyItinerary = MyItinerariesOutput["itineraries"][number];
 
@@ -304,7 +305,7 @@ function OpenedTrip({
             {itinerary.media.map((ref) => (
               <li key={ref.id} className="tf-media-gallery-item">
                 {ref.kind === "image" ? (
-                  <img src={ref.url} alt={ref.alt} className="tf-media-thumb" />
+                  <MediaThumbImage src={ref.url} alt={ref.alt} />
                 ) : (
                   <a href={ref.url} target="_blank" rel="noreferrer" className="tf-media-thumb tf-media-thumb--link">
                     ▶

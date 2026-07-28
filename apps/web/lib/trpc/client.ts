@@ -142,3 +142,39 @@ export type JoinGroupDepartureOutput = inferRouterOutputs<AppRouter>["workspace"
  */
 export type ListTripHandoffsOutput = inferRouterOutputs<AppRouter>["workspace"]["tripHandoffs"]["list"];
 export type AcceptTripHandoffOutput = inferRouterOutputs<AppRouter>["workspace"]["tripHandoffs"]["accept"];
+
+/**
+ * Consumer planner types via the same inference (spec 038): the traveler-facing
+ * chat-first planner. `planInterpret` reuses the same TripRequest shape the agent
+ * chat produces; `planDraft` is a subscription (redacted, sell-price-only
+ * options); `requestPlan` is the request-an-agent lead mutation. The server
+ * unions stay un-exported as a direct import surface (QS3-1) — inference keeps
+ * the browser in sync with the deployed contract.
+ */
+export type PlanInterpretInput = inferRouterInputs<AppRouter>["clientView"]["planInterpret"];
+export type PlanInterpretOutput = inferRouterOutputs<AppRouter>["clientView"]["planInterpret"];
+/** A resolved interpret's `tripRequest` — the SAME shape planDraft/requestPlan take. */
+export type ConsumerTripRequest = Extract<PlanInterpretOutput, { status: "resolved" }>["tripRequest"];
+export type PlanDraftEvent = inferSubscriptionOutput<AppRouter["clientView"]["planDraft"]>;
+export type PlanDraftOutput = Extract<PlanDraftEvent, { type: "result" }>["outcome"];
+export type ConsumerDraftedOptions = Extract<PlanDraftOutput, { status: "drafted" }>["options"];
+export type ConsumerDraftOption = ConsumerDraftedOptions[number];
+export type RequestPlanInput = inferRouterInputs<AppRouter>["clientView"]["requestPlan"];
+export type RequestPlanOutput = inferRouterOutputs<AppRouter>["clientView"]["requestPlan"];
+
+/**
+ * Traveler group-trips types via the same inference (spec 040): verified premium
+ * travelers form a group around a trip, invite members, chat, confirm, and
+ * finalize collectively. The server outcome unions stay un-exported as a direct
+ * import surface (QS3-1); inference keeps the browser in sync with the deployed
+ * contract. All under clientView.groups (the traveler surface, INV-024).
+ */
+export type GroupMembershipOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["membership"];
+export type CreateGroupOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["create"];
+export type JoinGroupOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["join"];
+export type MyGroupsOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["mine"];
+export type GroupSummaryView = MyGroupsOutput[number];
+export type GroupDetailOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["get"];
+export type GroupDetail = Extract<GroupDetailOutput, { status: "ok" }>["group"];
+export type PostGroupMessageOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["message"];
+export type FinalizeGroupOutput = inferRouterOutputs<AppRouter>["clientView"]["groups"]["finalize"];

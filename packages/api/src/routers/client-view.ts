@@ -8,15 +8,43 @@
 // protectedProcedure, any authenticated user.
 import { z } from "zod";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
+import { groupTripsRouter } from "./group-trips.js";
 import {
   resolveShareLink,
   getSignedInIdentity,
   attachTraveler,
   listTravelerTrips,
 } from "../services/client-view.js";
+import { selfBookItinerary } from "../services/booking.js";
 import { submitTripHandoffRequest, submitTripHandoffRequestInputSchema } from "../services/trip-handoffs.js";
+import {
+  interpretChatRequestInputSchema,
+  interpretChatTripRequest,
+  tripRequestSchema,
+} from "../services/planner.js";
+import {
+  draftConsumerOptions,
+  submitConsumerPlanRequest,
+  submitConsumerPlanRequestInputSchema,
+} from "../services/consumer-planner.js";
+import { browseMarketplaceForTraveler, forkListingForTraveler } from "../services/marketplace-traveler.js";
 
 const getInputSchema = z.strictObject({ token: z.uuid() });
+const forkInputSchema = z.strictObject({ listingId: z.uuid() });
+
+/** Traveler marketplace surface (spec 041; GOAL.md D2.7) — browse agent-listed
+ * trips and fork one into your own working copy, then self-book or request an
+ * agent from the existing /view/[token] flow. `browse` is PUBLIC (browsing
+ * needs no sign-in); `fork` is protectedProcedure (anonymous → UNAUTHORIZED,
+ * prompting sign-in — FR-008). INV-024: a traveler never invokes a workspace
+ * procedure; the copy is seller-owned and the money moves later through the
+ * unchanged selfBook path (INV-020 redacted, INV-011 conserved). */
+const marketplaceRouter = router({
+  browse: publicProcedure.query(({ ctx }) => browseMarketplaceForTraveler(ctx.container)),
+  fork: protectedProcedure
+    .input((value) => forkInputSchema.parse(value))
+    .mutation(({ ctx, input }) => forkListingForTraveler(ctx.container, ctx.session, input.listingId)),
+});
 
 export const clientViewRouter = router({
   /** Share token → redacted ClientItineraryView (allowlist projection). */
@@ -45,4 +73,47 @@ export const clientViewRouter = router({
   /** The signed-in caller's own "My Trips" list (spec 031 contract §2) — never
    * another visitor's trips (FR-005). */
   myTrips: protectedProcedure.query(({ ctx }) => listTravelerTrips(ctx.container, ctx.session.userId)),
+
+  /** Traveler self-drive booking (spec 036 contract; GOAL.md D2.4 — MONEY PATH).
+   * A signed-in traveler books the shared itinerary's bookable un-booked items
+   * through the SAME quote-then-book path an agent uses, scoped to the owning
+   * agency resolved from the token (INV-024: a traveler NEVER invokes a
+   * workspace procedure). protectedProcedure — anonymous callers get
+   * UNAUTHORIZED and are prompted to sign in (FR-009). The outcome is redacted
+   * (INV-020); state conservation is inherited from bookItinerary (INV-011). */
+  selfBook: protectedProcedure
+    .input((value) => getInputSchema.parse(value))
+    .mutation(({ ctx, input }) => selfBookItinerary(ctx.container, ctx.session, input.token)),
+
+  /** Consumer chat-first planner — interpret one chat turn (+ prior turns) into
+   * a TripRequest (spec 038 US1). REUSES the agent chat interpreter, which is
+   * session-free; protectedProcedure so a traveler (no agency) may call it but
+   * anonymous callers get UNAUTHORIZED (INV-024: NOT a workspace procedure). */
+  planInterpret: protectedProcedure
+    .input((value) => interpretChatRequestInputSchema.parse(value))
+    .mutation(({ ctx, input }) => interpretChatTripRequest(ctx.container, input)),
+
+  /** Consumer compare — 1-3 budget-fit, live-priced options for the traveler
+   * (spec 038 US1). Streamed like the agent `draft` (INV-028). REUSES the SAME
+   * draftOptions engine under an ephemeral tenant; redacted to sell-price-only
+   * (INV-020) and NEVER persisted (no booking/markup/trip_created write). */
+  planDraft: protectedProcedure
+    .input((value) => tripRequestSchema.parse(value))
+    .subscription(({ ctx, input }) => draftConsumerOptions(ctx.container, input)),
+
+  /** Request-an-agent fork (spec 038 US2) — a durable, agency-less, NON-money
+   * lead that routes the traveler's self-planned demand into the agent network
+   * (Constitution I). protectedProcedure; anonymous → UNAUTHORIZED. */
+  requestPlan: protectedProcedure
+    .input((value) => submitConsumerPlanRequestInputSchema.parse(value))
+    .mutation(({ ctx, input }) => submitConsumerPlanRequest(ctx.container, ctx.session, input)),
+
+  /** Traveler group trips (spec 040) — verified premium travelers form a group
+   * around a trip, invite members, chat, confirm, and finalize collectively.
+   * Nested under the traveler surface (INV-024); all protectedProcedure. */
+  groups: groupTripsRouter,
+
+  /** Traveler marketplace (spec 041; GOAL.md D2.7) — browse agent-listed trips
+   * and fork one to act on it. */
+  marketplace: marketplaceRouter,
 });

@@ -25,7 +25,7 @@ export default async function ClientSignInPage({ searchParams }: PageProps) {
 
   return (
     <ClientAuthShell
-      tagline="Sign in to have your name and email fill in automatically."
+      tagline="Sign in to see your trips and have your name and email fill in automatically."
       footer={
         <>
           New here?{" "}

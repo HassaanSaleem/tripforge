@@ -177,7 +177,11 @@ async function main() {
   // ── Seller: draft → quote at 18% → book ─────────────────────────────────
   const seller = await onboardAgent("seller", `Meridian Scenario ${runId}`);
 
-  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  // Spec 019 compare-then-choose: draft RETURNS options (persists nothing);
+  // selectDraft persists the chosen one and answers with the itinerary.
+  const draftCompare = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draftVariant = (draftCompare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draftCompare.data?.options?.[0]?.variant ?? "balanced";
+  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draftVariant });
   const itineraryId = draft.data?.itinerary?.id;
   check(
     "seller: AI draft persists an itinerary",

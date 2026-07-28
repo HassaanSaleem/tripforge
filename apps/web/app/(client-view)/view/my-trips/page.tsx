@@ -12,6 +12,7 @@ import Link from "next/link";
 import { getSessionContext } from "../../../../lib/auth.js";
 import { getAuthenticatedCaller } from "../../../../lib/trpc/server.js";
 import { formatMinorAmount } from "../../../../lib/planner-form.js";
+import { ClientSurfaceShell } from "../components/client-surface-shell.js";
 
 export const dynamic = "force-dynamic";
 
@@ -28,48 +29,52 @@ export default async function MyTripsPage() {
   }
 
   const caller = await getAuthenticatedCaller(requestHeaders);
-  const trips = await caller.clientView.myTrips();
+  // me() is the existing session-scoped traveler-identity read (no new
+  // procedure) — used only to greet by name in the shell's Account area.
+  const [identity, trips] = await Promise.all([
+    caller.clientView.me(),
+    caller.clientView.myTrips(),
+  ]);
+  const name = identity?.name?.trim() || null;
 
   return (
-    <div data-plain className="tf-client-root">
-      <main>
-        <header className="tf-client-head">
-          <p className="tf-eyebrow">Your account</p>
-          <h1>My Trips</h1>
-          <p>Trips that have been shared with you.</p>
-        </header>
+    <ClientSurfaceShell activeNav="myTrips" travelerName={name}>
+      <header className="tf-client-head">
+        <p className="tf-eyebrow">Your account</p>
+        <h1>My Trips</h1>
+        <p>Trips that have been shared with you.</p>
+      </header>
 
-        {trips.length === 0 ? (
-          <section className="tf-card">
-            <p className="tf-empty-day" data-testid="my-trips-empty">
-              No trips yet — once your agent shares a trip link with you and you open it, it will
-              show up here.
-            </p>
-          </section>
-        ) : (
-          <ul className="tf-items tf-client-items" data-testid="my-trips-list">
-            {trips.map((trip) => (
-              <li key={trip.token}>
-                <span className="d" aria-hidden="true" />
-                <Link href={`/view/${trip.token}`} className="tf-client-item" data-testid="my-trips-row">
-                  <span>
-                    <span className="tf-item-kind">{trip.agencyName}</span>: {trip.title}
-                  </span>
-                </Link>
-                {trip.totalSellMinor !== null ? (
-                  <span className="tf-price">{formatMinorAmount(trip.totalSellMinor, trip.currency)}</span>
-                ) : (
-                  <span aria-hidden="true" />
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+      {trips.length === 0 ? (
+        <section className="tf-card">
+          <p className="tf-empty-day" data-testid="my-trips-empty">
+            No trips yet — once your agent shares a trip link with you and you open it, it will
+            show up here.
+          </p>
+        </section>
+      ) : (
+        <ul className="tf-items tf-client-items" data-testid="my-trips-list">
+          {trips.map((trip) => (
+            <li key={trip.token}>
+              <span className="d" aria-hidden="true" />
+              <Link href={`/view/${trip.token}`} className="tf-client-item" data-testid="my-trips-row">
+                <span>
+                  <span className="tf-item-kind">{trip.agencyName}</span>: {trip.title}
+                </span>
+              </Link>
+              {trip.totalSellMinor !== null ? (
+                <span className="tf-price">{formatMinorAmount(trip.totalSellMinor, trip.currency)}</span>
+              ) : (
+                <span aria-hidden="true" />
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
-        <footer className="tf-client-foot">
-          <small>Open a trip link from your agent to add it here.</small>
-        </footer>
-      </main>
-    </div>
+      <footer className="tf-client-foot">
+        <small>Open a trip link from your agent to add it here.</small>
+      </footer>
+    </ClientSurfaceShell>
   );
 }

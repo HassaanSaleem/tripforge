@@ -80,7 +80,7 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.agencyAdmin.members (real Postgres)
         { name: "Mo Member", role: "member" },
       ]);
 
-      const roster = await callerFor(sessions["Olive Owner"]).workspace.agencyAdmin.members();
+      const roster = await callerFor(sessions["Olive Owner"]!).workspace.agencyAdmin.members();
       expect(roster).toHaveLength(3);
       const byName = new Map(roster.map((m) => [m.name, m]));
       expect(byName.get("Olive Owner")).toMatchObject({ role: "owner" });
@@ -98,7 +98,7 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.agencyAdmin.members (real Postgres)
         { name: "Ada Admin", role: "admin" },
       ]);
 
-      const roster = await callerFor(sessions["Ada Admin"]).workspace.agencyAdmin.members();
+      const roster = await callerFor(sessions["Ada Admin"]!).workspace.agencyAdmin.members();
       expect(roster).toHaveLength(1);
       expect(roster[0]?.name).toBe("Ada Admin");
     },
@@ -111,8 +111,8 @@ describe.skipIf(!DATABASE_URL)("L3 workspace.agencyAdmin.members (real Postgres)
       const alpha = await makeAgencyWithMembers("Alpha Roster Co", [{ name: "Alpha Owner", role: "owner" }]);
       const beta = await makeAgencyWithMembers("Beta Roster Co", [{ name: "Beta Owner", role: "owner" }]);
 
-      const alphaRoster = await callerFor(alpha.sessions["Alpha Owner"]).workspace.agencyAdmin.members();
-      const betaRoster = await callerFor(beta.sessions["Beta Owner"]).workspace.agencyAdmin.members();
+      const alphaRoster = await callerFor(alpha.sessions["Alpha Owner"]!).workspace.agencyAdmin.members();
+      const betaRoster = await callerFor(beta.sessions["Beta Owner"]!).workspace.agencyAdmin.members();
 
       expect(alphaRoster.map((m) => m.name)).toEqual(["Alpha Owner"]);
       expect(betaRoster.map((m) => m.name)).toEqual(["Beta Owner"]);

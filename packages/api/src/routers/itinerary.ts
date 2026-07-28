@@ -8,6 +8,7 @@ import { ChatEditProposalSchema } from "@tripforge/llm";
 import { router, agentProcedure } from "../trpc.js";
 import {
   draftOptions,
+  interpretChatRequestInputSchema,
   interpretChatTripRequest,
   selectDraftInputSchema,
   selectDraftOption,
@@ -36,7 +37,8 @@ const mediaTargetSchema = z.discriminatedUnion("scope", [
 
 const chatEditInputSchema = z.strictObject({ itineraryId: z.uuid(), message: z.string().min(1) });
 
-const interpretChatRequestInputSchema = z.strictObject({ message: z.string().min(1) });
+// Chat-first interpret input schema is shared from services/planner.ts (spec 038)
+// so the agent and consumer surfaces use ONE schema over ONE service.
 
 const applyChatEditInputSchema = z.strictObject({ itineraryId: z.uuid(), edit: ChatEditProposalSchema });
 
@@ -60,17 +62,20 @@ export const itineraryRouter = router({
    * terminal result event — rather than a blocking mutation. */
   draft: agentProcedure
     .input((value) => tripRequestSchema.parse(value))
-    .subscription(({ ctx, input }) => draftOptions(ctx.container, ctx.session, input)),
+    .subscription(({ ctx, input }) => draftOptions(ctx.container, ctx.session.agencyId, input)),
 
-  /** Chat-first entry (spec 028 contracts/interpret-chat-request-mutation.md):
-   * interpret ONE chat message into the SAME TripRequest shape `draft` above
-   * already accepts. A plain mutation, not a subscription — no supply search
-   * runs during interpretation (research.md D2). On `resolved`, the client
-   * feeds the returned `tripRequest` straight into `draft` — zero forking of
-   * the compare-then-choose pipeline. */
+  /** Chat-first entry (spec 028, promoted to multi-turn by spec 035
+   * contracts/interpret-chat-request-mutation.md): interpret the accumulated
+   * chat CONVERSATION (`priorMessages` + `message`) into the SAME TripRequest
+   * shape `draft` above already accepts. A plain mutation, not a subscription —
+   * no supply search runs during interpretation (research.md D2). On `resolved`,
+   * the client feeds the returned `tripRequest` straight into `draft` — zero
+   * forking of the compare-then-choose pipeline. Accumulation happens one layer
+   * above the LLM (transcript join, spec 035 research.md D1), so `packages/llm`
+   * and the keyless determinism guarantee are unchanged. */
   interpretChatRequest: agentProcedure
     .input((value) => interpretChatRequestInputSchema.parse(value))
-    .mutation(({ ctx, input }) => interpretChatTripRequest(ctx.container, ctx.session, input)),
+    .mutation(({ ctx, input }) => interpretChatTripRequest(ctx.container, input)),
 
   /** Persist exactly the option the agent picked from `draft`'s compare view
    * (spec 019 US2). Re-runs the same pipeline (fresh supply verification,

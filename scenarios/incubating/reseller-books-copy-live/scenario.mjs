@@ -176,7 +176,11 @@ async function main() {
   // ── Arrangement: seller drafts, gets vetted, lists (combos already covered
   //    by earlier passes — kept to the minimum needed to trade the good) ─────
   const seller = await onboardAgent("seller", `${SELLER_NAME_PREFIX} ${runId}`);
-  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  // Spec 019 compare-then-choose: draft RETURNS options (persists nothing);
+  // selectDraft persists the chosen one and answers with the itinerary.
+  const draftCompare = await trpcSubscribe(seller.jar, "workspace.itinerary.draft", TRIP);
+  const draftVariant = (draftCompare.data?.options ?? []).find((o) => o.variant === "balanced")?.variant ?? draftCompare.data?.options?.[0]?.variant ?? "balanced";
+  const draft = await trpcSubscribe(seller.jar, "workspace.itinerary.selectDraft", { tripRequest: TRIP, variant: draftVariant });
   const originalId = draft.data?.itinerary?.id;
   check("seller: AI draft persists an itinerary", draft.data?.status === "drafted" && !!originalId, draft.text.slice(0, 300));
 

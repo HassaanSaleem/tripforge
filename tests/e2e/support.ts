@@ -157,6 +157,9 @@ export const DRAFT_TIMEOUT_MS = 90_000;
  */
 export async function draftParisTrip(page: Page, checkOut = "2026-09-04"): Promise<void> {
   await page.goto("/workspace");
+  // Chat is the PRIMARY build path now (spec 035) — the structured form these
+  // fixtures fill is behind a toggle on the idle builder; reveal it first.
+  await page.getByTestId("entry-toggle-form").click();
   await page.getByLabel("Destination").fill("Paris");
   await page.getByLabel("Check-in").fill("2026-09-01");
   await page.getByLabel("Check-out").fill(checkOut);

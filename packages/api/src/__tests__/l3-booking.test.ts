@@ -391,6 +391,7 @@ describe.skipIf(!DATABASE_URL)("L3 money path (real Postgres + sandbox supply)",
       const heldItems = quoted.items.flatMap((i) => (i.outcome === "held" ? [i] : []));
       expect(heldItems.length).toBeGreaterThan(1);
       const [toBook, ...rest] = heldItems;
+      if (!toBook) throw new Error("expected at least one held item to book");
       const booked = await caller.workspace.booking.book({
         itineraryId,
         quoteRowIds: [toBook.quote.quoteRowId],

@@ -63,6 +63,9 @@ test("an agent drafts a trip and sees the rendered itinerary + budget fit (US1)"
   // The planner form is its own nav destination now (spec 017 research D1) —
   // sign-up lands on the dashboard, so navigate to the AI Builder explicitly.
   await page.goto("/workspace");
+  // Chat is the primary build path (spec 035); this journey drives the
+  // structured form, which is behind the "Prefer a guided form?" toggle.
+  await page.getByTestId("entry-toggle-form").click();
   await expect(page.getByRole("button", { name: "Draft itinerary" })).toBeVisible();
 
   await fillTripForm(page);
@@ -134,6 +137,7 @@ test("a hopeless budget maps to one human-readable message and keeps the form (U
   test.setTimeout(DRAFT_TIMEOUT_MS + 30_000);
   await signIn(page);
   await page.goto("/workspace");
+  await page.getByTestId("entry-toggle-form").click();
   await fillTripForm(page);
   await page.getByLabel("Budget", { exact: true }).fill("1");
   await page.getByLabel("Currency").fill("EUR");

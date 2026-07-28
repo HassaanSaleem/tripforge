@@ -62,6 +62,7 @@ describe("indicativeFlightOptions", () => {
 
   it("embeds the check-in/check-out dates in the departure/return labels", () => {
     const [option] = indicativeFlightOptions("Lisbon", "2026-09-07", "2026-09-10", "EUR");
+    if (!option) throw new Error("expected at least one indicative flight option");
     expect(option.departureLabel).toContain("2026-09-07");
     expect(option.returnLabel).toContain("2026-09-10");
   });

@@ -32,9 +32,10 @@ import {
   scopedWhere,
 } from "@tripforge/db";
 import { z } from "zod";
-import type { AgentSessionContext, Container } from "../../context.js";
+import type { Container } from "../../context.js";
 import { verifiedSupplyCatalog } from "../planner.js";
 import { logger, loadItinerary, portFor } from "./shared.js";
+import type { BookingActor } from "./actor.js";
 import { lockQuoteRowsInClaimOrder, releaseClaims } from "./claims.js";
 
 export const bookInputSchema = z.strictObject({
@@ -70,12 +71,12 @@ export interface BookOutcome {
 
 export async function bookItinerary(
   container: Container,
-  session: AgentSessionContext,
+  actor: BookingActor,
   input: BookInput,
 ): Promise<{ status: "not_found" } | BookOutcome> {
   const db = container.db;
   if (!db) throw new Error("database not configured");
-  const row = await loadItinerary(container, session, input.itineraryId);
+  const row = await loadItinerary(container, actor, input.itineraryId);
   if (!row) return { status: "not_found" };
 
   // Duplicate ids in one request must not double-consume a hold (FR-009):
@@ -88,7 +89,7 @@ export async function bookItinerary(
     .where(
       scopedWhere(
         bookingQuoteTable.agencyId,
-        session.agencyId,
+        actor.agencyId,
         eq(bookingQuoteTable.itineraryId, row.id),
         inArray(bookingQuoteTable.id, quoteRowIds),
       ),
@@ -284,7 +285,7 @@ export async function bookItinerary(
           // The held price is gone at the supplier — never book a different
           // price against an old hold (INV-006); the caller re-quotes.
           logger.warn("booking.book.hold_reestablish_price_mismatch", {
-            agencyId: session.agencyId,
+            agencyId: actor.agencyId,
             itineraryId: row.id,
             quoteRowId,
             heldNetMinor: quoteRow.netMinor,
@@ -297,7 +298,7 @@ export async function bookItinerary(
           continue;
         }
         logger.info("booking.book.hold_reestablished", {
-          agencyId: session.agencyId,
+          agencyId: actor.agencyId,
           itineraryId: row.id,
           quoteRowId,
           supplierQuoteId: quoteRow.supplierQuoteId,
@@ -354,7 +355,7 @@ export async function bookItinerary(
       const status = confirmed.length === quoteRowIds.length ? ("confirmed" as const) : ("partially_confirmed" as const);
       const [bookingRow] = await tx
         .insert(bookingTable)
-        .values({ agencyId: session.agencyId, itineraryId: row.id, status })
+        .values({ agencyId: actor.agencyId, itineraryId: row.id, status })
         .returning({ id: bookingTable.id });
       if (!bookingRow) {
         throw new Error("booking insert returned no row");
@@ -371,7 +372,7 @@ export async function bookItinerary(
           .insert(bookingComponentTable)
           .values({
             bookingId: bookingRow.id,
-            agencyId: session.agencyId,
+            agencyId: actor.agencyId,
             itineraryId: row.id,
             itemId: quoteRow.itemId,
             port: quoteRow.port,
@@ -397,7 +398,7 @@ export async function bookItinerary(
           money(quoteRow.convertedNetMinor, quoteRow.currency),
         );
         await tx.insert(markupLedgerTable).values({
-          agencyId: session.agencyId,
+          agencyId: actor.agencyId,
           bookingComponentId: component.id,
           netMinor: quoteRow.convertedNetMinor,
           sellMinor: quoteRow.sellMinor,
@@ -406,11 +407,11 @@ export async function bookItinerary(
         });
         await recordPmfEvent(tx, {
           type: "booking_confirmed",
-          agencyId: session.agencyId,
+          agencyId: actor.agencyId,
           itineraryId: row.id,
           amountMinor: quoteRow.sellMinor,
           currency: quoteRow.currency,
-          actorUserId: session.userId,
+          actorUserId: actor.userId,
         });
       }
       return { bookingId: bookingRow.id, status };
@@ -424,7 +425,7 @@ export async function bookItinerary(
       try {
         const cancelled = await portFor(container, c.quoteRow.port)?.cancel(c.supplierBookingId);
         logger.error("booking.book.recording_failed_supplier_cancelled", {
-          agencyId: session.agencyId,
+          agencyId: actor.agencyId,
           itineraryId: row.id,
           quoteRowId: c.quoteRow.id,
           supplierBookingId: c.supplierBookingId,
@@ -432,7 +433,7 @@ export async function bookItinerary(
         });
       } catch (cancelErr) {
         logger.error("booking.book.compensation_cancel_failed", {
-          agencyId: session.agencyId,
+          agencyId: actor.agencyId,
           itineraryId: row.id,
           quoteRowId: c.quoteRow.id,
           supplierBookingId: c.supplierBookingId,
@@ -447,7 +448,7 @@ export async function bookItinerary(
       );
     } catch (releaseErr) {
       logger.error("booking.book.compensation_release_failed", {
-        agencyId: session.agencyId,
+        agencyId: actor.agencyId,
         itineraryId: row.id,
         quoteRowIds: confirmed.map((c) => c.quoteRow.id),
         error: String(releaseErr),

@@ -172,6 +172,48 @@ main.home { width: 100%; max-width: none; margin: 0; }
 .home-foot { text-align: center; padding: clamp(28px,4vw,52px) 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
 @media (max-width: 880px) { .home-hero { grid-template-columns: 1fr; } .home-card { max-width: 440px; } .home-value { grid-template-columns: 1fr; } }
 
+/* ---- two-sided landing + marketing pages (spec 032) — additive, shared tokens.
+   No new palette / no dark-mode overrides (that is goal-ui-depoliteform). Nav
+   wraps so the public pages never scroll horizontally at ~375px (FR-010). ---- */
+.home-nav { flex-wrap: wrap; row-gap: 10px; }
+.home-nav nav { flex-wrap: wrap; }
+.lp-navlink { display: inline-flex; align-items: center; padding: 9px 12px; border-radius: var(--r-sm); color: var(--ink-soft); font-weight: 600; font-size: 14px; text-decoration: none; transition: background .12s, color .12s; }
+.lp-navlink:hover { background: var(--sea-tint); color: var(--sea-deep); }
+.lp-navlink[aria-current="page"] { background: var(--sea-tint); color: var(--sea-deep); }
+.home-hero h1 { font-family: var(--serif); letter-spacing: -.02em; }
+.home-hero-tagline { font-size: clamp(20px,3vw,30px); font-weight: 600; color: var(--ink); line-height: 1.25; margin: 8px 0 0; max-width: 22ch; }
+.home-hero-tagline em { font-style: italic; color: var(--coral-deep); }
+
+.home-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 0 clamp(20px,5vw,56px) clamp(40px,6vw,76px); max-width: 1140px; margin-inline: auto; }
+.home-side { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 28px 26px; box-shadow: var(--shadow-sm); }
+.home-side h2 { font-size: clamp(20px,2.4vw,24px); margin: 2px 0 2px; }
+.home-side p { color: var(--ink-soft); font-size: 15px; margin: 0 0 8px; }
+.home-side .tf-btn { align-self: flex-start; }
+.home-side-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: auto; }
+
+.lp-hero { position: relative; display: grid; grid-template-columns: 1fr 1.1fr; gap: 40px; align-items: center; padding: clamp(36px,6vw,76px) clamp(20px,5vw,56px) clamp(40px,6vw,68px); isolation: isolate; }
+.lp-hero::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
+  radial-gradient(1000px 620px at 90% -10%, #f7c9a6 0, transparent 55%),
+  radial-gradient(1100px 820px at 2% 112%, var(--sea-tint) 0, transparent 55%),
+  linear-gradient(180deg,#faf3ea,var(--sand)); }
+.lp-hero-copy h1 { font-size: clamp(30px,4.6vw,50px); font-weight: 600; line-height: 1.08; }
+.lp-video { margin: 0; }
+.lp-video-el { width: 100%; height: auto; display: block; aspect-ratio: 16 / 10; object-fit: cover; background: #10201f; border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+.lp-video figcaption { margin-top: 10px; font-size: 13px; color: var(--muted); text-align: center; }
+
+.lp-story { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; padding: 0 clamp(20px,5vw,56px) clamp(36px,6vw,64px); max-width: 1140px; margin-inline: auto; }
+.lp-step { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 24px 22px; }
+.lp-step-n { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 999px; background: var(--sea-tint); color: var(--sea-deep); font-weight: 700; margin-bottom: 12px; }
+.lp-step h2 { font-size: 18px; margin: 0 0 6px; }
+.lp-step p { color: var(--ink-soft); font-size: 14.5px; margin: 0; }
+
+.lp-cta-band { text-align: center; max-width: 720px; margin: 0 auto; padding: clamp(28px,5vw,56px) 20px clamp(20px,3vw,36px); }
+.lp-cta-band h2 { font-size: clamp(24px,3.4vw,34px); margin: 0 0 10px; }
+.lp-cta-band p { color: var(--ink-soft); margin: 0 0 20px; }
+.lp-cta-band .tf-btn { display: inline-flex; }
+
+@media (max-width: 880px) { .home-split { grid-template-columns: 1fr; } .lp-hero { grid-template-columns: 1fr; } .lp-story { grid-template-columns: 1fr; } }
+
 /* ---- workspace shell (agent surface): branded sticky header + identity ---- */
 .tf-workspace-header { position: sticky; top: 0; z-index: 20; }
 .tf-id { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--ink-soft); }
@@ -329,6 +371,10 @@ label > input, label > select, label > textarea {
 .tf-media-card { display: grid; gap: 6px; }
 .tf-media-thumb { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r); border: 1px solid var(--line); background: var(--sea-tint); }
 .tf-media-thumb--link { display: flex; align-items: center; justify-content: center; color: var(--sea-deep); font-weight: 600; text-decoration: none; }
+/* Graceful placeholder when a registered media URL is unreachable/expired
+   (iter9-gallery-media-fallback) — a labeled tile, never the browser's broken glyph. */
+.tf-media-thumb--fallback { display: flex; align-items: center; justify-content: center; padding: 6px; text-align: center; overflow: hidden; background: var(--sea-tint); color: var(--muted); }
+.tf-media-thumb-fallback-label { font-size: 12px; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; word-break: break-word; }
 .tf-media-alt { font-size: 13px; color: var(--muted); }
 .tf-media-gallery { list-style: none; display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 0; padding: 0; }
 .tf-media-gallery-item { position: relative; width: 96px; }
@@ -371,6 +417,10 @@ label > input, label > select, label > textarea {
 .tf-chat-suggestion-title { margin: 0; font-weight: 600; font-size: 14px; }
 .tf-chat-form { display: flex; gap: 10px; }
 .tf-chat-form input { flex: 1; }
+/* Chat-first entry (spec 035): resolve confirmation + "Build my trip" CTA, and
+   the chat/form entry-surface toggle. */
+.tf-chat-confirm { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tf-entry-switch { display: flex; justify-content: center; margin-top: 2px; }
 
 /* ---- booking flow (spec 009): markup control, quote review, confirmation ---- */
 .tf-booking { display: grid; gap: 14px; padding: 18px 20px; margin-top: 6px; }
@@ -482,11 +532,57 @@ label > input, label > select, label > textarea {
 .tf-client-fork form label { display: grid; gap: 6px; }
 .tf-client-fork form button[type="submit"] { justify-self: start; min-width: 200px; margin-top: 4px; }
 
+/* ---- traveler self-book review + advisory (spec 036): the "Before you book"
+   panel is clearly-labeled, sourced-only guidance — never fabricated facts. */
+.tf-client-advisory { margin: 16px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft, rgba(0,0,0,0.02)); }
+.tf-client-advisory ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.tf-client-advisory li { font-size: 13px; color: var(--ink-soft); }
+.tf-client-fork [data-testid="self-book-confirm"] { min-width: 220px; margin-top: 4px; }
+
 /* ---- traveler account strip (spec 030): OPTIONAL sign-in affordance on the
    fork's initial state — never a workspace affordance (INV-024), just a plain
    inline link/button. */
 .tf-client-account-strip { font-size: 13px; color: var(--ink-soft); margin: 0 0 10px; }
 .tf-link-btn { background: none; border: none; padding: 0; margin: 0; font: inherit; color: var(--sea); text-decoration: underline; cursor: pointer; }
+
+/* ---- traveler home at /view (spec 033): the signed-in landing + anonymous
+   welcome. Reuses .tf-card / .tf-quick-action(s) / .tf-btn; adds only the
+   welcome CTA row and the non-interactive "coming soon" signpost treatment.
+   Placed after .tf-quick-action so the muted overrides win by source order. */
+.tf-client-root a.tf-btn { text-decoration: none; }
+.tf-home-welcome-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.tf-home-soon { opacity: .72; cursor: default; }
+.tf-home-soon:hover { transform: none; box-shadow: var(--shadow); }
+.tf-home-soon b { color: var(--muted); }
+.tf-home-foot { display: flex; justify-content: center; }
+
+/* ---- consumer navigation shell (spec 037): the SIGNED-IN traveler's persistent
+   nav. Reuses the shared .tf-app-shell / .tf-sidebar theme kit (layout + the
+   checkbox-driven @media(max-width:880px) off-canvas collapse) — this block adds
+   ONLY the brand-neutral wordmark, the coming-soon (non-link) signpost treatment,
+   and the bottom Account region. No new responsive system; INV-020 keeps the
+   wordmark neutral (never "TripForge"/"Trellis"). */
+.tf-client-main { display: grid; gap: 24px; align-content: start; }
+.tf-client-nav-brand { color: var(--ink); }
+/* coming-soon nav rows mirror the .tf-sidebar link layout but are muted and
+   non-interactive (they are <span>, not <a> — no dead ends, FR-003). */
+.tf-client-nav .tf-client-nav-soon {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+  border-radius: var(--r-sm); color: var(--muted); font-weight: 600; font-size: 14px;
+  cursor: default;
+}
+.tf-client-nav .tf-client-nav-soon svg { flex: none; opacity: .7; }
+.tf-client-nav-soon-badge {
+  margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--ink-soft); background: var(--sand);
+  border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px;
+}
+/* Account region pinned to the bottom of the flex-column sidebar. */
+.tf-client-nav-account {
+  margin-top: auto; padding: 14px 12px 4px; border-top: 1px solid var(--line);
+  display: grid; gap: 8px; justify-items: start;
+}
+.tf-client-nav-name { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
 
 /* ---- Discover / "What's Hot" feed (spec 023): editorial, image-forward cards —
    the first cards in the app to render a real photo rather than a gradient
@@ -529,5 +625,117 @@ label > input, label > select, label > textarea {
 .tf-discover-hotel b { font-size: 13.5px; }
 .tf-discover-hotel span { color: var(--muted); font-size: 12.5px; }
 .tf-discover-card-body a.tf-btn--cta { justify-self: start; text-decoration: none; }
+
+/* ==========================================================================
+   goal-ui-depoliteform (spec 034) — premium lift of the shared kit.
+   Presentation only; EXISTING tokens only (no new palette, no dark mode).
+   Refines fields + primary CTA, adds a guided form-section system, a branded
+   auth split, and a premium booking-review summary. Every accessible name,
+   ARIA role, testid, and .tf-* hook the app / e2e depend on is preserved.
+   ========================================================================== */
+
+/* -- premium text fields: consistent height + soft depth. Excludes
+   checkbox/radio so the quote-table selectors and the sidebar toggle keep
+   their own sizing. Overrides the base padding via later-in-file order. -- */
+input:not([type="checkbox"]):not([type="radio"]), select, textarea {
+  min-height: 44px; padding: 12px 14px; box-shadow: var(--shadow-sm);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+textarea { min-height: 96px; }
+input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+select:focus-visible, textarea:focus-visible { border-color: var(--sea); }
+select {
+  appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
+}
+
+/* -- refined primary CTA (coral) + an optional large size -- */
+.tf-btn--cta { min-height: 46px; letter-spacing: .005em;
+  box-shadow: 0 1px 2px rgba(201,92,55,.22), 0 10px 22px -13px rgba(201,92,55,.55); }
+.tf-btn--lg { min-height: 52px; padding-inline: 26px; font-size: 15.5px; }
+
+/* -- guided form sections: turn a long field stack into titled, hinted groups.
+   .tf-form-sectionhead spans the planner grid (step number + serif title +
+   hint). Presentation only — fields keep their labels, order, and roles. -- */
+.tf-planner-lede { color: var(--ink-soft); margin: 2px 0 20px; max-width: 60ch; }
+.tf-form-sectionhead {
+  grid-column: 1 / -1; display: grid; grid-template-columns: auto 1fr;
+  gap: 1px 12px; align-items: center; margin-top: 10px; padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.tf-form-sectionhead:first-of-type { border-top: none; padding-top: 2px; margin-top: 0; }
+.tf-form-stepn {
+  grid-row: span 2; align-self: start; display: inline-grid; place-items: center;
+  width: 30px; height: 30px; border-radius: 999px; background: var(--sea-tint);
+  color: var(--sea-deep); font-family: var(--mono); font-weight: 700; font-size: 13px;
+}
+.tf-form-sectionhead b {
+  grid-column: 2; align-self: end; font-family: var(--serif); font-weight: 620;
+  font-size: 16.5px; color: var(--ink); text-transform: none; letter-spacing: -.01em;
+}
+.tf-form-sectionhead .tf-field-hint { grid-column: 2; align-self: start; margin: 0; }
+.tf-field-hint {
+  font-size: 12.5px; color: var(--muted); font-weight: 400;
+  text-transform: none; letter-spacing: normal; margin: 4px 0 0;
+}
+
+/* -- branded auth split: story/visual panel beside the credentials card.
+   Agent surface is platform-branded; the client (white-label) variant uses
+   .tf-auth-aside--plain and carries NO brand and NO product shot (INV-020). -- */
+.tf-auth-split { width: 100%; min-height: 100dvh; margin: 0;
+  display: grid; grid-template-columns: 1.02fr .98fr; }
+[data-plain] main.tf-auth-split { width: 100%; margin: 0; }
+.tf-auth-aside {
+  position: relative; isolation: isolate; display: flex; flex-direction: column;
+  justify-content: space-between; gap: 26px; padding: clamp(28px,4vw,56px);
+  color: #fff; overflow: hidden;
+}
+.tf-auth-aside::before { content: ""; position: absolute; inset: 0; z-index: -1; background:
+  radial-gradient(760px 520px at 12% -10%, #14887c 0, transparent 60%),
+  radial-gradient(720px 620px at 108% 8%, var(--coral) 0, transparent 52%),
+  linear-gradient(160deg, var(--sea-deep), #0a3f3a 60%, #7d3f2f); }
+.tf-auth-aside--plain::before { background:
+  radial-gradient(760px 520px at 12% -10%, #14887c 0, transparent 60%),
+  linear-gradient(160deg, var(--sea-deep), #0a3f3a); }
+.tf-auth-aside .tf-brand { color: #fff; font-size: 22px; }
+.tf-auth-aside .tf-brand::before { color: #ffd9a0; }
+.tf-auth-aside .tf-eyebrow { color: rgba(255,255,255,.82); }
+.tf-auth-aside h2 { color: #fff; font-size: clamp(23px,2.5vw,31px); max-width: 18ch; margin: 6px 0 0; }
+.tf-auth-aside-lede { color: rgba(255,255,255,.9); margin: 0; max-width: 40ch; }
+.tf-auth-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.tf-auth-points li { display: flex; align-items: flex-start; gap: 10px; color: rgba(255,255,255,.94); font-size: 14.5px; }
+.tf-auth-points li::before {
+  content: "✓"; flex: none; display: grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 999px; background: rgba(255,255,255,.16); font-size: 12px; margin-top: 1px;
+}
+.tf-auth-shot { margin: 0; border-radius: var(--r); overflow: hidden;
+  border: 1px solid rgba(255,255,255,.22); box-shadow: 0 20px 50px -22px rgba(0,0,0,.6);
+  background: rgba(255,255,255,.06); }
+.tf-auth-shot img { display: block; width: 100%; height: auto; }
+.tf-auth-panel { display: grid; place-items: center; padding: clamp(28px,5vw,56px) 20px; background:
+  radial-gradient(700px 420px at 88% -12%, var(--sea-tint) 0, transparent 60%), var(--sand); }
+.tf-auth-panel .tf-auth-card { margin: 0; }
+.tf-auth-panel .tf-auth-tagline { margin-top: 0; }
+@media (max-width: 880px) {
+  .tf-auth-split { grid-template-columns: 1fr; }
+  .tf-auth-aside { padding: 24px 22px; gap: 12px; }
+  .tf-auth-shot, .tf-auth-aside-lede, .tf-auth-points { display: none; }
+  .tf-auth-aside h2 { font-size: 21px; }
+}
+
+/* -- premium booking review: a summary band above the refined quote table -- */
+.tf-quote-summary { display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap; padding: 13px 16px; border-radius: var(--r);
+  background: var(--sea-tint); border: 1px solid color-mix(in srgb, var(--sea) 20%, var(--line)); }
+.tf-quote-summary .tf-eyebrow { color: var(--sea-deep); }
+.tf-quote-summary b { font-family: var(--serif); font-weight: 620; color: var(--ink); font-size: 15.5px; }
+.tf-quote-summary p { margin: 0; font-size: 13px; color: var(--ink-soft); max-width: 34ch; }
+.tf-quote-table thead th { background: var(--sand); }
+.tf-quote-table tbody tr { transition: background .12s; }
+.tf-quote-table tbody tr:not(.tf-row-failed):hover { background: color-mix(in srgb, var(--sea-tint) 55%, transparent); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

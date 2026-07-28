@@ -7,8 +7,9 @@ import { parseItinerary, type Itinerary } from "@tripforge/itinerary-schema";
 import { eq, itinerary as itineraryTable, scopedWhere } from "@tripforge/db";
 import type { SupplyPort, OfferBase, QuoteBase } from "@tripforge/supply-adapter";
 import { createLogger } from "@tripforge/shared";
-import type { AgentSessionContext, Container } from "../../context.js";
+import type { Container } from "../../context.js";
 import type { TripRequest } from "../planner.js";
+import type { BookingActor } from "./actor.js";
 
 export const logger = createLogger({ bindings: { component: "booking" } });
 
@@ -36,7 +37,7 @@ export interface ItineraryRow {
 
 export async function loadItinerary(
   container: Container,
-  session: AgentSessionContext,
+  actor: BookingActor,
   itineraryId: string,
 ): Promise<ItineraryRow | undefined> {
   const db = container.db;
@@ -44,7 +45,7 @@ export async function loadItinerary(
   const rows = await db
     .select()
     .from(itineraryTable)
-    .where(scopedWhere(itineraryTable.agencyId, session.agencyId, eq(itineraryTable.id, itineraryId)))
+    .where(scopedWhere(itineraryTable.agencyId, actor.agencyId, eq(itineraryTable.id, itineraryId)))
     .limit(1);
   const row = rows[0];
   if (!row) return undefined;

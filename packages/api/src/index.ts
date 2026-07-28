@@ -14,6 +14,10 @@ export type {
 // declaration emit must be able to NAME them (TS4023), so they are public
 // surface here, not incidental service exports (QS3-1).
 export type { BookOutcome, HeldQuote } from "./services/booking.js";
+// Traveler self-book outcome types surfaced the same way (spec 036, TS4023):
+// clientView.selfBook is a mutation riding the inferred AppRouter type, so its
+// redacted outcome union must be nameable in the emitted declarations.
+export type { SelfBookOutcome, SelfBookLeg, SelfBookFailureReason } from "./services/booking.js";
 // Draft streaming types surfaced the same way (spec 016): itinerary.draft is
 // now a subscription, so DraftEvent/DraftOutcome ride the inferred AppRouter
 // type and must be nameable (TS4023). Spec 019: draft is compare-only
@@ -58,6 +62,9 @@ export type {
   AttachTravelerOutcome,
   TravelerTripSummary,
 } from "./services/client-view.js";
+// Traveler marketplace surface (spec 041, TS4023): TravelerMarketplaceCard and
+// ForkListingOutcome ride the inferred AppRouter type via clientView.marketplace.*.
+export type { TravelerMarketplaceCard, ForkListingOutcome } from "./services/marketplace-traveler.js";
 // Agent Home dashboard aggregate surfaced the same way (spec 017, TS4023):
 // DashboardStats rides the inferred AppRouter type via workspace.dashboard.stats.
 export type { DashboardStats, CurrencyTotal, RecentActivityEntry } from "./services/dashboard-stats.js";
@@ -75,6 +82,36 @@ export type {
 // Agency admin member roster surfaced the same way (seed-0009, TS4023):
 // workspace.agencyAdmin.members rides the inferred AppRouter type.
 export type { AgencyMemberSummary } from "./services/agency-members.js";
+// Consumer planner types surfaced the same way (spec 038, TS4023): clientView.
+// planDraft is a subscription and clientView.requestPlan a mutation, both riding
+// the inferred AppRouter type, so their outcome/event unions must be nameable.
+export type {
+  ConsumerDraftOption,
+  ConsumerCompareOutcome,
+  ConsumerCompareEvent,
+  SubmitConsumerPlanRequestInput,
+  SubmitConsumerPlanRequestOutcome,
+} from "./services/consumer-planner.js";
+// Traveler group-trips types surfaced the same way (spec 040, TS4023): every
+// clientView.groups.* procedure rides the inferred AppRouter type, so its
+// input/outcome/view unions must be nameable in the emitted declarations.
+export type {
+  MembershipState,
+  CreateGroupInput,
+  CreateGroupOutcome,
+  JoinGroupInput,
+  JoinGroupOutcome,
+  GroupSummary,
+  GroupMemberView,
+  GroupMessageView,
+  GroupDetailView,
+  GroupDetailOutcome,
+  PostMessageInput,
+  PostMessageOutcome,
+  ConfirmOutcome,
+  FinalizeOutcome,
+  CancelOutcome,
+} from "./services/group-trips.js";
 export { buildContainer } from "./container.js";
 export type { BuildContainerOptions } from "./container.js";
 export {
