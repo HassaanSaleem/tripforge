@@ -1334,9 +1334,9 @@
     "body": "Feature-sized — route through Spec Kit. Campaign GOAL.md Deliverable 2.7 + Deliverable 4.\n\nFrom a marketplace itinerary a user can: book it as-is, or fork+edit it and then either request the agent to host/book it OR self-book it through the platform. Agent-side marketplace mechanics: white-label an entire trip when a matching offering exists on the marketplace, and add your own client into another agent's group departure when a seat is available and that agent listed the departure as joinable. Fork/resale/client-ownership/revenue-share semantics are Constitution VI — encode + enforce in the transaction path; ANY change to those semantics ALWAYS HALTS for the operator (DIRECTIVE §2).\n\nAcceptance: fork→edit→(request-agent | self-book) both work; white-label produces a rebranded copy with the original seller's revenue-share + the reseller's client-ownership enforced (L3 money-path + conservation); add-client-to-joinable-departure respects seat availability + the host agent's listing terms. No prod deploy; full live validation.",
     "type": "feature",
     "priority": "critical",
-    "state": "todo",
+    "state": "done",
     "created": "2026-07-21T16:00:00Z",
-    "pr_url": ""
+    "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/22"
   },
   {
     "id": "consumer-copy-honesty-interim",
@@ -1452,5 +1452,35 @@
     "state": "done",
     "created": "2026-07-22T10:55:00Z",
     "pr_url": "https://github.com/hassaansaleem-bit/tripforge/pull/18"
+  },
+  {
+    "id": "mp-fork-l3-fully-failed-conservation",
+    "title": "L3: add a fully-failed (zero-confirmed) conservation case to l3-traveler-marketplace-fork",
+    "body": "Adversarial review of PR #22 (marketplace fork, spec 041) noted: self-book.ts:20-22 documents a fully-failed-writes-nothing invariant, but l3-traveler-marketplace-fork.test.ts only exercises PARTIAL failure. The fully-failed branch is inherited from bookItinerary and covered by the sibling l3-traveler-self-book suite, so this is a coverage completeness note (not a defect). Add a forked test driving every leg to fail, asserting zero total money rows + all holds released.",
+    "type": "test",
+    "priority": "low",
+    "state": "todo",
+    "created": "2026-07-28T11:38:03Z",
+    "pr_url": ""
+  },
+  {
+    "id": "clientview-marketplace-l2-rbac",
+    "title": "L2 contract test for clientView.marketplace.* auth (browse/fork), mirroring workspace marketplace-rbac",
+    "body": "Adversarial review of PR #22 noted: the anon->UNAUTHORIZED assertion for clientView.marketplace.fork lives only in the DB-gated L3 test (skipped in keyless CI). The gate itself (shared protectedProcedure) is sound; add a fast L2 contract test for clientView.marketplace.browse/fork auth analogous to marketplace-rbac.test.ts so the gate is verified in the default no-db unit run.",
+    "type": "test",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-28T11:38:03Z",
+    "pr_url": ""
+  },
+  {
+    "id": "marketplace-browse-inv020-runtime-assert",
+    "title": "Runtime-assert INV-020 redaction on the publicProcedure marketplace browse projection",
+    "body": "Adversarial review of PR #22 noted: clientView.marketplace.browse is a publicProcedure performing the one deliberate cross-tenant read; its client-safe projection (TravelerMarketplaceCard: listingId/title/agencyName/sellerVetted/currency/fromTotalMinor) is enforced only structurally by the type, with no test asserting a browse card never carries netRate/markup/revenue-share bps. Add a runtime assertion (browseMarketplaceForTraveler in marketplace-traveler.ts).",
+    "type": "test",
+    "priority": "medium",
+    "state": "todo",
+    "created": "2026-07-28T11:38:03Z",
+    "pr_url": ""
   }
 ]
