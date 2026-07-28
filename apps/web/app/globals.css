@@ -420,9 +420,9 @@ label > input, label > select, label > textarea {
   box-shadow: var(--shadow-sm); overflow-wrap: anywhere;
   animation: tf-msg-in .22s ease both;
 }
-.tf-chat-message p { margin: 0; }
+.tf-chat-message p { margin: 0; color: inherit; max-width: none; }
 .tf-chat-message--agent {
-  justify-self: end; background: var(--sea); color: #fff;
+  justify-self: end; background: var(--sea-deep); color: #fff;
   border-radius: var(--r-lg) var(--r-lg) var(--r-sm) var(--r-lg);
 }
 .tf-chat-message--assistant {

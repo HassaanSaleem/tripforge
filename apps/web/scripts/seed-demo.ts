@@ -19,9 +19,16 @@ import { randomUUID } from "node:crypto";
 import {
   agencyVetting,
   and,
+  clientTripLink,
+  consumerPlanRequest,
   eq,
+  marketplaceFork,
   member,
   organization,
+  travelerGroup,
+  travelerGroupMember,
+  travelerGroupMessage,
+  travelerMembership,
   user as userTable,
   type Db,
 } from "@tripforge/db";
@@ -218,6 +225,170 @@ const DEMO_MEDIA = {
   alt: "A narrow street in Lisbon's Alfama neighborhood",
   attribution: "Photo by Claudio Schwarz on Unsplash",
 };
+
+// ─── Traveler (consumer surface) fixtures ────────────────────────────────────
+//
+// So the consumer surface (/view/*) shows a populated product too, not just the
+// agent side. Travelers are ORG-LESS Better Auth users (INV-024: no organization/
+// member/agency_vetting rows). Their side records are the same "bolt-on metadata"
+// family the agent seed treats as operator-class direct inserts: traveler_membership
+// (spec 040 eligibility), client_trip_link (spec 031 My Trips), consumer_plan_request
+// (spec 038 request-an-agent lead), traveler_group{,_member,_message} (spec 040 group
+// trips). The marketplace fork (spec 041) alone reuses the REAL clientView.marketplace.
+// fork tRPC path (it re-validates the copy via parseItinerary and writes the seller-
+// owned copy itinerary + share link + client_trip_link + provenance row in one tx).
+
+interface TravelerFixture {
+  slug: string;
+  name: string;
+  email: string;
+  /** premium ⇒ a premium + identity-verified traveler_membership row (eligible for
+   * group trips); standard travelers get NO row (the service's default state). */
+  premium: boolean;
+}
+
+const TRAVELERS: TravelerFixture[] = [
+  { slug: "amelia-rivera", name: "Amelia Rivera", email: "traveler-amelia@demo.test", premium: true },
+  { slug: "omar-haddad", name: "Omar Haddad", email: "traveler-omar@demo.test", premium: true },
+  { slug: "yuki-tanaka", name: "Yuki Tanaka", email: "traveler-yuki@demo.test", premium: true },
+  { slug: "lena-novak", name: "Lena Novak", email: "traveler-lena@demo.test", premium: false },
+  { slug: "carlos-mendes", name: "Carlos Mendes", email: "traveler-carlos@demo.test", premium: false },
+];
+
+interface TripViewFixture {
+  travelerSlug: string;
+  itineraryIndex: number; // index into ITINERARIES
+}
+
+// "My Trips" entries (source 'view') — attach travelers to EXISTING seeded
+// itineraries so the traveler's My Trips list is populated. (Group members also
+// get source 'group' links, and the fork gets a source 'fork' link, below.)
+const TRAVELER_TRIP_VIEWS: TripViewFixture[] = [
+  { travelerSlug: "amelia-rivera", itineraryIndex: 0 }, // Lisbon (Azure)
+  { travelerSlug: "omar-haddad", itineraryIndex: 2 }, // Marrakech (Meridian)
+  { travelerSlug: "yuki-tanaka", itineraryIndex: 4 }, // Tokyo (Kaido)
+  { travelerSlug: "lena-novak", itineraryIndex: 5 }, // Reykjavik (Nordlight)
+  { travelerSlug: "carlos-mendes", itineraryIndex: 0 }, // Lisbon (Azure)
+];
+
+interface PlanRequestFixture {
+  travelerSlug: string;
+  destination: string;
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  budgetAmountMinor: number;
+  budgetMode: "hardCap" | "target";
+  variant: "budgetSavvy" | "balanced" | "premium";
+  optionTitle: string;
+  notes?: string;
+}
+
+// 3 request-an-agent leads (status 'new') — durable, agency-less consumer demand
+// carried into the network (Constitution I). Each ties to a traveler's own budget.
+const PLAN_REQUESTS: PlanRequestFixture[] = [
+  {
+    travelerSlug: "amelia-rivera",
+    destination: "Barcelona",
+    checkIn: "2026-09-05",
+    checkOut: "2026-09-12",
+    adults: 2,
+    children: 0,
+    budgetAmountMinor: 400_000, // $4,000
+    budgetMode: "hardCap",
+    variant: "balanced",
+    optionTitle: "Barcelona balanced trip",
+    notes: "Anniversary trip — would love a food-focused itinerary.",
+  },
+  {
+    travelerSlug: "omar-haddad",
+    destination: "Dubai",
+    checkIn: "2026-10-01",
+    checkOut: "2026-10-06",
+    adults: 2,
+    children: 2,
+    budgetAmountMinor: 600_000, // $6,000
+    budgetMode: "target",
+    variant: "premium",
+    optionTitle: "Dubai premium trip",
+    notes: "Family of four; two kids under 10.",
+  },
+  {
+    travelerSlug: "lena-novak",
+    destination: "Rome",
+    checkIn: "2026-11-12",
+    checkOut: "2026-11-18",
+    adults: 1,
+    children: 0,
+    budgetAmountMinor: 300_000, // $3,000
+    budgetMode: "hardCap",
+    variant: "budgetSavvy",
+    optionTitle: "Rome budget-savvy trip",
+  },
+];
+
+interface GroupMemberFixture {
+  travelerSlug: string;
+  role: "organizer" | "member";
+  confirmed: boolean;
+}
+interface GroupMessageFixture {
+  senderSlug: string;
+  body: string;
+}
+interface GroupFixture {
+  itineraryIndex: number; // index into ITINERARIES (the trip the group forms around)
+  title: string;
+  status: "forming" | "finalized";
+  /** members[0] is the organizer. Every member is drawn from the premium+verified
+   * set (the eligibility gate the real join path enforces). A finalized group MUST
+   * have all members confirmed (the all-party finalize gate, spec 040 FR-008). */
+  members: GroupMemberFixture[];
+  messages: GroupMessageFixture[];
+}
+
+// 2 traveler groups: one 'forming' (a member still pending, so finalize is blocked)
+// and one 'finalized' (all members confirmed) — around existing seeded itineraries.
+const TRAVELER_GROUPS: GroupFixture[] = [
+  {
+    itineraryIndex: 1, // Tokyo (Azure)
+    title: "Tokyo crew — autumn 2026",
+    status: "forming",
+    members: [
+      { travelerSlug: "amelia-rivera", role: "organizer", confirmed: true },
+      { travelerSlug: "yuki-tanaka", role: "member", confirmed: true },
+      { travelerSlug: "omar-haddad", role: "member", confirmed: false },
+    ],
+    messages: [
+      { senderSlug: "amelia-rivera", body: "Hey team! Started our Tokyo group — take a look at the trip and confirm when you're in." },
+      { senderSlug: "yuki-tanaka", body: "Looks amazing, I'm confirmed!" },
+      { senderSlug: "omar-haddad", body: "So excited — I'll confirm as soon as my dates are locked." },
+    ],
+  },
+  {
+    itineraryIndex: 5, // Reykjavik (Nordlight)
+    title: "Reykjavik aurora squad",
+    status: "finalized",
+    members: [
+      { travelerSlug: "yuki-tanaka", role: "organizer", confirmed: true },
+      { travelerSlug: "omar-haddad", role: "member", confirmed: true },
+    ],
+    messages: [
+      { senderSlug: "yuki-tanaka", body: "Everyone's confirmed — finalizing our aurora trip!" },
+      { senderSlug: "omar-haddad", body: "Perfect, can't wait for the Northern Lights." },
+    ],
+  },
+];
+
+interface TravelerForkFixture {
+  travelerSlug: string;
+  listingIndex: number; // index into LISTINGS
+}
+
+// 1 traveler fork of an existing marketplace listing (the Lisbon Getaway, sold by
+// Azure) — reuses the real fork tRPC path so the copy is seller-owned + re-validated.
+const TRAVELER_FORK: TravelerForkFixture = { travelerSlug: "carlos-mendes", listingIndex: 0 };
 
 // ─── Identity + tenancy scaffolding (direct insert — the seed script is an
 // operator-class action, same class as packages/db/scripts/vet-agency.mjs;
@@ -460,6 +631,203 @@ async function ensureBooking(caller: AppCaller, itineraryId: string): Promise<{ 
   return { created: true };
 }
 
+// ─── Traveler-side flows (org-less; direct inserts mirror the clientView
+// services, the same operator-class direct-insert class the identity scaffolding
+// uses; the marketplace fork alone rides the real tRPC path) ─────────────────
+
+/** A traveler caller: a session with a userId but NO agency (INV-024) — the only
+ * thing `protectedProcedure`/clientView.* require. */
+function travelerCallerFor(container: Container, userId: string): AppCaller {
+  return createAppCaller(createContext({ session: { userId }, container }));
+}
+
+/**
+ * Upserts a premium + identity-verified `traveler_membership` (mirrors the
+ * verifyMembership service — idempotent on the user_id PK). Standard travelers
+ * get NO row: absence IS the default `standard`/ineligible state the service reads.
+ */
+async function ensureTravelerMembership(db: Db, userId: string, premium: boolean): Promise<void> {
+  if (!premium) return;
+  const now = new Date();
+  await db
+    .insert(travelerMembership)
+    .values({ userId, tier: "premium", identityVerified: true, verifiedAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: travelerMembership.userId,
+      set: { tier: "premium", identityVerified: true, verifiedAt: now, updatedAt: now },
+    });
+}
+
+/** Attaches a traveler to a trip's My Trips (client_trip_link) — the same
+ * idempotent "attach on view" record spec 031's attachTraveler writes; the
+ * UNIQUE(user_id, itinerary_id) index is the arbiter (a traveler already linked
+ * via a group/fork keeps that link — onConflictDoNothing). */
+async function ensureClientTripLink(db: Db, userId: string, itineraryId: string, source: string): Promise<boolean> {
+  const result = await db
+    .insert(clientTripLink)
+    .values({ userId, itineraryId, source })
+    .onConflictDoNothing({ target: [clientTripLink.userId, clientTripLink.itineraryId] });
+  return (result.rowCount ?? 0) > 0;
+}
+
+/**
+ * Inserts one consumer plan request (mirrors submitConsumerPlanRequest). No
+ * natural unique key exists, so idempotency is a read-first guard on
+ * (traveler, destination) — the same idempotency-key pattern ensureSeededItinerary
+ * and ensureGroupDeparture already use.
+ */
+async function ensurePlanRequest(
+  db: Db,
+  travelerUserId: string,
+  contactName: string,
+  contactEmail: string,
+  fixture: PlanRequestFixture,
+): Promise<boolean> {
+  const existing = await db
+    .select({ id: consumerPlanRequest.id })
+    .from(consumerPlanRequest)
+    .where(
+      and(
+        eq(consumerPlanRequest.travelerUserId, travelerUserId),
+        eq(consumerPlanRequest.destination, fixture.destination),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return false;
+
+  await db.insert(consumerPlanRequest).values({
+    travelerUserId,
+    destination: fixture.destination,
+    checkIn: fixture.checkIn,
+    checkOut: fixture.checkOut,
+    adults: fixture.adults,
+    children: fixture.children,
+    budgetAmountMinor: fixture.budgetAmountMinor,
+    budgetCurrency: "USD",
+    budgetMode: fixture.budgetMode,
+    variant: fixture.variant,
+    optionTitle: fixture.optionTitle,
+    contactName,
+    contactEmail,
+    notes: fixture.notes ?? null,
+    status: "new",
+  });
+  return true;
+}
+
+/**
+ * Creates one traveler group with its members, My-Trips links, and chat messages
+ * in one tx — mirroring createGroup + joinGroup + confirm + finalize + postMessage.
+ * traveler_group has no natural unique key, so idempotency is a read-first guard on
+ * (organizer, itinerary, title). A 'finalized' fixture's members are all confirmed
+ * (the all-party finalize gate); a 'forming' group is left joinable.
+ */
+async function ensureTravelerGroup(
+  db: Db,
+  itineraryId: string,
+  travelerUserIds: Map<string, string>,
+  fixture: GroupFixture,
+): Promise<boolean> {
+  const resolve = (slug: string): string => {
+    const id = travelerUserIds.get(slug);
+    if (!id) throw new Error(`ensureTravelerGroup: unknown traveler slug "${slug}"`);
+    return id;
+  };
+  const organizerFixture = fixture.members.find((m) => m.role === "organizer");
+  if (!organizerFixture) throw new Error(`ensureTravelerGroup: "${fixture.title}" has no organizer`);
+  const organizerUserId = resolve(organizerFixture.travelerSlug);
+
+  const existing = await db
+    .select({ id: travelerGroup.id })
+    .from(travelerGroup)
+    .where(
+      and(
+        eq(travelerGroup.organizerUserId, organizerUserId),
+        eq(travelerGroup.itineraryId, itineraryId),
+        eq(travelerGroup.title, fixture.title),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return false;
+
+  const finalized = fixture.status === "finalized";
+  await db.transaction(async (tx) => {
+    const now = new Date();
+    const inserted = await tx
+      .insert(travelerGroup)
+      .values({
+        itineraryId,
+        organizerUserId,
+        title: fixture.title,
+        status: fixture.status,
+        joinable: !finalized, // a finalized group is closed to new joiners
+        finalizedAt: finalized ? now : null,
+      })
+      .returning({ id: travelerGroup.id });
+    const group = inserted[0];
+    if (!group) throw new Error("ensureTravelerGroup: traveler_group insert returned no row");
+
+    for (const m of fixture.members) {
+      const memberUserId = resolve(m.travelerSlug);
+      await tx
+        .insert(travelerGroupMember)
+        .values({
+          groupId: group.id,
+          userId: memberUserId,
+          role: m.role,
+          confirmationStatus: m.confirmed ? "confirmed" : "pending",
+          confirmedAt: m.confirmed ? now : null,
+        })
+        .onConflictDoNothing({ target: [travelerGroupMember.groupId, travelerGroupMember.userId] });
+
+      // Link the group's trip into each member's My Trips (source 'group'), the
+      // same write createGroup/joinGroup do.
+      await tx
+        .insert(clientTripLink)
+        .values({ userId: memberUserId, itineraryId, source: "group" })
+        .onConflictDoNothing({ target: [clientTripLink.userId, clientTripLink.itineraryId] });
+    }
+
+    for (const msg of fixture.messages) {
+      await tx.insert(travelerGroupMessage).values({
+        groupId: group.id,
+        senderUserId: resolve(msg.senderSlug),
+        body: msg.body,
+      });
+    }
+  });
+  return true;
+}
+
+/**
+ * Forks an active marketplace listing into a traveler's own working copy via the
+ * REAL clientView.marketplace.fork path (forkListingForTraveler): it re-validates
+ * the copy via parseItinerary and writes the seller-owned copy itinerary + share
+ * link + client_trip_link (source 'fork') + marketplace_fork provenance row in one
+ * tx. Idempotency is the seed's own read-first guard on (traveler, listing), since
+ * the service mints a fresh copy on every call.
+ */
+async function ensureTravelerFork(
+  db: Db,
+  container: Container,
+  travelerUserId: string,
+  listingId: string,
+): Promise<boolean> {
+  const existing = await db
+    .select({ id: marketplaceFork.id })
+    .from(marketplaceFork)
+    .where(and(eq(marketplaceFork.travelerUserId, travelerUserId), eq(marketplaceFork.listingId, listingId)))
+    .limit(1);
+  if (existing[0]) return false;
+
+  const caller = travelerCallerFor(container, travelerUserId);
+  const result = await caller.clientView.marketplace.fork({ listingId });
+  if (result.status !== "forked") {
+    throw new Error(`ensureTravelerFork: fork failed for listing ${listingId} — ${result.status}`);
+  }
+  return true;
+}
+
 async function main(): Promise<void> {
   const handle = getDb();
   const db = handle.db;
@@ -576,8 +944,61 @@ async function main(): Promise<void> {
     console.log(`seed-demo: rating (listing ${listingId}, rater ${fixture.resellerSlug}) — RATED ${fixture.stars} stars`);
   }
 
+  // ─── Traveler (consumer surface) demo data — org-less users + client-side
+  // records so /view/* shows a populated product too (INV-024). ────────────────
+  const travelerUserIds = new Map<string, string>();
+  for (const traveler of TRAVELERS) {
+    const { userId, created } = await ensureDemoUser(db, traveler.email, traveler.name);
+    travelerUserIds.set(traveler.slug, userId);
+    // Org-less by design: NO ensureMembership/ensureAgency call (INV-024). Only
+    // the traveler_membership premium/identity flag, when premium.
+    await ensureTravelerMembership(db, userId, traveler.premium);
+    console.log(
+      `seed-demo: traveler ${traveler.email} / ${DEMO_PASSWORD} — ${created ? "created" : "already exists"} (${traveler.premium ? "premium+verified" : "standard"})`,
+    );
+  }
+
+  for (const view of TRAVELER_TRIP_VIEWS) {
+    const userId = travelerUserIds.get(view.travelerSlug);
+    const itineraryId = itineraryIds[view.itineraryIndex];
+    if (!userId || !itineraryId) throw new Error(`main: bad trip-view fixture ${view.travelerSlug}/${view.itineraryIndex}`);
+    const attached = await ensureClientTripLink(db, userId, itineraryId, "view");
+    console.log(
+      `seed-demo: my-trips link (${view.travelerSlug} → itinerary ${itineraryId}) — ${attached ? "ATTACHED" : "already linked, skipping"}`,
+    );
+  }
+
+  for (const fixture of PLAN_REQUESTS) {
+    const traveler = TRAVELERS.find((t) => t.slug === fixture.travelerSlug);
+    const userId = travelerUserIds.get(fixture.travelerSlug);
+    if (!traveler || !userId) throw new Error(`main: unknown plan-request traveler "${fixture.travelerSlug}"`);
+    const created = await ensurePlanRequest(db, userId, traveler.name, traveler.email, fixture);
+    console.log(
+      `seed-demo: consumer plan request (${fixture.travelerSlug} → ${fixture.destination}) — ${created ? "CREATED" : "already exists, skipping"}`,
+    );
+  }
+
+  for (const fixture of TRAVELER_GROUPS) {
+    const itineraryId = itineraryIds[fixture.itineraryIndex];
+    if (!itineraryId) throw new Error(`main: unknown group itinerary index ${fixture.itineraryIndex}`);
+    const created = await ensureTravelerGroup(db, itineraryId, travelerUserIds, fixture);
+    console.log(
+      `seed-demo: traveler group "${fixture.title}" (${fixture.status}) — ${created ? "CREATED" : "already exists, skipping"}`,
+    );
+  }
+
+  const forkTravelerId = travelerUserIds.get(TRAVELER_FORK.travelerSlug);
+  const forkListingId = listingIds[TRAVELER_FORK.listingIndex];
+  if (!forkTravelerId || !forkListingId) throw new Error("main: bad traveler-fork fixture");
+  const forked = await ensureTravelerFork(db, container, forkTravelerId, forkListingId);
   console.log(
-    `seed-demo: done — ${AGENCIES.length} agencies, ${ITINERARIES.length} itineraries, ${LISTINGS.length} listings, ${LICENSES.length} licenses, ${LICENSES.length} ratings, ${GROUP_DEPARTURES.length} group departures, 1 booking`,
+    `seed-demo: traveler fork (${TRAVELER_FORK.travelerSlug} → listing ${forkListingId}) — ${forked ? "FORKED" : "already forked, skipping"}`,
+  );
+
+  const premiumTravelers = TRAVELERS.filter((t) => t.premium).length;
+  console.log(
+    `seed-demo: done — ${AGENCIES.length} agencies, ${ITINERARIES.length} itineraries, ${LISTINGS.length} listings, ${LICENSES.length} licenses, ${LICENSES.length} ratings, ${GROUP_DEPARTURES.length} group departures, 1 booking; ` +
+      `${TRAVELERS.length} travelers (${premiumTravelers} premium+verified), ${TRAVELER_TRIP_VIEWS.length} my-trips links, ${PLAN_REQUESTS.length} consumer plan requests, ${TRAVELER_GROUPS.length} traveler groups, 1 traveler fork`,
   );
   await handle.close();
 }
