@@ -17,12 +17,31 @@ Product source of truth: [`docs/product/Trellis_Product_Charter_PRD.pdf`](docs/p
 
 ---
 
+## Live demo
+
+**Live at [tripforge-vert.vercel.app](https://tripforge-vert.vercel.app)** — Vercel + Neon Postgres, real Claude in the planner. Seeded demo accounts (password for all: **`TripForgeDemo!2026`**):
+
+| Role | Sign in | Email | What's on it |
+| --- | --- | --- | --- |
+| **Agent** — Azure Travel Co | `/sign-in` | `owner@azure-travel-demo.test` | 4 itineraries · a marketplace listing + licenses/ratings · a group departure · media library · trip-request inbox · dashboard + AI builder |
+| **Traveler** — Omar Haddad | `/view/sign-in` | `traveler-omar@demo.test` | 3 shared trips (My Trips) · 2 group trips (forming + finalized) · a saved AI plan request · discover + marketplace feeds |
+
+Re-seed the demo data any time (idempotent): `DATABASE_URL=<url> npx tsx apps/web/scripts/seed-demo.ts`.
+
 ## Status
 
-The application skeleton does not exist yet. This repo currently holds the
-**governance and the autonomous build harness**; the first loop iteration
-scaffolds the app (see **Bootstrap** below). Until then `npm test` / `npm run
-lint` intentionally fail.
+Built and **deployed**. Both surfaces work end to end: budget-aware AI planning
+(real Claude Haiku), quote-then-book with money-conservation + a markup ledger,
+the two-sided marketplace (list / license / white-label / revenue-share), group
+trips, and the full traveler surface — all live-verified against the deployed app.
+
+**Not yet a real-transacting MVP.** Two integrations remain before real GBV can
+flow: (1) **live supply** — the supply adapter runs on a sandbox / curated
+catalog behind the ports-and-adapters boundary; real Booking.com / flight-GDS /
+aggregator inventory plugs in there; (2) **payments** — bookings record the money
+math but don't charge a card (no payment gateway / merchant-of-record yet). Also
+stubbed: premium-identity gating for group trips (v0 self-serve, not real KYC),
+and the three-way resale payout (deferred). See the PRD roadmap.
 
 ## How this repo is built
 
