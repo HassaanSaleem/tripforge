@@ -765,11 +765,11 @@ select {
 .tf-quote-table tbody tr:not(.tf-row-failed):hover { background: color-mix(in srgb, var(--sea-tint) 55%, transparent); }
 
 /* ---- home "see it in action" band (holds the animated reel) ---- */
-.home-demo { display: grid; grid-template-columns: 0.82fr 1.18fr; gap: 40px; align-items: center; padding: 8px clamp(20px,5vw,56px) 40px; max-width: 1140px; margin-inline: auto; }
-.home-demo-copy { display: grid; gap: 12px; }
-.home-demo-copy h2 { font-size: 27px; margin: 0; }
-.home-demo-copy p { margin: 0; color: var(--ink-soft); max-width: 42ch; }
-@media (max-width: 760px) { .home-demo { grid-template-columns: 1fr; gap: 22px; } }
+.home-demo { display: grid; justify-items: center; text-align: center; gap: 22px; padding: 12px clamp(20px,5vw,56px) 52px; max-width: 900px; margin-inline: auto; }
+.home-demo-copy { display: grid; gap: 10px; justify-items: center; max-width: 58ch; }
+.home-demo-copy h2 { font-size: clamp(24px,3vw,32px); margin: 0; }
+.home-demo-copy p { margin: 0; color: var(--ink-soft); max-width: 52ch; }
+.home-demo .pv { width: 100%; }
 
 /* ---- animated product explainer ("demo video"): pure-CSS scene reel ---- */
 .tf-reel { --reel-per: 3.4s; --reel-total: 17s; display: grid; gap: 12px; }
@@ -826,5 +826,32 @@ select {
 .tf-reel-flywheel { display: flex; align-items: center; gap: 16px; justify-content: center; }
 .tf-reel-node { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font-weight: 700; color: var(--ink); }
 .tf-reel-loop { font-size: 30px; color: var(--sea); animation: tf-rotate 3.4s linear infinite; }
+
+/* ---- pitch / demo "video" player (code-driven, JS-timed scenes) ---- */
+.pv{ display:grid; gap:10px; }
+.pv-player{ position:relative; border-radius:var(--r-lg); overflow:hidden; border:1px solid var(--line); box-shadow:var(--shadow);
+  background:radial-gradient(130% 130% at 12% -10%, var(--sea-tint), var(--surface) 46%, var(--sand)); }
+.pv-stage{ position:relative; aspect-ratio:16 / 9; }
+.pv-scene{ position:absolute; inset:0; display:grid; align-content:center; justify-items:center; text-align:center; gap:16px;
+  padding:7% 8%; opacity:0; transform:translateY(12px) scale(.99); transition:opacity .7s ease, transform .7s ease; pointer-events:none; }
+.pv-scene.on{ opacity:1; transform:none; }
+.pv-narr{ font-family:var(--serif); font-weight:600; font-size:clamp(19px,3vw,34px); line-height:1.12; letter-spacing:-.012em;
+  color:var(--ink); margin:0; max-width:20ch; text-wrap:balance; }
+.pv-sub{ font-size:clamp(12.5px,1.5vw,15px); color:var(--ink-soft); margin:0; max-width:46ch; line-height:1.45; }
+.pv-visual{ margin-top:4px; width:100%; max-width:440px; display:grid; justify-items:center; }
+.pv-visual > *{ width:100%; }
+.pv-visual .d{ width:9px; height:9px; border-radius:50%; flex:none; }
+.pv-visual .d--stay{ background:var(--sea); } .pv-visual .d--activity{ background:var(--gold); } .pv-visual .d--transfer{ background:var(--coral); }
+.pv-chips{ display:grid; gap:8px; }
+.pv-chips span{ background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:8px 16px; font-size:13.5px; color:var(--ink-soft); }
+.pv-mark{ font-family:var(--serif); font-weight:600; font-size:clamp(30px,6vw,54px); color:var(--sea-deep); letter-spacing:-.02em; }
+.pv-mark.small{ font-size:clamp(24px,4vw,38px); }
+.pv-bar{ display:flex; align-items:center; gap:12px; padding:11px 14px; background:color-mix(in srgb, var(--surface) 90%, transparent); border-top:1px solid var(--line); }
+.pv-play{ flex:none; width:34px; height:34px; border-radius:50%; border:none; background:var(--sea-deep); color:#fff; font-size:11px; cursor:pointer; display:grid; place-items:center; line-height:1; }
+.pv-play:hover{ background:var(--sea); }
+.pv-track{ flex:1; height:5px; border-radius:3px; background:var(--line); overflow:hidden; }
+.pv-track span{ display:block; height:100%; width:0; background:linear-gradient(90deg,var(--sea),var(--coral)); }
+.pv-time{ flex:none; font-family:var(--mono); font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; letter-spacing:.03em; }
+@media (prefers-reduced-motion:reduce){ .pv-scene{ transition:none; } .pv-scene:first-child{ opacity:1; transform:none; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

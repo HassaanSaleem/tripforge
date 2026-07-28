@@ -6,7 +6,7 @@
 // an agent), it is NOT a standalone-planner pitch.
 import Link from "next/link";
 import { MarketingNav } from "../components/marketing-nav.js";
-import { AnimatedDemo } from "../components/animated-demo.js";
+import { PitchVideo } from "../components/pitch-video.js";
 
 export const metadata = {
   title: "TripForge for travelers — see your trip, book it yourself or hand it to an agent",
@@ -41,11 +41,11 @@ export default function ForTravelersPage() {
           </div>
 
           <figure className="lp-video">
-            {/* Animated, code-driven explainer of the live traveler experience. */}
-            <AnimatedDemo variant="traveler" />
+            {/* Code-driven demo video of the live traveler experience. */}
+            <PitchVideo variant="traveler" />
             <figcaption>
-              Plan with AI, book it yourself or hand it to an agent, plan group
-              trips, and discover trips worth taking.
+              A quick tour: plan with AI, book it yourself or hand it to an agent,
+              plan group trips, and discover trips worth taking.
             </figcaption>
           </figure>
         </section>
