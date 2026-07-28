@@ -43,8 +43,8 @@ export class SandboxActivityAdapter
           content: {
             title: activity.title,
             description: activity.description,
-            imageUrl: activity.imageUrl,
-            attribution: activity.attribution,
+            // Dynamically-grounded catalogs carry no licensed imagery.
+            ...(activity.imageUrl ? { imageUrl: activity.imageUrl, attribution: activity.attribution } : {}),
           },
           netRate: money(activity.netRateMinor, activity.currency),
           durationMinutes: activity.durationMinutes,

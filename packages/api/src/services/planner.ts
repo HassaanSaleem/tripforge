@@ -21,11 +21,14 @@ import type { Itinerary } from "@tripforge/itinerary-schema";
 import { itinerary as itineraryTable, recordPmfEvent, type Db } from "@tripforge/db";
 import {
   DRAFT_VARIANT_LABELS,
+  type DestinationCatalog,
   type DraftItineraryResult,
   type DraftStep,
   type DraftVariant,
   type PlannerToolDeps,
 } from "@tripforge/llm";
+import type { DiscoverDestinationCatalogResult } from "@tripforge/llm";
+import { hasCatalog, registerDynamicCatalog, type CuratedCityCatalog } from "@tripforge/supply-adapter";
 import { z } from "zod";
 import type { AgentSessionContext, Container } from "../context.js";
 
@@ -107,6 +110,69 @@ export type CompareEvent = { type: "progress"; step: DraftStep } | { type: "resu
 
 function tripDayCount(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.round((Date.parse(`${checkOut}T00:00:00Z`) - Date.parse(`${checkIn}T00:00:00Z`)) / 86_400_000));
+}
+
+/**
+ * Map the LLM's discovery vocabulary onto the sandbox adapter's curated-catalog
+ * shape — the composition root's translation job, so no supplier shape crosses a
+ * package boundary (INV-005). Indicative prices ride the itinerary currency;
+ * dynamically-grounded entries carry no licensed imagery.
+ */
+function toCuratedCatalog(dc: DestinationCatalog, currency: string): CuratedCityCatalog {
+  return {
+    hotels: dc.hotels.map((h) => ({ title: h.name, description: h.description, netRateMinor: h.nightlyRateMinor, currency })),
+    activities: dc.activities.map((a) => ({
+      title: a.name,
+      description: a.description,
+      netRateMinor: a.priceMinor,
+      currency,
+      durationMinutes: a.durationMinutes,
+    })),
+    transfers: dc.transfers.map((t) => ({ title: t.name, netRateMinor: t.priceMinor, currency, mode: t.mode })),
+  };
+}
+
+/**
+ * Ground a destination's supply catalog with real, web-searched places before
+ * drafting (stopgap until the real booking.com/sastaticket adapters land). A
+ * no-op for the four static hero cities and for anything already grounded in
+ * this process; strictly best-effort — a `failed` result or any error leaves
+ * the procedural supply in place and NEVER blocks a draft. Only the funded
+ * Anthropic adapter performs a live web search; the deterministic fake returns
+ * `failed` (unless a test scripts a catalog), so the keyless stack is unchanged.
+ */
+/** Hard ceiling on the grounding pass so a slow web search can never dominate
+ * the request's function budget (route maxDuration). Beyond this, drafting
+ * proceeds on procedural supply — a slightly-generic itinerary beats a timeout. */
+const GROUNDING_TIMEOUT_MS = 40_000;
+
+async function groundDestination(container: Container, input: TripRequest): Promise<void> {
+  if (hasCatalog(input.destination)) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const discovery = container.llm.discoverDestinationCatalog({
+      purpose: "planner.groundDestination",
+      destination: input.destination,
+      currency: input.budget.currency,
+      nights: tripDayCount(input.checkIn, input.checkOut),
+      party: input.party,
+    });
+    // If the timeout wins the race, the discovery promise may reject/resolve
+    // later with nobody awaiting it — swallow that so it never surfaces as an
+    // unhandled rejection.
+    void discovery.catch(() => undefined);
+    const timeout = new Promise<DiscoverDestinationCatalogResult>((resolve) => {
+      timer = setTimeout(() => resolve({ status: "failed" }), GROUNDING_TIMEOUT_MS);
+    });
+    const result = await Promise.race([discovery, timeout]);
+    if (result.status === "discovered") {
+      registerDynamicCatalog(input.destination, toCuratedCatalog(result.catalog, input.budget.currency));
+    }
+  } catch {
+    // Best-effort grounding — swallow and fall back to procedural supply.
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**
@@ -222,6 +288,12 @@ async function* plannerCore(container: Container, agencyId: string, input: TripR
   }
   const allocatedMinor = (category: string): number =>
     allocation.allocations.find((a) => a.category === category)?.allocated.amountMinor ?? 0;
+
+  // Web-search grounding stopgap: give the supply adapters real, named inventory
+  // for THIS destination before either the draft's tool loop or the verification
+  // sweep reads them — so both see the same grounded catalog. Best-effort and
+  // idempotent per process; hero cities and already-grounded destinations skip it.
+  await groundDestination(container, input);
 
   let plannerResult: DraftItineraryResult | undefined;
   for await (const event of container.llm.draftItinerary({

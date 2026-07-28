@@ -11,8 +11,11 @@
 export interface CuratedOfferFixture {
   title: string;
   description: string;
-  imageUrl: string;
-  attribution: string;
+  /** Licensed imagery — present for the static hero cities; absent for
+   * dynamically-discovered (web-search-grounded) destinations, which carry a
+   * real name + description but no licensed photo. */
+  imageUrl?: string;
+  attribution?: string;
   netRateMinor: number;
   currency: string;
 }
@@ -322,7 +325,44 @@ const CURATED_CITIES: Record<string, CuratedCityCatalog> = {
   },
 };
 
-/** Case-insensitive, whitespace-trimmed lookup; `undefined` for any non-hero destination. */
+// ─── Dynamic (web-search-grounded) catalogs ──────────────────────────────────
+// A supply STOPGAP until the real booking.com/sastaticket adapters land: any
+// destination outside the static hero set can have a catalog registered at
+// request time — real, named inventory the LLM discovered via web search (see
+// packages/llm's discoverDestinationCatalog + packages/api's grounding step).
+// Same SHAPE as the static hero cities, so it flows through the sandbox
+// adapters' existing curated path unchanged (INV-005: only data crosses this
+// boundary). Prices are indicative demo bands (INV-019), never live net rates —
+// exactly as the static hero-city fixtures already are.
+//
+// Process-global + in-memory by design (mirrors the sandbox engine, INV-019):
+// grounding registers a destination in THIS process and the same request's
+// search reads it back. A cold serverless invocation simply re-grounds — the
+// registry is a best-effort per-process cache, not a source of truth.
+const DYNAMIC_CITIES = new Map<string, CuratedCityCatalog>();
+
+/**
+ * Register a web-search-grounded catalog for a non-hero destination. Keyed
+ * case-insensitively; a static hero city is authoritative and is NEVER
+ * overwritten (a re-registration for one is a no-op). Idempotent.
+ */
+export function registerDynamicCatalog(destination: string, catalog: CuratedCityCatalog): void {
+  const key = destination.trim().toLowerCase();
+  if (key in CURATED_CITIES) return; // static hero cities win
+  DYNAMIC_CITIES.set(key, catalog);
+}
+
+/** True when a destination already has a static OR dynamic catalog — lets the
+ * caller skip a redundant (paid) web-search discovery pass. */
+export function hasCatalog(destination: string): boolean {
+  const key = destination.trim().toLowerCase();
+  return key in CURATED_CITIES || DYNAMIC_CITIES.has(key);
+}
+
+/** Case-insensitive, whitespace-trimmed lookup — static hero city first, then a
+ * dynamically-registered catalog; `undefined` when neither exists (the caller
+ * falls back to procedural generation). */
 export function lookupCuratedCity(destination: string): CuratedCityCatalog | undefined {
-  return CURATED_CITIES[destination.trim().toLowerCase()];
+  const key = destination.trim().toLowerCase();
+  return CURATED_CITIES[key] ?? DYNAMIC_CITIES.get(key);
 }

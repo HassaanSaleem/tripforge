@@ -44,8 +44,8 @@ export class SandboxHotelAdapter extends SandboxPortAdapter<HotelOffer> implemen
           content: {
             title: hotel.title,
             description: hotel.description,
-            imageUrl: hotel.imageUrl,
-            attribution: hotel.attribution,
+            // Dynamically-grounded catalogs carry no licensed imagery.
+            ...(hotel.imageUrl ? { imageUrl: hotel.imageUrl, attribution: hotel.attribution } : {}),
           },
           netRate: money(hotel.netRateMinor, hotel.currency),
         })),
