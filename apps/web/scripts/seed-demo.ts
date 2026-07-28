@@ -22,6 +22,8 @@ import {
   clientTripLink,
   consumerPlanRequest,
   eq,
+  itinerary,
+  itineraryShareLink,
   marketplaceFork,
   member,
   organization,
@@ -29,6 +31,7 @@ import {
   travelerGroupMember,
   travelerGroupMessage,
   travelerMembership,
+  tripHandoffRequest,
   user as userTable,
   type Db,
 } from "@tripforge/db";
@@ -663,11 +666,50 @@ async function ensureTravelerMembership(db: Db, userId: string, premium: boolean
  * UNIQUE(user_id, itinerary_id) index is the arbiter (a traveler already linked
  * via a group/fork keeps that link — onConflictDoNothing). */
 async function ensureClientTripLink(db: Db, userId: string, itineraryId: string, source: string): Promise<boolean> {
+  // My Trips (listTravelerTrips) INNER-joins client_trip_link → itinerary_share_link,
+  // so a linked trip only surfaces if its itinerary has a share link — the real
+  // "agent shares a trip, traveler opens it" flow always mints one. Seed it too.
+  const shareRows = await db.select({ agencyId: itinerary.agencyId }).from(itinerary).where(eq(itinerary.id, itineraryId)).limit(1);
+  if (shareRows[0]?.agencyId) {
+    await db
+      .insert(itineraryShareLink)
+      .values({ agencyId: shareRows[0].agencyId, itineraryId })
+      .onConflictDoNothing({ target: itineraryShareLink.itineraryId });
+  }
   const result = await db
     .insert(clientTripLink)
     .values({ userId, itineraryId, source })
     .onConflictDoNothing({ target: [clientTripLink.userId, clientTripLink.itineraryId] });
   return (result.rowCount ?? 0) > 0;
+}
+
+/** Inserts a trip_handoff_request (mirrors clientView.requestHandoff), directed
+ * to the itinerary's OWNING agency — this is what populates the agent
+ * "Trip Requests" inbox. Idempotent read-first on (agency, itinerary, contactName). */
+async function ensureTripHandoff(
+  db: Db,
+  itineraryId: string,
+  contactName: string,
+  contactEmail: string,
+  notes: string,
+): Promise<boolean> {
+  const itin = await db.select({ agencyId: itinerary.agencyId }).from(itinerary).where(eq(itinerary.id, itineraryId)).limit(1);
+  const agencyId = itin[0]?.agencyId;
+  if (!agencyId) return false;
+  const existing = await db
+    .select({ id: tripHandoffRequest.id })
+    .from(tripHandoffRequest)
+    .where(
+      and(
+        eq(tripHandoffRequest.agencyId, agencyId),
+        eq(tripHandoffRequest.itineraryId, itineraryId),
+        eq(tripHandoffRequest.contactName, contactName),
+      ),
+    )
+    .limit(1);
+  if (existing[0]) return false;
+  await db.insert(tripHandoffRequest).values({ itineraryId, agencyId, contactName, contactEmail, notes, status: "new" });
+  return true;
 }
 
 /**
@@ -781,7 +823,15 @@ async function ensureTravelerGroup(
         .onConflictDoNothing({ target: [travelerGroupMember.groupId, travelerGroupMember.userId] });
 
       // Link the group's trip into each member's My Trips (source 'group'), the
-      // same write createGroup/joinGroup do.
+      // same write createGroup/joinGroup do — plus the share link so it surfaces
+      // in My Trips (listTravelerTrips inner-joins client_trip_link → share_link).
+      const groupShare = await tx.select({ agencyId: itinerary.agencyId }).from(itinerary).where(eq(itinerary.id, itineraryId)).limit(1);
+      if (groupShare[0]?.agencyId) {
+        await tx
+          .insert(itineraryShareLink)
+          .values({ agencyId: groupShare[0].agencyId, itineraryId })
+          .onConflictDoNothing({ target: itineraryShareLink.itineraryId });
+      }
       await tx
         .insert(clientTripLink)
         .values({ userId: memberUserId, itineraryId, source: "group" })
@@ -877,6 +927,14 @@ async function main(): Promise<void> {
       const caller = callerFor(container, sessionFor(agencyId, userId));
       const attached = await ensureGalleryMedia(caller, firstItineraryId);
       console.log(`seed-demo: gallery media for itinerary ${firstItineraryId} — ${attached ? "attached" : "already present, skipping"}`);
+
+      // A second gallery asset on the same agency's next itinerary, so the agent
+      // Media library is not a single row.
+      const secondItineraryId = itineraryIds[1];
+      if (secondItineraryId && ITINERARIES[1]?.agencySlug === firstAgencySlug) {
+        const attached2 = await ensureGalleryMedia(caller, secondItineraryId);
+        console.log(`seed-demo: gallery media for itinerary ${secondItineraryId} — ${attached2 ? "attached" : "already present, skipping"}`);
+      }
 
       const { created: booked } = await ensureBooking(caller, firstItineraryId);
       console.log(`seed-demo: booking for itinerary ${firstItineraryId} — ${booked ? "BOOKED" : "already booked, skipping"}`);
@@ -994,6 +1052,35 @@ async function main(): Promise<void> {
   console.log(
     `seed-demo: traveler fork (${TRAVELER_FORK.travelerSlug} → listing ${forkListingId}) — ${forked ? "FORKED" : "already forked, skipping"}`,
   );
+
+  // Backfill: every My-Trips-linked itinerary (view/group/fork) needs a share
+  // link to surface in listTravelerTrips — guarantees My Trips is populated even
+  // on re-seed, when idempotency guards skip the inline share-link writes.
+  const allLinks = await db.select({ itineraryId: clientTripLink.itineraryId }).from(clientTripLink);
+  const linkedItineraryIds = [...new Set(allLinks.map((l) => l.itineraryId))];
+  for (const itineraryId of linkedItineraryIds) {
+    const itin = await db.select({ agencyId: itinerary.agencyId }).from(itinerary).where(eq(itinerary.id, itineraryId)).limit(1);
+    if (itin[0]?.agencyId) {
+      await db
+        .insert(itineraryShareLink)
+        .values({ agencyId: itin[0].agencyId, itineraryId })
+        .onConflictDoNothing({ target: itineraryShareLink.itineraryId });
+    }
+  }
+  console.log(`seed-demo: backfilled share links for ${linkedItineraryIds.length} My-Trips itineraries`);
+
+  // Agent "Trip Requests" inbox: travelers on shared Azure trips ask an agent to
+  // arrange & book (trip_handoff_request → the owning agency).
+  const HANDOFFS = [
+    { itineraryIndex: 0, contactName: "Amelia Rivera", contactEmail: "traveler-amelia@demo.test", notes: "Could you firm up the hotel and the airport transfer for these dates?" },
+    { itineraryIndex: 1, contactName: "Omar Haddad", contactEmail: "traveler-omar@demo.test", notes: "Two of us — please book the full itinerary if the price holds." },
+  ];
+  for (const h of HANDOFFS) {
+    const itineraryId = itineraryIds[h.itineraryIndex];
+    if (!itineraryId) throw new Error(`main: bad handoff index ${h.itineraryIndex}`);
+    const created = await ensureTripHandoff(db, itineraryId, h.contactName, h.contactEmail, h.notes);
+    console.log(`seed-demo: trip handoff request (${h.contactName} → itinerary ${itineraryId}) — ${created ? "CREATED" : "already exists, skipping"}`);
+  }
 
   const premiumTravelers = TRAVELERS.filter((t) => t.premium).length;
   console.log(
