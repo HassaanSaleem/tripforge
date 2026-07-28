@@ -9,7 +9,7 @@
 // (the agent panel's "Agency workspace" link) — both preserved below.
 import Link from "next/link";
 import { MarketingNav } from "./components/marketing-nav.js";
-import { PitchVideo } from "./components/pitch-video.js";
+import { EngineAnimation } from "./components/engine-animation.js";
 
 export default function HomePage() {
   return (
@@ -88,16 +88,17 @@ export default function HomePage() {
           </aside>
         </section>
 
-        <section className="home-demo" aria-label="What TripForge is — a two-minute overview">
+        <section className="home-demo" aria-label="What TripForge is — the engine, animated">
           <div className="home-demo-copy">
-            <p className="tf-eyebrow">Watch · 2 min</p>
-            <h2>See what TripForge is, in two minutes</h2>
+            <p className="tf-eyebrow">What TripForge is</p>
+            <h2>One engine. Two sides. Trips flow through it.</h2>
             <p>
-              One engine — build with AI, book at your markup, trade on the
-              marketplace, and let travelers plan, join, and book the very same trips.
+              Agents build with AI, book at their markup, and trade finished
+              trips on the marketplace — travelers plan, join, and book the very
+              same trips. Watch it move:
             </p>
           </div>
-          <PitchVideo variant="home" />
+          <EngineAnimation />
         </section>
 
         {/* The two-sided fork — a deliberate split into each audience's story. */}
