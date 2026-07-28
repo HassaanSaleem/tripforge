@@ -765,7 +765,7 @@ select {
 .tf-quote-table tbody tr:not(.tf-row-failed):hover { background: color-mix(in srgb, var(--sea-tint) 55%, transparent); }
 
 /* ---- home "see it in action" band (holds the animated reel) ---- */
-.home-demo { display: grid; grid-template-columns: 0.82fr 1.18fr; gap: 40px; align-items: center; padding: 8px 0; }
+.home-demo { display: grid; grid-template-columns: 0.82fr 1.18fr; gap: 40px; align-items: center; padding: 8px clamp(20px,5vw,56px) 40px; max-width: 1140px; margin-inline: auto; }
 .home-demo-copy { display: grid; gap: 12px; }
 .home-demo-copy h2 { font-size: 27px; margin: 0; }
 .home-demo-copy p { margin: 0; color: var(--ink-soft); max-width: 42ch; }
