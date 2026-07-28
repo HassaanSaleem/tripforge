@@ -781,7 +781,7 @@ select {
 .tf-reel-chrome > span:nth-child(3) { background: var(--ok); }
 .tf-reel-chrome em { margin-left: 8px; font-style: normal; font-size: 12px; color: var(--muted); font-family: var(--mono); }
 .tf-reel-stage { position: relative; aspect-ratio: 16 / 10; }
-.tf-reel-scene { position: absolute; inset: 0; opacity: 0; display: grid; grid-template-rows: 1fr auto; gap: 12px; padding: 22px; align-content: center; animation: tf-reel-cycle var(--reel-total) infinite; animation-delay: calc(var(--i) * var(--reel-per)); }
+.tf-reel-scene { position: absolute; inset: 0; opacity: 0; display: grid; grid-template-rows: auto auto; gap: 20px; padding: 22px; align-content: center; justify-items: stretch; animation: tf-reel-cycle var(--reel-total) infinite; animation-delay: calc(var(--i) * var(--reel-per)); }
 .tf-reel-scene:first-child { opacity: 1; }
 .tf-reel-body { display: grid; align-content: center; gap: 10px; }
 .tf-reel-cap { display: grid; gap: 2px; text-align: center; }
