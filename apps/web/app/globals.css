@@ -764,4 +764,67 @@ select {
 .tf-quote-table tbody tr { transition: background .12s; }
 .tf-quote-table tbody tr:not(.tf-row-failed):hover { background: color-mix(in srgb, var(--sea-tint) 55%, transparent); }
 
+/* ---- home "see it in action" band (holds the animated reel) ---- */
+.home-demo { display: grid; grid-template-columns: 0.82fr 1.18fr; gap: 40px; align-items: center; padding: 8px 0; }
+.home-demo-copy { display: grid; gap: 12px; }
+.home-demo-copy h2 { font-size: 27px; margin: 0; }
+.home-demo-copy p { margin: 0; color: var(--ink-soft); max-width: 42ch; }
+@media (max-width: 760px) { .home-demo { grid-template-columns: 1fr; gap: 22px; } }
+
+/* ---- animated product explainer ("demo video"): pure-CSS scene reel ---- */
+.tf-reel { --reel-per: 3.4s; --reel-total: 17s; display: grid; gap: 12px; }
+.tf-reel-window { border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; background: linear-gradient(180deg, var(--surface), var(--sand)); box-shadow: var(--shadow); }
+.tf-reel-chrome { display: flex; align-items: center; gap: 6px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--sand-2); }
+.tf-reel-chrome > span { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.tf-reel-chrome > span:nth-child(1) { background: #e5695a; }
+.tf-reel-chrome > span:nth-child(2) { background: var(--gold); }
+.tf-reel-chrome > span:nth-child(3) { background: var(--ok); }
+.tf-reel-chrome em { margin-left: 8px; font-style: normal; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.tf-reel-stage { position: relative; aspect-ratio: 16 / 10; }
+.tf-reel-scene { position: absolute; inset: 0; opacity: 0; display: grid; grid-template-rows: 1fr auto; gap: 12px; padding: 22px; align-content: center; animation: tf-reel-cycle var(--reel-total) infinite; animation-delay: calc(var(--i) * var(--reel-per)); }
+.tf-reel-scene:first-child { opacity: 1; }
+.tf-reel-body { display: grid; align-content: center; gap: 10px; }
+.tf-reel-cap { display: grid; gap: 2px; text-align: center; }
+.tf-reel-cap b { font-family: var(--serif); font-size: 18px; color: var(--ink); }
+.tf-reel-cap span { font-size: 13px; color: var(--muted); }
+@keyframes tf-reel-cycle { 0% { opacity: 0; transform: translateY(10px) scale(.985); } 2.5% { opacity: 1; transform: none; } 17.5% { opacity: 1; transform: none; } 20% { opacity: 0; transform: translateY(-10px) scale(.985); } 100% { opacity: 0; } }
+.tf-reel-dots { display: flex; justify-content: center; gap: 7px; }
+.tf-reel-dots span { width: 22px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; position: relative; }
+.tf-reel-dots span::after { content: ""; position: absolute; inset: 0; background: var(--sea); transform-origin: left; transform: scaleX(0); animation: tf-reel-dot var(--reel-total) infinite; animation-delay: calc(var(--i) * var(--reel-per)); }
+@keyframes tf-reel-dot { 0% { transform: scaleX(0); } 2.5% { transform: scaleX(0); } 20% { transform: scaleX(1); } 20.01% { transform: scaleX(0); } 100% { transform: scaleX(0); } }
+.tf-reel-chat { display: grid; gap: 8px; max-width: 400px; margin: 0 auto; width: 100%; }
+.tf-reel-b { padding: 9px 13px; border-radius: 14px; font-size: 13.5px; line-height: 1.4; max-width: 88%; }
+.tf-reel-b--me { justify-self: end; background: var(--sea-deep); color: #fff; border-bottom-right-radius: 5px; }
+.tf-reel-b--ai { justify-self: start; background: var(--surface); border: 1px solid var(--line); color: var(--ink); border-bottom-left-radius: 5px; }
+.tf-reel-cta { justify-self: end; background: var(--coral); color: #fff; padding: 7px 14px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.tf-reel-list { display: grid; gap: 7px; max-width: 360px; margin: 0 auto; width: 100%; }
+.tf-reel-chip { justify-self: center; background: var(--sea-tint); color: var(--sea-deep); padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+.tf-reel-row { display: flex; align-items: center; gap: 9px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-size: 13.5px; }
+.tf-reel-row b { margin-left: auto; }
+.tf-reel .d { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.tf-reel .d--stay { background: var(--sea); }
+.tf-reel .d--activity { background: var(--gold); }
+.tf-reel .d--transfer { background: var(--coral); }
+.tf-reel-total { display: flex; padding: 8px 12px; font-weight: 700; color: var(--sea-deep); font-size: 14px; }
+.tf-reel-total b { margin-left: auto; }
+.tf-reel-fork { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.tf-reel-pill { border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 18px; font-size: 13.5px; font-weight: 600; }
+.tf-reel-pill--cta { background: var(--coral); color: #fff; border-color: var(--coral); }
+.tf-reel-card { max-width: 330px; margin: 0 auto; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 9px; }
+.tf-reel-card b { font-size: 14.5px; }
+.tf-reel-avatars { display: flex; }
+.tf-reel-avatars span { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--sea); border: 2px solid var(--surface); margin-left: -8px; }
+.tf-reel-avatars span:first-child { margin-left: 0; }
+.tf-reel-meta { font-size: 12.5px; color: var(--muted); }
+.tf-reel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 380px; margin: 0 auto; width: 100%; }
+.tf-reel-mini { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+.tf-reel-mini span { font-size: 12px; color: var(--muted); font-weight: 500; }
+.tf-reel-money { display: flex; align-items: center; gap: 12px; justify-content: center; flex-wrap: wrap; font-size: 15px; }
+.tf-reel-money > span { color: var(--ink-soft); }
+.tf-reel-money em { font-style: normal; color: var(--coral-deep); font-weight: 600; }
+.tf-reel-money b { background: var(--sea-tint); color: var(--sea-deep); padding: 6px 14px; border-radius: 10px; }
+.tf-reel-flywheel { display: flex; align-items: center; gap: 16px; justify-content: center; }
+.tf-reel-node { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 10px 20px; font-weight: 700; color: var(--ink); }
+.tf-reel-loop { font-size: 30px; color: var(--sea); animation: tf-rotate 3.4s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

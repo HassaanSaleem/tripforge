@@ -6,6 +6,7 @@
 // an agent), it is NOT a standalone-planner pitch.
 import Link from "next/link";
 import { MarketingNav } from "../components/marketing-nav.js";
+import { AnimatedDemo } from "../components/animated-demo.js";
 
 export const metadata = {
   title: "TripForge for travelers — see your trip, book it yourself or hand it to an agent",
@@ -24,11 +25,10 @@ export default function ForTravelersPage() {
             <p className="tf-eyebrow">For travelers</p>
             <h1>Your trip, priced for real — and yours to run</h1>
             <p className="home-lede">
-              Sign in to see the day-by-day itinerary your travel agent built for
-              you, priced against real net rates. When you&apos;re ready, book it
-              yourself — or hand it back to a vetted agent to arrange and book for
-              you. Planning your own trip with AI is coming to your traveler
-              account.
+              Plan your own trip with our budget-aware AI, or open the itinerary
+              your agent built for you — priced against real net rates. When
+              you&apos;re ready, book it yourself, plan it with friends as a group
+              trip, or hand it to a vetted agent to arrange and book for you.
             </p>
             <div className="home-cta">
               <Link href="/view/sign-in" className="tf-btn tf-btn--cta">
@@ -41,22 +41,11 @@ export default function ForTravelersPage() {
           </div>
 
           <figure className="lp-video">
-            {/* Staged real demo (Compliance &amp; Content Sourcing). No autoplay,
-                metadata-only preload + poster so the file downloads on play. */}
-            <video
-              className="lp-video-el"
-              controls
-              preload="metadata"
-              poster="/shots/clients/01-shared-trip.png"
-              aria-label="TripForge traveler demo: reviewing and booking a shared trip"
-            >
-              <source src="/demos/tripforge-clients.mp4" type="video/mp4" />
-              Your browser cannot play this video.{" "}
-              <a href="/demos/tripforge-clients.mp4">Download the traveler demo</a>.
-            </video>
+            {/* Animated, code-driven explainer of the live traveler experience. */}
+            <AnimatedDemo variant="traveler" />
             <figcaption>
-              A shared trip, end to end — review the priced itinerary and choose
-              how to book.
+              Plan with AI, book it yourself or hand it to an agent, plan group
+              trips, and discover trips worth taking.
             </figcaption>
           </figure>
         </section>
