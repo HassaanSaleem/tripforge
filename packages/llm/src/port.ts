@@ -19,6 +19,7 @@ import type {
 import type { NamedPlannerDraft } from "./planner-draft.js";
 import type { ChatEditResult } from "./chat-edit.js";
 import type { InterpretTripRequestResult } from "./interpret-trip-request.js";
+import type { DestinationCatalog } from "./destination-catalog.js";
 import type { LlmUsage } from "./usage.js";
 
 // Re-exported from the leaf usage module so the metering type stays reachable
@@ -148,8 +149,37 @@ export interface InterpretTripRequestRequest {
   message: string;
 }
 
+// ─── Destination grounding (web-search stopgap) ──────────────────────────────
+// A one-shot, web-search-backed lookup of real named inventory for a
+// destination, so the AI builder grounds anywhere — not just the four static
+// hero cities — until the real supply adapters land. NOT a supply verb and NOT
+// a money path: it returns indicative demo pricing + real names/descriptions
+// that the caller registers as a sandbox catalog; every itinerary price is
+// still re-read from a supply port at assembly, and booking is unaffected.
+// Non-streamed (a single grounding lookup precedes the drafting tool loop) and
+// best-effort — `failed` simply means the caller falls back to procedural
+// generation.
+export interface DiscoverDestinationCatalogRequest {
+  /** Why this call is being made — recorded in metering (INV-013). */
+  purpose: string;
+  destination: string;
+  /** Itinerary currency — indicative prices come back in minor units of this. */
+  currency: string;
+  nights: number;
+  party: { adults: number; children: number };
+}
+
+export type DiscoverDestinationCatalogResult =
+  | { status: "discovered"; catalog: DestinationCatalog; usage: LlmUsage }
+  | { status: "failed" };
+
 export interface LLMPort {
   complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse>;
+  /** Discover real, named inventory for a destination via web search (spec:
+   * grounding stopgap). Best-effort: `failed` means fall back to procedural
+   * supply. Only the funded Anthropic adapter performs a live search; the
+   * deterministic fake returns `failed` unless a test scripts a catalog. */
+  discoverDestinationCatalog(req: DiscoverDestinationCatalogRequest): Promise<DiscoverDestinationCatalogResult>;
   /** Draft 1-3 labeled trip options through tool-driven supply lookups (spec
    * 019). Proposals only — every price in the final itinerary is re-read from
    * supply by the caller. Yields zero or more progress events followed by

@@ -5,6 +5,13 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@tripforge/api";
 import { createTrpcContext } from "../../../../lib/trpc/server.js";
 
+// The AI draft (itinerary.draft/selectDraft) streams and now runs a web-search
+// destination-grounding pass (~30-40s for a new destination) before the draft
+// tool loop — so raise the function budget above the platform default. Clamped
+// to the plan's max by Vercel; the grounding pass is itself capped in
+// packages/api so it can never dominate this budget. (Route Segment Config.)
+export const maxDuration = 300;
+
 function handler(req: Request): Promise<Response> {
   return fetchRequestHandler({
     endpoint: "/api/trpc",

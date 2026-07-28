@@ -17,7 +17,11 @@ export type {
   ChatEditStep,
   ChatEditProgressEvent,
   InterpretTripRequestRequest,
+  DiscoverDestinationCatalogRequest,
+  DiscoverDestinationCatalogResult,
 } from "./port.js";
+export { DestinationCatalogSchema } from "./destination-catalog.js";
+export type { DestinationCatalog } from "./destination-catalog.js";
 export { ChatEditProposalSchema, HotelSuggestionSchema, ChatEditProposeSchema } from "./chat-edit.js";
 export type { ChatEditProposal, HotelSuggestion, ChatEditPropose, ChatEditResult } from "./chat-edit.js";
 export { InterpretedTripParamsSchema, InterpretTripRequestProposeSchema } from "./interpret-trip-request.js";

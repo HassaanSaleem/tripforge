@@ -9,6 +9,8 @@ import type {
   ChatEditProgressEvent,
   ChatEditRequest,
   ChatEditStep,
+  DiscoverDestinationCatalogRequest,
+  DiscoverDestinationCatalogResult,
   DraftItineraryRequest,
   DraftProgressEvent,
   DraftStep,
@@ -16,6 +18,8 @@ import type {
   LlmUsage,
   PlannerTripRequest,
 } from "./port.js";
+import type { DestinationCatalog } from "./destination-catalog.js";
+import { submitDestinationCatalogTool } from "./tools/submit-destination-catalog.js";
 import type { NamedPlannerDrafts } from "./planner-draft.js";
 import type { ChatEditPropose } from "./chat-edit.js";
 import type { InterpretTripRequestPropose, InterpretTripRequestResult } from "./interpret-trip-request.js";
@@ -107,6 +111,34 @@ const INTERPRET_TRIP_REQUEST_SYSTEM = [
 
 const INTERPRET_MAX_TOKENS = 1024;
 
+// Destination grounding (web-search stopgap). Kept free of per-request values so
+// the prompt prefix stays cacheable (INV-013), mirroring the other systems.
+const DISCOVER_CATALOG_SYSTEM = [
+  "You are a destination researcher for a travel agency. Given a destination, use the",
+  "web_search tool to confirm REAL, currently-operating places, then submit a catalog.",
+  "Rules:",
+  "- Every hotel and attraction MUST be a real, named place AT THIS destination — verify",
+  "  with web_search; never invent a name or return a generic '<City> Grand'.",
+  "- Prefer well-known, genuinely bookable hotels and real landmarks/tours/day-trips.",
+  "- Prices are INDICATIVE only, in minor units of the given currency (e.g. cents): give",
+  "  sensible per-night hotel rates and per-person activity prices for the destination's",
+  "  typical range, cheaper options first.",
+  "- Return 2-4 hotels, 3-6 activities, and 1-3 airport transfers.",
+  "- Finish by calling submit_destination_catalog exactly once.",
+].join("\n");
+
+const CATALOG_MAX_TOKENS = 2048;
+const CATALOG_MAX_ITERATIONS = 6;
+
+function discoverCatalogUserPrompt(req: DiscoverDestinationCatalogRequest): string {
+  return [
+    `Destination: ${req.destination}.`,
+    `Trip: ${req.nights} night(s) for ${req.party.adults} adult(s) and ${req.party.children} child(ren).`,
+    `Indicative prices in ${req.currency}, given in minor units (e.g. cents).`,
+    `Research real hotels, attractions, and airport transfers for ${req.destination}, then submit the catalog.`,
+  ].join(" ");
+}
+
 function chatEditUserPrompt(req: ChatEditRequest): string {
   const itemLines = req.items.length
     ? req.items.map((it) => `- ${it.id} (${it.kind}, day ${it.dayNumber}): ${it.title}`).join("\n")
@@ -157,6 +189,45 @@ export class AnthropicLLM implements LLMPort {
     this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
 
     return { text, model: LLM_MODEL, usage };
+  }
+
+  /** Web-search-grounded destination discovery (stopgap). Runs the bounded tool
+   * loop with Anthropic's server-side web_search (basic `web_search_20250305`,
+   * the variant Haiku 4.5 supports) plus the structured submit tool. Best-effort:
+   * any error, or a paused/incomplete run, returns `failed` so the caller falls
+   * back to procedural supply. Metered like every other call (INV-013). */
+  async discoverDestinationCatalog(req: DiscoverDestinationCatalogRequest): Promise<DiscoverDestinationCatalogResult> {
+    let captured: DestinationCatalog | undefined;
+    const runner = this.client.beta.messages.toolRunner({
+      model: LLM_MODEL,
+      max_tokens: CATALOG_MAX_TOKENS,
+      max_iterations: CATALOG_MAX_ITERATIONS,
+      system: DISCOVER_CATALOG_SYSTEM,
+      messages: [{ role: "user", content: discoverCatalogUserPrompt(req) }],
+      tools: [
+        // Anthropic-hosted web search — no local handler; results arrive as
+        // server tool-result blocks the model reads, never as a client tool_use.
+        { type: "web_search_20250305", name: "web_search", max_uses: 5 },
+        submitDestinationCatalogTool((c) => {
+          captured = c;
+        }),
+      ],
+      // NOTE: no `effort` param — unsupported on Haiku 4.5 (INV-013).
+    });
+
+    const usage: LlmUsage = { inputTokens: 0, outputTokens: 0 };
+    try {
+      for await (const message of runner) {
+        usage.inputTokens += message.usage.input_tokens;
+        usage.outputTokens += message.usage.output_tokens;
+      }
+    } catch {
+      this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
+      return { status: "failed" };
+    }
+    this.onUsage?.({ purpose: req.purpose, model: LLM_MODEL, ...usage });
+
+    return captured ? { status: "discovered", catalog: captured, usage } : { status: "failed" };
   }
 
   async *draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent> {

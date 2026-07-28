@@ -46,6 +46,17 @@ export type {
   UploadMediaOutcome,
   UploadMimeType,
 } from "./ports/media-store.js";
+// Web-search-grounded dynamic catalog (stopgap until real supply adapters):
+// packages/api registers a discovered catalog here before drafting so the
+// sandbox adapters return real, named inventory for any destination.
+export {
+  registerDynamicCatalog,
+  hasCatalog,
+  type CuratedCityCatalog,
+  type CuratedOfferFixture,
+  type CuratedActivityFixture,
+  type CuratedTransferFixture,
+} from "./sandbox/curated-catalog.js";
 export { SandboxHotelAdapter } from "./sandbox/hotel.js";
 export { SandboxActivityAdapter } from "./sandbox/activity.js";
 export { SandboxTransferAdapter } from "./sandbox/transfer.js";

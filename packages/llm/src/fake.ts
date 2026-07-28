@@ -12,6 +12,8 @@ import {
   LLM_MODEL,
   type ChatEditProgressEvent,
   type ChatEditRequest,
+  type DiscoverDestinationCatalogRequest,
+  type DiscoverDestinationCatalogResult,
   type DraftItineraryRequest,
   type DraftItineraryResult,
   type DraftProgressEvent,
@@ -137,23 +139,39 @@ export interface FakeLLMOptions {
   /** Canned draftItinerary() results (consumed in order); when exhausted or
    * absent, the deterministic tool-driven draft below is produced. */
   plannerScripts?: DraftItineraryResult[];
+  /** Canned discoverDestinationCatalog() results (consumed in order); when
+   * exhausted or absent, grounding returns `failed` so the keyless/test path
+   * falls through to procedural supply unchanged. */
+  catalogScripts?: DiscoverDestinationCatalogResult[];
 }
 
 export class FakeLLM implements LLMPort {
   private readonly scripted: string[];
   private readonly plannerScripts: DraftItineraryResult[];
+  private readonly catalogScripts: DiscoverDestinationCatalogResult[];
   public readonly calls: LlmCompleteRequest[] = [];
   public readonly draftCalls: DraftItineraryRequest[] = [];
+  public readonly catalogCalls: DiscoverDestinationCatalogRequest[] = [];
 
   /** Provide canned responses (consumed in order); falls back to echoing the last user message. */
   constructor(scripted: string[] | FakeLLMOptions = []) {
     if (Array.isArray(scripted)) {
       this.scripted = [...scripted];
       this.plannerScripts = [];
+      this.catalogScripts = [];
     } else {
       this.scripted = [...(scripted.scripted ?? [])];
       this.plannerScripts = [...(scripted.plannerScripts ?? [])];
+      this.catalogScripts = [...(scripted.catalogScripts ?? [])];
     }
+  }
+
+  /** Deterministic destination grounding: returns the next scripted catalog, or
+   * `failed` when none is scripted — so the keyless compose stack and every
+   * existing planner test keep their unchanged procedural supply (INV-019). */
+  async discoverDestinationCatalog(req: DiscoverDestinationCatalogRequest): Promise<DiscoverDestinationCatalogResult> {
+    this.catalogCalls.push(req);
+    return this.catalogScripts.shift() ?? { status: "failed" };
   }
 
   async complete(req: LlmCompleteRequest): Promise<LlmCompleteResponse> {

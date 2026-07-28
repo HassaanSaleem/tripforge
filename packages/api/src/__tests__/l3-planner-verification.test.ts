@@ -31,6 +31,8 @@ import {
   FakeLLM,
   type ChatEditProgressEvent,
   type ChatEditRequest,
+  type DiscoverDestinationCatalogRequest,
+  type DiscoverDestinationCatalogResult,
   type DraftItineraryRequest,
   type DraftProgressEvent,
   type InterpretTripRequestRequest,
@@ -66,6 +68,12 @@ class SloppyCriteriaLLM implements LLMPort {
 
   async interpretTripRequest(_req: InterpretTripRequestRequest): Promise<InterpretTripRequestResult> {
     throw new Error("not used by the planner draft path");
+  }
+
+  // Grounding is best-effort; `failed` keeps this test on procedural supply so
+  // the sloppy-criteria verification behaviour under test is unchanged.
+  async discoverDestinationCatalog(_req: DiscoverDestinationCatalogRequest): Promise<DiscoverDestinationCatalogResult> {
+    return { status: "failed" };
   }
 
   async *draftItinerary(req: DraftItineraryRequest): AsyncGenerator<DraftProgressEvent> {
