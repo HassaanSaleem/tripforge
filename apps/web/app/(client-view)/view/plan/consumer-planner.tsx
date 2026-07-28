@@ -7,7 +7,7 @@
 // agent network (Constitution I). Presentation rides the seed-0009s .tf-* theme.
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   trpc,
   type ConsumerTripRequest,
@@ -96,8 +96,15 @@ export function ConsumerPlanner({
   const [fork, setFork] = useState<Fork>({ choice: null });
   const nextId = useRef(0);
   const activeSub = useRef<{ unsubscribe: () => void } | null>(null);
+  const messagesRef = useRef<HTMLDivElement>(null);
 
   const busy = view.phase === "drafting";
+
+  // Keep the newest message in view as the conversation grows.
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages, thinking, busy]);
 
   function appendMessage(entry: Omit<ChatMessage, "id">) {
     nextId.current += 1;
@@ -357,7 +364,7 @@ export function ConsumerPlanner({
     <section className="tf-card tf-chat" data-testid="consumer-planner-chat">
       <p className="tf-eyebrow">Build by chatting</p>
       <h3>Describe the trip you want</h3>
-      <div className="tf-chat-messages" data-testid="consumer-chat-messages" aria-live="polite">
+      <div className="tf-chat-messages" data-testid="consumer-chat-messages" aria-live="polite" ref={messagesRef}>
         {messages.length === 0 ? (
           <p className="tf-chat-empty">
             Try &quot;Plan a trip to Lisbon&quot; — I&apos;ll ask for anything I still need. Add the

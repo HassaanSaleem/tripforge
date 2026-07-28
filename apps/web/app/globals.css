@@ -404,18 +404,44 @@ label > input, label > select, label > textarea {
 .tf-flights-times { color: var(--muted); font-size: 13px; }
 
 /* ---- chat panel (spec 020): conversational itinerary editing ---- */
-.tf-chat { display: grid; gap: 12px; }
-.tf-chat-messages { display: grid; gap: 10px; max-height: 360px; overflow-y: auto; padding-right: 2px; }
-.tf-chat-empty { margin: 0; color: var(--muted); font-size: 14px; }
-.tf-chat-message { padding: 10px 14px; border-radius: var(--r); max-width: 85%; }
+.tf-chat { display: grid; gap: 14px; }
+.tf-chat-messages {
+  display: grid; gap: 12px; align-content: start;
+  min-height: 200px; max-height: 440px; overflow-y: auto;
+  padding: 18px; scroll-behavior: smooth;
+  background: var(--sand); border: 1px solid var(--line); border-radius: var(--r-lg);
+}
+.tf-chat-empty {
+  margin: auto; max-width: 44ch; text-align: center;
+  color: var(--muted); font-size: 14.5px; line-height: 1.65; padding: 20px 8px;
+}
+.tf-chat-message {
+  padding: 11px 15px; max-width: 82%; line-height: 1.5; font-size: 15px;
+  box-shadow: var(--shadow-sm); overflow-wrap: anywhere;
+  animation: tf-msg-in .22s ease both;
+}
 .tf-chat-message p { margin: 0; }
-.tf-chat-message--agent { justify-self: end; background: var(--sea-deep); color: #fff; }
-.tf-chat-message--assistant { justify-self: start; background: var(--sand-2); color: var(--ink); }
-.tf-chat-thinking { display: flex; align-items: center; gap: 10px; color: var(--sea-deep); font-weight: 600; margin: 0; font-size: 14px; }
+.tf-chat-message--agent {
+  justify-self: end; background: var(--sea); color: #fff;
+  border-radius: var(--r-lg) var(--r-lg) var(--r-sm) var(--r-lg);
+}
+.tf-chat-message--assistant {
+  justify-self: start; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg) var(--r-lg) var(--r-lg) var(--r-sm);
+}
+@keyframes tf-msg-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tf-chat-thinking {
+  justify-self: start; display: inline-flex; align-items: center; gap: 10px;
+  color: var(--sea-deep); font-weight: 600; margin: 0; font-size: 14px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg) var(--r-lg) var(--r-lg) var(--r-sm);
+  padding: 10px 15px; box-shadow: var(--shadow-sm);
+}
 .tf-chat-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 10px; }
 .tf-chat-suggestion-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: grid; gap: 6px; color: var(--ink); }
 .tf-chat-suggestion-title { margin: 0; font-weight: 600; font-size: 14px; }
-.tf-chat-form { display: flex; gap: 10px; }
+.tf-chat-form { display: flex; gap: 10px; align-items: stretch; }
 .tf-chat-form input { flex: 1; }
 /* Chat-first entry (spec 035): resolve confirmation + "Build my trip" CTA, and
    the chat/form entry-surface toggle. */
