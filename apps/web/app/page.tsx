@@ -9,6 +9,7 @@
 // (the agent panel's "Agency workspace" link) — both preserved below.
 import Link from "next/link";
 import { MarketingNav } from "./components/marketing-nav.js";
+import { AnimatedDemo } from "./components/animated-demo.js";
 
 export default function HomePage() {
   return (
@@ -85,6 +86,18 @@ export default function HomePage() {
               </div>
             </div>
           </aside>
+        </section>
+
+        <section className="home-demo" aria-label="See how it works">
+          <div className="home-demo-copy">
+            <p className="tf-eyebrow">See it in action</p>
+            <h2>One engine, two sides — the flywheel</h2>
+            <p>
+              Build with AI, book at your markup, trade it on the marketplace —
+              and let travelers plan, join, and book the very same trips.
+            </p>
+          </div>
+          <AnimatedDemo variant="home" />
         </section>
 
         {/* The two-sided fork — a deliberate split into each audience's story. */}
