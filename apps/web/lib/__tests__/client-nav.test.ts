@@ -1,5 +1,5 @@
 // L1 tests for the SIGNED-IN traveler consumer nav map (spec 037,
-// data-model "Consumer Nav Destination"): five destinations in a fixed order,
+// data-model "Consumer Nav Destination"): six destinations in a fixed order,
 // ids exhaustive over ClientSurfaceShell's activeNav union, live⇔href /
 // soon⇔null coupling (no dead links, no live section without a target), and the
 // belt-and-suspenders INV-020 negative (no platform wordmark in any label).
@@ -7,11 +7,12 @@ import { describe, it, expect } from "vitest";
 import { CLIENT_NAV_DESTINATIONS, type ClientNavDestinationId } from "../client-nav.js";
 
 // Order is load-bearing (FR-001) — assert the exact sequence, not just the set.
-const EXPECTED_ORDER: ClientNavDestinationId[] = ["home", "myTrips", "plan", "discover", "groupTrips"];
+// "marketplace" went live in spec 041 (traveler marketplace browse/fork).
+const EXPECTED_ORDER: ClientNavDestinationId[] = ["home", "myTrips", "plan", "discover", "marketplace", "groupTrips"];
 
 describe("CLIENT_NAV_DESTINATIONS (spec 037, data-model Consumer Nav Destination)", () => {
-  it("has exactly five destinations in the exact FR-001 order (INV-C)", () => {
-    expect(CLIENT_NAV_DESTINATIONS).toHaveLength(5);
+  it("has exactly six destinations in the exact FR-001 order (INV-C)", () => {
+    expect(CLIENT_NAV_DESTINATIONS).toHaveLength(6);
     expect(CLIENT_NAV_DESTINATIONS.map((d) => d.id)).toEqual(EXPECTED_ORDER);
   });
 
@@ -41,6 +42,8 @@ describe("CLIENT_NAV_DESTINATIONS (spec 037, data-model Consumer Nav Destination
     expect(byId.get("plan")).toMatchObject({ href: "/view/plan", status: "live" });
     // Discover is LIVE as of spec 039 (consumer "What's Hot" feed).
     expect(byId.get("discover")).toMatchObject({ href: "/view/discover", status: "live" });
+    // Marketplace is LIVE as of spec 041 (traveler marketplace browse/fork).
+    expect(byId.get("marketplace")).toMatchObject({ href: "/view/marketplace", status: "live" });
     // Group trips is LIVE as of spec 040 (traveler group coordination).
     expect(byId.get("groupTrips")).toMatchObject({ href: "/view/groups", status: "live" });
   });

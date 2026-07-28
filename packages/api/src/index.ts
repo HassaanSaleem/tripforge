@@ -62,6 +62,9 @@ export type {
   AttachTravelerOutcome,
   TravelerTripSummary,
 } from "./services/client-view.js";
+// Traveler marketplace surface (spec 041, TS4023): TravelerMarketplaceCard and
+// ForkListingOutcome ride the inferred AppRouter type via clientView.marketplace.*.
+export type { TravelerMarketplaceCard, ForkListingOutcome } from "./services/marketplace-traveler.js";
 // Agent Home dashboard aggregate surfaced the same way (spec 017, TS4023):
 // DashboardStats rides the inferred AppRouter type via workspace.dashboard.stats.
 export type { DashboardStats, CurrencyTotal, RecentActivityEntry } from "./services/dashboard-stats.js";

@@ -27,8 +27,24 @@ import {
   submitConsumerPlanRequest,
   submitConsumerPlanRequestInputSchema,
 } from "../services/consumer-planner.js";
+import { browseMarketplaceForTraveler, forkListingForTraveler } from "../services/marketplace-traveler.js";
 
 const getInputSchema = z.strictObject({ token: z.uuid() });
+const forkInputSchema = z.strictObject({ listingId: z.uuid() });
+
+/** Traveler marketplace surface (spec 041; GOAL.md D2.7) — browse agent-listed
+ * trips and fork one into your own working copy, then self-book or request an
+ * agent from the existing /view/[token] flow. `browse` is PUBLIC (browsing
+ * needs no sign-in); `fork` is protectedProcedure (anonymous → UNAUTHORIZED,
+ * prompting sign-in — FR-008). INV-024: a traveler never invokes a workspace
+ * procedure; the copy is seller-owned and the money moves later through the
+ * unchanged selfBook path (INV-020 redacted, INV-011 conserved). */
+const marketplaceRouter = router({
+  browse: publicProcedure.query(({ ctx }) => browseMarketplaceForTraveler(ctx.container)),
+  fork: protectedProcedure
+    .input((value) => forkInputSchema.parse(value))
+    .mutation(({ ctx, input }) => forkListingForTraveler(ctx.container, ctx.session, input.listingId)),
+});
 
 export const clientViewRouter = router({
   /** Share token → redacted ClientItineraryView (allowlist projection). */
@@ -96,4 +112,8 @@ export const clientViewRouter = router({
    * around a trip, invite members, chat, confirm, and finalize collectively.
    * Nested under the traveler surface (INV-024); all protectedProcedure. */
   groups: groupTripsRouter,
+
+  /** Traveler marketplace (spec 041; GOAL.md D2.7) — browse agent-listed trips
+   * and fork one to act on it. */
+  marketplace: marketplaceRouter,
 });

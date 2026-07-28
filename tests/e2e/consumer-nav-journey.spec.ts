@@ -43,14 +43,16 @@ test("a signed-in traveler navigates the consumer surface via the persistent pan
   await expect(homeLink).toHaveAttribute("aria-current", "page");
 
   // FR-002/FR-003: the built destinations are links (no dead ends). "Plan a trip"
-  // went LIVE in spec 038, "Discover" in spec 039, and "Group trips" in spec 040,
-  // so ALL FIVE nav destinations (Home, My Trips, Plan a trip, Discover, Group
-  // trips) are now live links — no coming-soon signpost remains. Names are matched
-  // `exact: true`, so the "My Trips"/"Group trips" shared "trips" substring never
-  // resolves a selector to two links (the caution lib/client-nav.ts documents).
-  await expect(nav.getByRole("link")).toHaveCount(5);
+  // went LIVE in spec 038, "Discover" in spec 039, "Group trips" in spec 040, and
+  // "Marketplace" in spec 041, so ALL SIX nav destinations (Home, My Trips, Plan a
+  // trip, Discover, Marketplace, Group trips) are now live links — no coming-soon
+  // signpost remains. Names are matched `exact: true`, so the "My Trips"/"Group
+  // trips" shared "trips" substring never resolves a selector to two links (the
+  // caution lib/client-nav.ts documents); "Marketplace" shares no substring.
+  await expect(nav.getByRole("link")).toHaveCount(6);
   await expect(nav.getByRole("link", { name: "Plan a trip", exact: true })).toHaveAttribute("href", "/view/plan");
   await expect(nav.getByRole("link", { name: "Discover", exact: true })).toHaveAttribute("href", "/view/discover");
+  await expect(nav.getByRole("link", { name: "Marketplace", exact: true })).toHaveAttribute("href", "/view/marketplace");
   await expect(nav.getByRole("link", { name: "Group trips", exact: true })).toHaveAttribute("href", "/view/groups");
 
   // FR-004/FR-006: brand-neutral, no workspace affordance on the signed-in surface.

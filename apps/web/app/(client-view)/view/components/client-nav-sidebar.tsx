@@ -71,6 +71,14 @@ function NavIcon({ kind }: { kind: ClientNavIconKind }) {
           <path d="M17.5 12c2.2.4 4 2.3 4 4.6" />
         </svg>
       );
+    case "store":
+      return (
+        <svg {...common}>
+          <path d="M4 9h16l-1-4H5z" />
+          <path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" />
+          <path d="M9 20v-5h6v5" />
+        </svg>
+      );
   }
 }
 

@@ -34,6 +34,7 @@ export {
   travelerGroupMember,
   travelerGroupMessage,
 } from "./schema-group-trips";
+export { marketplaceFork } from "./schema-marketplace-fork";
 
 import { user, session, account, verification, organization, member, invitation } from "./schema-auth";
 import { itinerary, itineraryShareLink, mediaAsset, clientTripLink } from "./schema-itinerary";
@@ -55,6 +56,7 @@ import {
   travelerGroupMember,
   travelerGroupMessage,
 } from "./schema-group-trips";
+import { marketplaceFork } from "./schema-marketplace-fork";
 
 export const schema = {
   user,
@@ -86,6 +88,7 @@ export const schema = {
   travelerGroup,
   travelerGroupMember,
   travelerGroupMessage,
+  marketplaceFork,
 };
 
 export type Schema = typeof schema;

@@ -66,16 +66,15 @@ test("a traveler signs up with no share token, lands on a real home, reaches My 
   await expect(page.getByTestId("traveler-home-greeting")).toHaveCount(0);
 });
 
-// consumer-copy-honesty-interim (FRICTION-7): a hopeful /view/marketplace URL used
-// to fall through to /view/[token] and render the dead-token message. As a static
-// segment it now shows an honest coming-soon affordance pointing at My Trips — still
-// brand-neutral (INV-020). (/view/discover went LIVE in spec 039 and is now signed-in
-// gated — its anonymous redirect is covered by consumer-discover-journey.spec.ts.)
+// /view/marketplace went LIVE in spec 041 (the traveler marketplace browse/fork).
+// A hopeful URL no longer falls through to /view/[token]'s dead-token message: as a
+// static segment it is now a real, signed-in-gated page (INV-023) — an anonymous
+// request redirects to sign-in, the SAME gate as /view/discover (spec 039). The
+// signed-in browse/fork journey is covered by traveler-marketplace-journey.spec.ts.
 for (const route of ["/view/marketplace"]) {
-  test(`${route}: honest coming-soon affordance, not the dead-token message`, async ({ page }) => {
+  test(`${route}: signed-in gated — anonymous redirects to sign-in, not the dead-token message`, async ({ page }) => {
     await page.goto(route);
-    await expect(page.getByTestId("discovery-coming")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Go to My Trips" })).toHaveAttribute("href", "/view/my-trips");
+    await expect(page).toHaveURL(/\/view\/sign-in$/);
     await expect(page.getByText(/isn't available/i)).toHaveCount(0);
     // INV-020: no platform naming on the consumer surface.
     await expect(page.getByText(/TripForge/i)).toHaveCount(0);

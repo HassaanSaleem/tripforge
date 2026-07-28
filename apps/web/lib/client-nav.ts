@@ -9,10 +9,10 @@
 // `id` is exhaustive over ClientSurfaceShell's activeNav union: adding/removing a
 // destination here without updating that type is a compile error, not a runtime
 // gap (same discipline as NavDestinationId).
-export type ClientNavDestinationId = "home" | "myTrips" | "plan" | "discover" | "groupTrips";
+export type ClientNavDestinationId = "home" | "myTrips" | "plan" | "discover" | "marketplace" | "groupTrips";
 
 /** Which local inline SVG `ClientNavSidebar` renders (no icon library). */
-export type ClientNavIconKind = "home" | "suitcase" | "sparkle" | "compass" | "users";
+export type ClientNavIconKind = "home" | "suitcase" | "sparkle" | "compass" | "users" | "store";
 
 export interface ClientNavDestination {
   id: ClientNavDestinationId;
@@ -35,10 +35,12 @@ export interface ClientNavDestination {
 // never resolves to two links. The nav landmark is labelled "Traveler navigation"
 // (see ClientNavSidebar), distinct from the agent "Main navigation" (whose specs
 // use a bare `name: "Trips"`), so cross-surface selectors never collide either.
+// "Marketplace" (spec 041 — now LIVE) shares no substring with any other label.
 export const CLIENT_NAV_DESTINATIONS: readonly ClientNavDestination[] = [
   { id: "home", label: "Home", href: "/view", status: "live", icon: "home" },
   { id: "myTrips", label: "My Trips", href: "/view/my-trips", status: "live", icon: "suitcase" },
   { id: "plan", label: "Plan a trip", href: "/view/plan", status: "live", icon: "sparkle" },
   { id: "discover", label: "Discover", href: "/view/discover", status: "live", icon: "compass" },
+  { id: "marketplace", label: "Marketplace", href: "/view/marketplace", status: "live", icon: "store" },
   { id: "groupTrips", label: "Group trips", href: "/view/groups", status: "live", icon: "users" },
 ];

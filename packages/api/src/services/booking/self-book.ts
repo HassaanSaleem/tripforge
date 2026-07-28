@@ -21,7 +21,7 @@
 // CONSERVATION (FR-006/INV-011): inherited unchanged from bookItinerary — a
 // failed leg is never charged, a fully-failed self-book writes nothing, holds
 // released. This module adds NO new money math (INV-010).
-import { desc, eq, bookingQuote as bookingQuoteTable } from "@tripforge/db";
+import { desc, eq, bookingQuote as bookingQuoteTable, marketplaceFork as marketplaceForkTable } from "@tripforge/db";
 import type { Container, SessionContext } from "../../context.js";
 import { resolveShareLinkTenant } from "../client-view.js";
 import { logger, loadItinerary } from "./shared.js";
@@ -71,14 +71,29 @@ function safeReason(
 }
 
 /** The most recent quote markup for this itinerary (the agent's established
- * pricing), or the platform default when it has never been quoted. */
+ * pricing), or the platform default when it has never been quoted.
+ *
+ * FORK-AWARE (spec 041, bound b): a traveler's marketplace-fork copy has no
+ * quotes of its own, so it is priced at its SOURCE listing's established markup
+ * — the seller's existing sell price — never the flat default (a traveler must
+ * not accidentally pay a cheaper-than-the-seller price). One extra indexed hop
+ * on marketplace_fork; unchanged for every non-fork itinerary. Still never
+ * returns 0 (FR-011): if the source was itself never quoted, the platform
+ * default applies. No new money math — the markup is read, then applied by the
+ * unchanged quoteItinerary path. */
 async function deriveMarkupBps(container: Container, itineraryId: string): Promise<number> {
   const db = container.db;
   if (!db) throw new Error("database not configured");
+  const forks = await db
+    .select({ sourceItineraryId: marketplaceForkTable.sourceItineraryId })
+    .from(marketplaceForkTable)
+    .where(eq(marketplaceForkTable.copyItineraryId, itineraryId))
+    .limit(1);
+  const effectiveId = forks[0]?.sourceItineraryId ?? itineraryId;
   const rows = await db
     .select({ markupBps: bookingQuoteTable.markupBps })
     .from(bookingQuoteTable)
-    .where(eq(bookingQuoteTable.itineraryId, itineraryId))
+    .where(eq(bookingQuoteTable.itineraryId, effectiveId))
     .orderBy(desc(bookingQuoteTable.createdAt))
     .limit(1);
   return rows[0]?.markupBps ?? DEFAULT_MARKUP_BPS;

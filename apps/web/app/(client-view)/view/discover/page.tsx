@@ -1,7 +1,7 @@
 // /view/discover — the traveler's "What's Hot" discovery feed (spec 039, ticket
-// goal-consumer-whats-hot / GOAL.md D2.2, PRD §9.7). Replaces the prior honest
-// "coming soon" placeholder (DiscoveryComing) with the real curated feed, now that
-// the consumer surface is operator-pulled-forward (GOAL.md, roadmap P2). Static
+// goal-consumer-whats-hot / GOAL.md D2.2, PRD §9.7). Replaced the prior honest
+// "coming soon" placeholder with the real curated feed, now that the consumer
+// surface is operator-pulled-forward (GOAL.md, roadmap P2). Static
 // Next.js segment, resolved ahead of the sibling dynamic /view/[token] route (same
 // precedent as /view/plan and /view/my-trips), so an anonymous redirect never falls
 // through to the dead-token message. Signed-in only (INV-023): an anonymous request
