@@ -33,6 +33,19 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
+      # Ensure the real Anthropic key is set as a Vercel PRODUCTION env var so the
+      # deployed app uses real Claude (not the keyless FakeLLM). Idempotent:
+      # remove-if-present then add from the ANTHROPIC_API_KEY repo secret.
+      - name: Set ANTHROPIC_API_KEY in Vercel production
+        run: |
+          vercel env rm ANTHROPIC_API_KEY production --yes --token="$VERCEL_TOKEN" 2>/dev/null || true
+          printf '%s' "$ANTHROPIC_API_KEY" | vercel env add ANTHROPIC_API_KEY production --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
       # Uploads the source; Vercel builds it server-side using the project's own
       # settings (rootDirectory=apps/web, pnpm, env vars). ORG/PROJECT ids link
       # to the existing project non-interactively.
