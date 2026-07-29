@@ -769,7 +769,10 @@ select {
 .home-demo-copy { display: grid; gap: 10px; justify-items: center; max-width: 58ch; }
 .home-demo-copy h2 { font-size: clamp(24px,3vw,32px); margin: 0; }
 .home-demo-copy p { margin: 0; color: var(--ink-soft); max-width: 52ch; }
-.home-demo .pv, .home-demo .fw { width: 100%; }
+.home-demo .pv { width: 100%; }
+/* Real narrated pitch MP4 — keep native 16:9 (no crop; captions sit at frame edges). */
+.home-demo-video { margin: 0; width: 100%; }
+.home-demo-video-el { width: 100%; height: auto; display: block; aspect-ratio: 16 / 9; background: #0b0d12; border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); }
 
 /* ---- animated product explainer ("demo video"): pure-CSS scene reel ---- */
 .tf-reel { --reel-per: 3.4s; --reel-total: 17s; display: grid; gap: 12px; }
@@ -855,55 +858,3 @@ select {
 @media (prefers-reduced-motion:reduce){ .pv-scene{ transition:none; } .pv-scene:first-child{ opacity:1; transform:none; } }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
-
-/* Engine animation — a CONTINUOUS animated explainer of what TripForge is (not
-   a slideshow): a pulsing engine core, a stream of particles orbiting a flywheel
-   ring, and four stations that energize in clockwise sequence as the flow
-   passes — between the two sides the engine serves. Pure CSS motion. */
-.fw{ display:grid; gap:12px; }
-.fw-head, .fw-foot{ text-align:center; margin:0; }
-.fw-head{ font-family:var(--mono); font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--sea-deep); }
-.fw-foot{ font-size:14px; color:var(--ink-soft); }
-.fw-scene{ position:relative; aspect-ratio:16 / 9; border-radius:var(--r-lg); border:1px solid var(--line); box-shadow:var(--shadow);
-  overflow:hidden; background:radial-gradient(120% 120% at 50% 42%, var(--surface), var(--sand));
-  display:grid; grid-template-columns:1fr auto 1fr; align-items:center; justify-items:center; gap:clamp(6px,3vw,44px); padding:4% 5%; }
-.fw-side{ display:grid; gap:4px; text-align:center; z-index:1; }
-.fw-side b{ font-family:var(--serif); font-weight:600; font-size:clamp(15px,2.2vw,24px); }
-.fw-side span{ font-size:12px; color:var(--muted); }
-.fw-side--l b{ color:var(--sea-deep); } .fw-side--r b{ color:var(--coral-deep); }
-
-.fw-ring{ position:relative; width:clamp(168px,28vw,264px); aspect-ratio:1; border-radius:50%;
-  border:1.5px dashed color-mix(in srgb, var(--sea) 34%, transparent); }
-.fw-orbits{ position:absolute; inset:0; }
-.fw-orbit{ position:absolute; inset:0; animation:fw-spin 9s linear infinite; animation-delay:calc(var(--i) * -0.75s); }
-.fw-dot{ position:absolute; top:-5px; left:50%; width:9px; height:9px; margin-left:-4.5px; border-radius:50%;
-  background:var(--sea); box-shadow:0 0 10px color-mix(in srgb, var(--sea) 65%, transparent); }
-.fw-orbit:nth-child(even) .fw-dot{ top:-4px; width:7px; height:7px; margin-left:-3.5px;
-  background:var(--coral); box-shadow:0 0 10px color-mix(in srgb, var(--coral) 60%, transparent); }
-@keyframes fw-spin{ to{ transform:rotate(360deg); } }
-
-.fw-core{ position:absolute; inset:27%; border-radius:26%; display:grid; place-items:center; gap:2px; text-align:center; z-index:2;
-  background:var(--sea-deep); color:#fff; box-shadow:0 10px 26px -10px color-mix(in srgb, var(--sea-deep) 80%, transparent);
-  animation:fw-core 4.5s ease-in-out infinite; }
-.fw-core-mark{ font-size:clamp(18px,3vw,30px); line-height:1; }
-.fw-core em{ font-style:normal; font-size:9px; letter-spacing:.1em; text-transform:uppercase; opacity:.82; }
-@keyframes fw-core{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
-
-.fw-wp{ position:absolute; z-index:3; font-size:11.5px; font-weight:700; color:var(--ink); background:var(--surface);
-  border:1px solid var(--line); border-radius:999px; padding:4px 11px 4px 9px; display:inline-flex; align-items:center; gap:6px;
-  white-space:nowrap; box-shadow:var(--shadow-sm); animation:fw-pulse 9s ease-in-out infinite; }
-.fw-wp i{ width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none; }
-.fw-wp--n{ top:-14px; left:50%; transform:translateX(-50%); animation-delay:0s; }
-.fw-wp--e{ right:-16px; top:50%; transform:translateY(-50%); animation-delay:-2.25s; }
-.fw-wp--s{ bottom:-14px; left:50%; transform:translateX(-50%); animation-delay:-4.5s; }
-.fw-wp--w{ left:-18px; top:50%; transform:translateY(-50%); animation-delay:-6.75s; }
-.fw-wp--n i{ background:var(--sea); } .fw-wp--e i{ background:var(--coral); }
-.fw-wp--s i{ background:#7b4a86; } .fw-wp--w i{ background:var(--sea-deep); }
-@keyframes fw-pulse{
-  0%, 100%{ box-shadow:var(--shadow-sm); border-color:var(--line); }
-  5%{ box-shadow:0 0 0 5px color-mix(in srgb, var(--sea) 20%, transparent); border-color:var(--sea); }
-  13%{ box-shadow:var(--shadow-sm); border-color:var(--line); }
-}
-@media (max-width:600px){ .fw-scene{ grid-template-columns:1fr; } .fw-side{ display:none; } }
-/* Reduced motion: drop the moving particle stream, keep a clean static diagram. */
-@media (prefers-reduced-motion: reduce){ .fw-orbits{ display:none; } }
