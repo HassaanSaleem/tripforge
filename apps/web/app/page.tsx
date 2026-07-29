@@ -9,7 +9,6 @@
 // (the agent panel's "Agency workspace" link) — both preserved below.
 import Link from "next/link";
 import { MarketingNav } from "./components/marketing-nav.js";
-import { EngineAnimation } from "./components/engine-animation.js";
 
 export default function HomePage() {
   return (
@@ -88,17 +87,30 @@ export default function HomePage() {
           </aside>
         </section>
 
-        <section className="home-demo" aria-label="What TripForge is — the engine, animated">
+        <section className="home-demo" aria-label="What TripForge is — a three-minute narrated overview">
           <div className="home-demo-copy">
-            <p className="tf-eyebrow">What TripForge is</p>
+            <p className="tf-eyebrow">Watch · 3 min</p>
             <h2>One engine. Two sides. Trips flow through it.</h2>
             <p>
               Agents build with AI, book at their markup, and trade finished
               trips on the marketplace — travelers plan, join, and book the very
-              same trips. Watch it move:
+              same trips. Here is the whole thing in three minutes:
             </p>
           </div>
-          <EngineAnimation />
+          <figure className="home-demo-video">
+            {/* Narrated pitch (real MP4). No autoplay; metadata-only preload + poster. */}
+            <video
+              className="home-demo-video-el"
+              controls
+              preload="metadata"
+              poster="/demos/tripforge-pitch-poster.jpg"
+              aria-label="TripForge pitch: what TripForge is, in three minutes"
+            >
+              <source src="/demos/tripforge-pitch.mp4" type="video/mp4" />
+              Your browser cannot play this video.{" "}
+              <a href="/demos/tripforge-pitch.mp4">Download the TripForge pitch</a>.
+            </video>
+          </figure>
         </section>
 
         {/* The two-sided fork — a deliberate split into each audience's story. */}
