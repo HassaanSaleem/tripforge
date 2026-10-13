@@ -120,5 +120,4 @@ local boot. Open-source / free tooling throughout.
 
 ## License
 
-Proprietary — © disrupt-gt. All rights reserved. (Not yet licensed for
-distribution.)
+MIT — © 2026 Syed Hassaan Saleem. See [LICENSE](LICENSE).
